@@ -982,6 +982,7 @@ async function getAHSlotsIDs(bot, itemPrices) {
 
 async function getBestAHSlot(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return null;
+    await saveToJsonFile('ah.json', bot.currentWindow?.slots)
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
