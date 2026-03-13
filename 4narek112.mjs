@@ -490,7 +490,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     bot.menu = myItems;
-                    await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                     break;
                 }
                 
@@ -587,7 +587,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
                 } else {
                     bot.menu = analysisAH;
-                    await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                 }
                 break;
 
@@ -596,7 +596,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = bot.key;
                 logger.info(`${name} - ${bot.menu}`);
                 bot.menu = analysisAH;
-                await safeClickBuy(bot, 45, getRandomDelayInRange(700, 1300), key);
+                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                 break;
 
             case "clan":
