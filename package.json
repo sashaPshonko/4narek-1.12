@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "minecraft-protocol": "^1.64.0",
+    "mineflayer": "^4.35.0",
+    "mineflayer-auto-eat": "^5.0.3",
+    "node-telegram-bot-api": "^0.67.0",
+    "prismarine-item": "^1.17.0",
+    "prismarine-nbt": "^2.8.0",
+    "protodef": "^1.19.0",
+    "winston": "^3.19.0",
+    "ws": "^8.19.0"
+  }
+}
