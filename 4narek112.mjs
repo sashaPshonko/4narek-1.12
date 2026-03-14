@@ -1027,9 +1027,22 @@ async function getBestAHSlot(bot, itemPrices) {
 
 function getItemUUID(item) {
     try {
-        const uuidArray = item?.nbt?.value?.PublicBukkitValues?.value?.['auctions:if-uuid']?.value;
-        return uuidArray ? uuidArray.join(',') : null;
+        // Ищем компонент custom_data
+        const customDataComp = item.components?.find(c => c.type === 'custom_data');
+        if (!customDataComp) return null;
+
+        // Достаём значение PublicBukkitValues
+        const pubBukkit = customDataComp.data?.value?.PublicBukkitValues?.value;
+        if (!pubBukkit) return null;
+
+        // Берём массив auctions:if-uuid
+        const uuidArray = pubBukkit['auctions:if-uuid']?.value;
+        if (!Array.isArray(uuidArray)) return null;
+
+        // Преобразуем в строку через запятую
+        return uuidArray.join(',');
     } catch (e) {
+        console.log('Ошибка при получении UUID:', e.message);
         return null;
     }
 }
