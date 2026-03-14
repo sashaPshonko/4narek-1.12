@@ -992,6 +992,7 @@ async function getBestAHSlot(bot, itemPrices) {
         if (!slotData) continue;
         
         const currentUUID = getItemUUID(slotData);
+        console.log(`uuid - ${currentUUID}`)
         
         if (currentUUID && itemsBuying?.includes(currentUUID)) {
             console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
