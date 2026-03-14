@@ -1100,67 +1100,80 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
     // Получаем обычные зачарования из компонента enchantments
     const vanillaEnchants = [];
-    if (item.components) {
-        const enchComponent = item.components.find(c => c.type === 'enchantments');
-        if (enchComponent?.data?.enchantments) {
-            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
-                let name = e.id?.value;
-                if (typeof name === 'number') {
-                    name = numericToName[name] || `unknown:${name}`;
-                }
-                return { name, lvl: e.lvl?.value };
-            }));
-        }
-    }
-
-    // Получаем кастомные зачарования из LORE (текста описания)
-    const customEnchants = [];
-    const loreComponent = item.components?.find(c => c.type === 'lore');
-    
-    if (loreComponent?.data) {
-        const loreLines = loreComponent.data;
-        
-        for (const line of loreLines) {
-            // Извлекаем текст из сложной структуры JSON
-            let text = '';
+if (item.components) {
+    const enchComponent = item.components.find(c => c.type === 'enchantments');
+    if (enchComponent?.data?.enchantments) {
+        vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
+            let name = e.id?.value;
+            if (typeof name === 'number') {
+                name = numericToName[name] || `unknown:${name}`;
+            }
             
-            if (line.type === 'string') {
-                text = line.value;
-            } else if (line.type === 'compound' && line.value?.extra) {
-                // Обрабатываем compound с extra
-                const extra = line.value.extra;
-                if (extra.type === 'list' && extra.value?.value) {
-                    for (const extraItem of extra.value.value) {
-                        if (extraItem.type === 'compound' && extraItem.value?.text?.value) {
-                            text += extraItem.value.text.value;
-                        }
+            // Если level нет или undefined - ставим 1
+            let lvl = e.lvl?.value;
+            if (lvl === undefined || lvl === null) {
+                lvl = 1;
+            }
+            
+            return { name, lvl };
+        }));
+    }
+}
+
+// Получаем кастомные зачарования из LORE
+const customEnchants = [];
+const loreComponent = item.components?.find(c => c.type === 'lore');
+
+if (loreComponent?.data) {
+    const loreLines = loreComponent.data;
+    
+    for (const line of loreLines) {
+        let text = '';
+        
+        if (line.type === 'string') {
+            text = line.value;
+        } else if (line.type === 'compound' && line.value?.extra) {
+            const extra = line.value.extra;
+            if (extra.type === 'list' && extra.value?.value) {
+                for (const extraItem of extra.value.value) {
+                    if (extraItem.type === 'compound' && extraItem.value?.text?.value) {
+                        text += extraItem.value.text.value;
                     }
                 }
             }
+        }
+        
+        // Ищем зачарования в тексте (формат "Название" или "Название РимскаяЦифра")
+        // Теперь поддерживает оба варианта: "Окисление" (lvl=1) и "Окисление II" (lvl=2)
+        const enchantRegex = /^([А-Яа-яA-Za-z]+)(?:\s+(I{1,3}|IV|V|VI{0,3}))?$/;
+        const match = text.trim().match(enchantRegex);
+        
+        if (match) {
+            const name = match[1].toLowerCase();
             
-            // Ищем зачарования в тексте (формат "Название РимскаяЦифра")
-            // Например: "Окисление II", "Вампиризм II", "Яд III"
-            const enchantRegex = /^([А-Яа-яA-Za-z]+)\s+(I{1,3}|IV|V|VI{0,3})$/;
-            const match = text.trim().match(enchantRegex);
-            
-            if (match) {
-                const name = match[1].toLowerCase(); // Приводим к нижнему регистру
+            // Если есть римская цифра - конвертируем, если нет - уровень 1
+            let lvl = 1;
+            if (match[2]) {
                 const romanNumeral = match[2];
-                const lvl = romanToArabic(romanNumeral);
-                
-                // Маппинг русских названий в английские (если нужно)
-                const nameMapping = {
-                    'окисление': 'poison',
-                    'вампиризм': 'vampirism',
-                    'яд': 'poison',
-                    'detection': 'detection'
-                };
-                
-                const mappedName = nameMapping[name] || name;
-                customEnchants.push({ name: mappedName, lvl });
+                lvl = romanToArabic(romanNumeral);
             }
+            
+            // Маппинг русских названий в английские
+            const nameMapping = {
+                'окисление': 'poison',
+                'вампиризм': 'vampirism',
+                'яд': 'poison',
+                'детекция': 'detection',
+                'тяжелый': 'heavy',
+                'тяжёлый': 'heavy',
+                'нестабильный': 'unstable'
+            };
+            
+            const mappedName = nameMapping[name] || name;
+            customEnchants.push({ name: mappedName, lvl });
         }
     }
+}
 
     // Функция для конвертации римских чисел в арабские
     function romanToArabic(roman) {
