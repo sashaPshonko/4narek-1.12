@@ -1,0 +1,2337 @@
+[
+  {
+    "type": 874,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    -128,
+                    19,
+                    -16,
+                    -60,
+                    -93,
+                    82,
+                    65,
+                    6,
+                    -100,
+                    -18,
+                    -111,
+                    111,
+                    18,
+                    17,
+                    21,
+                    -94
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    13
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "damage",
+        "data": 2
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 4
+            },
+            {
+              "id": 10,
+              "level": 1
+            },
+            {
+              "id": 32,
+              "level": 5
+            },
+            {
+              "id": 1,
+              "level": 6
+            },
+            {
+              "id": 34,
+              "level": 6
+            },
+            {
+              "id": 18,
+              "level": 2
+            }
+          ],
+          "showTooltip": true
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "string",
+            "value": ""
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "color": {
+                                "type": "string",
+                                "value": "#FFFF00"
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": "забрать"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы "
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF0000"
+              },
+              "strikethrough": {
+                "type": "byte",
+                "value": 1
+              },
+              "text": {
+                "type": "string",
+                "value": "                         "
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#00FF00"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "color": {
+                                "type": "string",
+                                "value": "#00FF00"
+                              },
+                              "extra": {
+                                "type": "list",
+                                "value": {
+                                  "type": "string",
+                                  "value": [
+                                    "1,000,000"
+                                  ]
+                                }
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": " "
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": " Ценa:"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "$"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "color": {
+                                "type": "string",
+                                "value": "#FFFF00"
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": " [Продается]"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": " Статус:"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "⚕"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "extra": {
+                        "type": "list",
+                        "value": {
+                          "type": "compound",
+                          "value": [
+                            {
+                              "color": {
+                                "type": "string",
+                                "value": "#FF6600"
+                              },
+                              "extra": {
+                                "type": "list",
+                                "value": {
+                                  "type": "string",
+                                  "value": [
+                                    "23 ч. 59 мин. 8 сек. "
+                                  ]
+                                }
+                              },
+                              "text": {
+                                "type": "string",
+                                "value": " "
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": " Истeкaeт:"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "⟲"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF0000"
+              },
+              "strikethrough": {
+                "type": "byte",
+                "value": 1
+              },
+              "text": {
+                "type": "string",
+                "value": "                         "
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "netherite_sword",
+    "displayName": "Netherite Sword",
+    "stackSize": 1,
+    "maxDurability": 2031,
+    "slot": 0
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    94,
+                    34,
+                    50,
+                    48,
+                    63,
+                    114,
+                    73,
+                    86,
+                    -112,
+                    -47,
+                    58,
+                    95,
+                    53,
+                    -27,
+                    32,
+                    98
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            16
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы обновить"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Эта кнопка позволяет"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "обновить список товаров"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Обновить"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 45
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    -24,
+                    -12,
+                    -104,
+                    -33,
+                    -11,
+                    63,
+                    74,
+                    84,
+                    -65,
+                    120,
+                    33,
+                    56,
+                    -11,
+                    -120,
+                    51,
+                    117
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            13
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Вернуться"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 46
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    -82,
+                    -123,
+                    88,
+                    79,
+                    -106,
+                    -114,
+                    74,
+                    -50,
+                    -89,
+                    87,
+                    53,
+                    67,
+                    -84,
+                    -19,
+                    88,
+                    -52
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            20
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Такой страницы нет.."
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[«]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 47
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    20,
+                    -61,
+                    9,
+                    98,
+                    99,
+                    51,
+                    75,
+                    -34,
+                    -105,
+                    -22,
+                    11,
+                    67,
+                    37,
+                    65,
+                    -96,
+                    117
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            1
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы обновить"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Эта кнопка позволяет"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "обновить список товаров"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Обновить"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 48
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    20,
+                    -61,
+                    9,
+                    98,
+                    99,
+                    51,
+                    75,
+                    -34,
+                    -105,
+                    -22,
+                    11,
+                    67,
+                    37,
+                    65,
+                    -96,
+                    117
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            1
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы обновить"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Эта кнопка позволяет"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "обновить список товаров"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Обновить"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 49
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    20,
+                    -61,
+                    9,
+                    98,
+                    99,
+                    51,
+                    75,
+                    -34,
+                    -105,
+                    -22,
+                    11,
+                    67,
+                    37,
+                    65,
+                    -96,
+                    117
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            1
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы обновить"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Эта кнопка позволяет"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "обновить список товаров"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Обновить"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 50
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    115,
+                    -76,
+                    -5,
+                    -125,
+                    66,
+                    -53,
+                    77,
+                    -57,
+                    -73,
+                    -23,
+                    35,
+                    110,
+                    23,
+                    -124,
+                    -56,
+                    -39
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            21
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Такой страницы нет..."
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[»]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 51
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    62,
+                    -113,
+                    12,
+                    123,
+                    -116,
+                    -32,
+                    75,
+                    121,
+                    -117,
+                    -57,
+                    73,
+                    -126,
+                    87,
+                    -119,
+                    56,
+                    -80
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            15
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы перевыставить"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Автоматически выставит все"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Ваши предметы заново в Аукцион"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "по тем же ценам"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Перевыставить предметы"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[⟲]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 52
+  },
+  {
+    "type": 957,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "auctions:if-uuid": {
+                  "type": "byteArray",
+                  "value": [
+                    40,
+                    -21,
+                    122,
+                    52,
+                    79,
+                    -42,
+                    71,
+                    17,
+                    -100,
+                    -1,
+                    15,
+                    121,
+                    -25,
+                    88,
+                    -19,
+                    -106
+                  ]
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    35,
+                    47,
+                    13,
+                    11,
+                    4,
+                    52,
+                    40,
+                    70,
+                    68,
+                    37,
+                    59,
+                    65,
+                    66,
+                    63,
+                    89,
+                    51,
+                    67,
+                    79,
+                    46,
+                    55,
+                    41,
+                    60,
+                    42,
+                    34,
+                    10,
+                    12
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            58
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FF6600"
+              },
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "color": {
+                        "type": "string",
+                        "value": "#FFFFE6"
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": ", чтобы перейти"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": "➥ Нажмите"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "Здесь можно арендовать,"
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "italic": {
+                "type": "byte",
+                "value": 0
+              },
+              "color": {
+                "type": "string",
+                "value": "#FFFFE6"
+              },
+              "text": {
+                "type": "string",
+                "value": "дополнительные слоты"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "italic": {
+              "type": "byte",
+              "value": 0
+            },
+            "color": {
+              "type": "string",
+              "value": "#FF0000"
+            },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": {
+                      "type": "string",
+                      "value": "#FF6600"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " Аренда слотов"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": "[☃]"
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "paper",
+    "displayName": "Paper",
+    "stackSize": 64,
+    "slot": 53
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 874,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    2,
+                    76,
+                    -7,
+                    62,
+                    -14,
+                    38,
+                    73,
+                    -118,
+                    -106,
+                    101,
+                    28,
+                    117,
+                    55,
+                    -127,
+                    44,
+                    -25
+                  ]
+                },
+                "minecraft:ps": {
+                  "type": "byteArray",
+                  "value": [
+                    -73,
+                    67,
+                    -109,
+                    109,
+                    45,
+                    65,
+                    76,
+                    -38,
+                    -121,
+                    -60,
+                    59,
+                    -84,
+                    14,
+                    10,
+                    5,
+                    72
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "damage",
+        "data": 1
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 5
+            },
+            {
+              "id": 10,
+              "level": 2
+            },
+            {
+              "id": 32,
+              "level": 7
+            },
+            {
+              "id": 1,
+              "level": 6
+            },
+            {
+              "id": 34,
+              "level": 7
+            },
+            {
+              "id": 36,
+              "level": 3
+            },
+            {
+              "id": 18,
+              "level": 5
+            },
+            {
+              "id": 22,
+              "level": 1
+            }
+          ],
+          "showTooltip": true
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "netherite_sword",
+    "displayName": "Netherite Sword",
+    "stackSize": 1,
+    "maxDurability": 2031,
+    "slot": 81
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+]

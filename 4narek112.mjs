@@ -535,6 +535,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case myItems:
+                // saveToJsonFile('storage.json', bot.currentWindow.slots)
+                // return
                 generateRandomKey(bot);
                 key = bot.key;
                 if (bot.currentWindow.slots[27]) {
@@ -553,7 +555,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) break;
 
-                    const priceOnAH = await getBuyPriceInStorage(currentSlot);
+                    const priceOnAH = getPriceFromItem(currentSlot);
                     const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
 
                     if (priceSell !== priceOnAH) {
@@ -1004,8 +1006,9 @@ async function getBestAHSlot(bot, itemPrices) {
         if (!config) continue;
         
         try {
-            const price = await getBuyPrice(slotData);
-            // console.log(`цена - ${price}`)
+            // const price = 0
+            const price = getPriceFromItem(slotData);
+            console.log(`цена - ${price}`)
             if (!price || price >= config.priceSell - config.nacenka) continue;
             if (!config.priceSell) continue;
 
@@ -1063,21 +1066,143 @@ function getNacenkaByEnchantments(slotData, itemPrices) {
     return getItemNacenka(slotData, itemPrices);
 }
 
-function removeSlotAndTime(obj) {
-    const result = JSON.parse(JSON.stringify(obj));
-    delete result.slot;
-    try {
-        const loreEntries = result.nbt.value.display.value.Lore.value.value;
-        const timeIndex = loreEntries.findIndex(entry => 
-            entry.includes('Истeкaeт:') || entry.includes('Истекает:') ||
-            entry.includes('expires:') || entry.includes('⟲')
-        );
-        if (timeIndex !== -1) loreEntries.splice(timeIndex, 1);
-    } catch (error) {
-        console.warn('Не удалось удалить строку со временем:', error.message);
+
+/**
+ * Преобразует римскую цифру в число (поддерживает I..X)
+ */
+function romanToArabic(roman) {
+    const map = {
+        'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
+        'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10
+    };
+    return map[roman] || 1;
+}
+
+/**
+ * Извлекает кастомные зачарования из предмета, используя цвет "gray" как маркер.
+ * Возвращает массив { name, lvl }.
+ */
+function extractCustomEnchantsFromItem(item) {
+    console.log('🔍 extractCustomEnchantsFromItem: начат поиск кастомных зачарований');
+
+    // Преобразуем весь объект в JSON-строку
+    const jsonStr = JSON.stringify(item);
+    
+    // Ищем все значения ключа "value" (предполагаем, что строки не содержат кавычек внутри)
+    // Регулярка: ищем "value":" затем захватываем всё до следующей кавычки
+    const valueRegex = /"value":"([^"]*)"/g;
+    const matches = [];
+    let match;
+    while ((match = valueRegex.exec(jsonStr)) !== null) {
+        matches.push(match[1]); // захваченное содержимое
     }
+
+    console.log('📋 Все найденные значения из поля "value":', matches);
+
+    // Оставляем только те, которые содержат буквы (латиница или кириллица) и не начинаются с '#'
+    const textStrings = matches.filter(s => {
+        if (!s || typeof s !== 'string') return false;
+        const trimmed = s.trim();
+        if (!trimmed) return false;
+        if (/^#/.test(trimmed)) return false;   // отсекаем цвета типа "#FF6600"
+        return /[a-zA-Zа-яА-Я]/.test(trimmed);  // есть хотя бы одна буква
+    });
+
+    console.log('📋 Отфильтрованные строки (с буквами):', textStrings);
+
+    const romanRegex = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/;
+    const result = [];
+
+    for (const str of textStrings) {
+        const trimmed = str.trim();
+
+        // Пытаемся найти в конце римскую цифру после пробела
+        const lastSpaceIndex = trimmed.lastIndexOf(' ');
+        if (lastSpaceIndex !== -1) {
+            const possibleRoman = trimmed.substring(lastSpaceIndex + 1);
+            if (romanRegex.test(possibleRoman)) {
+                const name = trimmed.substring(0, lastSpaceIndex).trim();
+                const lvl = romanToArabic(possibleRoman);
+                console.log(`✅ Найдено кастомное зачарование: "${name}" уровень ${lvl} (римская: ${possibleRoman})`);
+                result.push({ name, lvl });
+                continue;
+            }
+        }
+
+        // Если нет римской цифры в конце, считаем уровень 1
+        console.log(`✅ Найдено кастомное зачарование (без уровня): "${trimmed}" ур. 1`);
+        result.push({ name: trimmed, lvl: 1 });
+    }
+
+    console.log('🎯 Итоговый массив кастомных зачарований:', result);
     return result;
 }
+
+/**
+ * Извлекает цену из объекта предмета Minecraft (структура с компонентами).
+ * @param {Object} item - объект предмета, содержащий components.
+ * @returns {number|null} - цена в виде числа или null, если не найдена.
+ */
+function getPriceFromItem(item) {
+  // 1. Находим компонент lore
+  const loreComp = item.components?.find(c => c.type === 'lore');
+  if (!loreComp || !Array.isArray(loreComp.data)) return null;
+
+  // 2. Перебираем все записи lore (строки описания)
+  for (const loreEntry of loreComp.data) {
+    const strings = [];
+    extractStrings(loreEntry, strings);
+
+    // 3. Проверяем, есть ли в этой записи маркер цены (например, "Цена:" или "Ценa:")
+    const hasPriceMarker = strings.some(s => typeof s === 'string' && s.includes('Цен'));
+    if (!hasPriceMarker) continue;
+
+    // 4. Ищем строку, которая выглядит как число (только цифры, запятые, максимум одна точка)
+    for (const s of strings) {
+      if (typeof s !== 'string') continue;
+      const trimmed = s.trim();
+      if (trimmed === '') continue;
+
+      // Убираем запятые (разделители тысяч) и проверяем формат
+      const withoutCommas = trimmed.replace(/,/g, '');
+      if (/^\d*\.?\d+$/.test(withoutCommas)) {
+        const num = parseFloat(withoutCommas);
+        if (!isNaN(num)) return num;
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractStrings(node, out) {
+    if (node === null || node === undefined) return;
+
+    if (Array.isArray(node)) {
+        for (const item of node) {
+            extractStrings(item, out);
+        }
+    } else if (typeof node === 'object') {
+        if (node.type === 'string' && node.hasOwnProperty('value')) {
+            const val = node.value;
+            if (typeof val === 'string') {
+                out.push(val);
+            } else {
+                extractStrings(val, out);
+            }
+        } else {
+            for (const val of Object.values(node)) {
+                extractStrings(val, out);
+            }
+        }
+    } else if (typeof node === 'string') {
+        out.push(node);
+    }
+}
+
+// Пример использования:
+// const price = findPrice(item);
+// console.log(price); // 3490000
 
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
@@ -1087,7 +1212,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
-    // Маппинг числовых ID в названия
+    // Маппинг числовых ID в названия (ванильные)
     const numericToName = {
         32: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
@@ -1095,108 +1220,77 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         36: 'minecraft:sweeping',
         17: 'minecraft:knockback',
         18: 'minecraft:looting',
-        34: 'minecraft:unbreaking', 
+        34: 'minecraft:unbreaking',
+    };
+
+    // Маппинг русских названий кастомных зачарований в английские (из конфига)
+    const customNameMap = {
+        'Яд': 'poison',
+        'Вампиризм': 'vampirism',
+        'Детекция': 'detection',
+        'Окисление': 'oxidation',      // предположительно
+        'Опытный': 'experienced',       // если есть в конфиге
+        // Добавьте остальные по мере необходимости
     };
 
     // Получаем обычные зачарования из компонента enchantments
     const vanillaEnchants = [];
-if (item.components) {
-    const enchComponent = item.components.find(c => c.type === 'enchantments');
-    if (enchComponent?.data?.enchantments) {
-        vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
-            let name = e.id?.value;
-            if (typeof name === 'number') {
-                name = numericToName[name] || `unknown:${name}`;
-            }
-            
-            // Если level нет или undefined - ставим 1
-            let lvl = e.lvl?.value;
-            if (lvl === undefined || lvl === null) {
-                lvl = 1;
-            }
-            
-            return { name, lvl };
-        }));
-    }
-}
-
-// Получаем кастомные зачарования из LORE
-const customEnchants = [];
-const loreComponent = item.components?.find(c => c.type === 'lore');
-
-if (loreComponent?.data) {
-    const loreLines = loreComponent.data;
-    
-    for (const line of loreLines) {
-        let text = '';
-        
-        if (line.type === 'string') {
-            text = line.value;
-        } else if (line.type === 'compound' && line.value?.extra) {
-            const extra = line.value.extra;
-            if (extra.type === 'list' && extra.value?.value) {
-                for (const extraItem of extra.value.value) {
-                    if (extraItem.type === 'compound' && extraItem.value?.text?.value) {
-                        text += extraItem.value.text.value;
-                    }
+    if (item.components && Array.isArray(item.components)) {
+        const enchComponent = item.components.find(c => c && c.type === 'enchantments');
+        if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
+            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
+                if (!e) return null;
+                
+                let name = e.id;
+                if (typeof name === 'number') {
+                    name = numericToName[name] || `unknown:${name}`;
                 }
-            }
-        }
-        
-        // Ищем зачарования в тексте (формат "Название" или "Название РимскаяЦифра")
-        // Теперь поддерживает оба варианта: "Окисление" (lvl=1) и "Окисление II" (lvl=2)
-        const enchantRegex = /^([А-Яа-яA-Za-z]+)(?:\s+(I{1,3}|IV|V|VI{0,3}))?$/;
-        const match = text.trim().match(enchantRegex);
-        
-        if (match) {
-            const name = match[1].toLowerCase();
-            
-            // Если есть римская цифра - конвертируем, если нет - уровень 1
-            let lvl = 1;
-            if (match[2]) {
-                const romanNumeral = match[2];
-                lvl = romanToArabic(romanNumeral);
-            }
-            
-            // Маппинг русских названий в английские
-            const nameMapping = {
-                'окисление': 'poison',
-                'вампиризм': 'vampirism',
-                'яд': 'poison',
-                'детекция': 'detection',
-                'тяжелый': 'heavy',
-                'тяжёлый': 'heavy',
-                'нестабильный': 'unstable'
-            };
-            
-            const mappedName = nameMapping[name] || name;
-            customEnchants.push({ name: mappedName, lvl });
+                
+                let lvl = e.level;
+                if (lvl === undefined || lvl === null) {
+                    lvl = 1;
+                }
+                
+                return { name, lvl };
+            }).filter(e => e !== null));
         }
     }
-}
 
-    // Функция для конвертации римских чисел в арабские
-    function romanToArabic(roman) {
-        const romanMap = {
-            'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6
-        };
-        return romanMap[roman] || 1;
-    }
+    // Получаем кастомные зачарования из LORE (теперь они возвращаются с русскими названиями)
+    const rawCustomEnchants = extractCustomEnchantsFromItem(item);
+
+    // Преобразуем русские названия в английские согласно словарю
+    const customEnchants = rawCustomEnchants.map(ench => {
+        const englishName = customNameMap[ench.name];
+        if (englishName) {
+            return { name: englishName, lvl: ench.lvl };
+        } else {
+            // Если нет в словаре, оставляем как есть (может, это неизвестное зачарование,
+            // но в конфиге его не будет, так что оно просто не совпадёт)
+            console.log(`⚠️ Неизвестное кастомное зачарование: "${ench.name}" (уровень ${ench.lvl}) — оставляем без перевода`);
+            return ench; // или можно вернуть null, но лучше оставить для отладки
+        }
+    });
+
+    // Функция для конвертации римских чисел в арабские (оставлена для совместимости, но уже не нужна здесь, т.к. extractCustomEnchantsFromItem сама преобразует)
+    // function romanToArabic(roman) { ... }
 
     // Собираем все зачарования
     const allEnchants = [...vanillaEnchants, ...customEnchants];
     
     // Логирование для отладки
-    console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
-    console.log('Кастомные зачарования:', customEnchants.map(e => `${e.name}:${e.lvl}`));
-    console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
+    if (vanillaEnchants.length > 0 || customEnchants.length > 0) {
+        console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
+        console.log('Кастомные зачарования (после перевода):', customEnchants.map(e => `${e.name}:${e.lvl}`));
+        console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
+    }
 
     // Продолжаем поиск подходящей конфигурации
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
 
         const areEnchantsValid = configItem.effects?.every(required => {
-            const foundEnchant = allEnchants.find(e => e.name === required.name);
+            const foundEnchant = allEnchants.find(e => e && e.name === required.name);
             return foundEnchant && foundEnchant.lvl >= required.lvl;
         });
 
@@ -1204,7 +1298,7 @@ if (loreComponent?.data) {
 
         if (options.checkMissingEnchants) {
             const hasMissingEnchants = allEnchants.some(en => {
-                if (!missingEnchantsNames.includes(en.name)) return false;
+                if (!en || !missingEnchantsNames.includes(en.name)) return false;
                 const isRequiredByConfig = configItem.effects?.some(ef => ef.name === en.name);
                 return !isRequiredByConfig;
             });
@@ -1213,15 +1307,16 @@ if (loreComponent?.data) {
 
         // Специальная проверка для кирки с silk touch
         if (item.name === 'netherite_pickaxe' &&
-            allEnchants.some(en => en.name === 'minecraft:silk_touch') &&
-            !allEnchants.some(en => en.name === 'melting')) {
+            allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
+            !allEnchants.some(en => en && en.name === 'melting')) {
             continue;
         }
 
         if (options.checkDurability && item.maxDurability) {
             let coefficient = 0.9;
-            if (allEnchants.some(en => en.name === 'minecraft:mending')) coefficient = 0.75;
-            const damage = item.nbt?.value?.Damage?.value || 0;
+            if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.75;
+            const damageComp = item.components?.find(c => c.type === 'damage');
+            const damage = damageComp?.data || 0;
             const durabilityLeft = item.maxDurability - damage;
             if (durabilityLeft < item.maxDurability * coefficient) continue;
         }
@@ -1231,7 +1326,6 @@ if (loreComponent?.data) {
 
     return null;
 }
-
 function getSellPrice(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     return config ? config.priceSell : 0;
@@ -1260,47 +1354,7 @@ function getItemConfig(item, itemPrices) {
     return findMatchingConfigItem(item, itemPrices);
 }
 
-async function getBuyPrice(slotData) {
-    const loreArray = slotData.nbt?.value?.display?.value?.Lore?.value?.value;
-    if (!loreArray) return undefined;
 
-    for (const jsonString of loreArray) {
-        try {
-            const parsedData = JSON.parse(jsonString);
-            
-            function findPrice(obj) {
-                if (!obj) return null;
-                if (typeof obj === 'string') {
-                    const match = obj.match(/[\d,]+/);
-                    return match ? match[0] : null;
-                }
-                if (obj.extra && Array.isArray(obj.extra)) {
-                    for (const item of obj.extra) {
-                        const found = findPrice(item);
-                        if (found) return found;
-                    }
-                }
-                if (obj.text && typeof obj.text === 'string') {
-                    const match = obj.text.match(/[\d,]+/);
-                    if (match) return match[0];
-                }
-                return null;
-            }
-            
-            const priceStr = findPrice(parsedData);
-            if (priceStr) {
-                const price = parseInt(priceStr.replace(/,/g, ''));
-                if (!isNaN(price)) return price;
-            }
-        } catch (e) {
-            continue;
-        }
-    }
-
-    logger.error('Цена не найдена');
-    saveToJsonFile('error.json', slotData);
-    return undefined;
-}
 
 async function getBuyPriceInStorage(slotData) {
     const loreArray = slotData?.nbt?.value?.display?.value?.Lore?.value?.value;
