@@ -8,244 +8,6 @@
   null,
   null,
   null,
-  {
-    "type": 1165,
-    "count": 1,
-    "metadata": 0,
-    "nbt": null,
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "heavy"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 1
-                        }
-                      }
-                    ]
-                  }
-                },
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    -6,
-                    -23,
-                    72,
-                    10,
-                    60,
-                    127,
-                    72,
-                    -55,
-                    -69,
-                    -66,
-                    37,
-                    70,
-                    83,
-                    41,
-                    -64,
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "red"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Тяжелый I"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "enchanted_book",
-    "displayName": "Enchanted Book",
-    "stackSize": 1,
-    "slot": 9
-  },
-  {
-    "type": 1165,
-    "count": 1,
-    "metadata": 0,
-    "nbt": null,
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "unstable"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 2
-                        }
-                      }
-                    ]
-                  }
-                },
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    23,
-                    82,
-                    -71,
-                    -88,
-                    39,
-                    -72,
-                    73,
-                    112,
-                    -94,
-                    -7,
-                    -50,
-                    -24,
-                    94,
-                    -67,
-                    -54,
-                    16
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "red"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Нестабильный II"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "enchanted_book",
-    "displayName": "Enchanted Book",
-    "stackSize": 1,
-    "slot": 10
-  },
   null,
   null,
   null,
@@ -254,139 +16,9 @@
   null,
   null,
   null,
-  {
-    "type": 874,
-    "count": 1,
-    "metadata": 0,
-    "nbt": {
-      "type": "compound",
-      "name": "",
-      "value": {
-        "Damage": {
-          "type": "int",
-          "value": 0
-        }
-      }
-    },
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "poison"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 1
-                        }
-                      }
-                    ]
-                  }
-                },
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    -108,
-                    70,
-                    91,
-                    -38,
-                    -55,
-                    -17,
-                    74,
-                    21,
-                    -76,
-                    38,
-                    123,
-                    -102,
-                    -122,
-                    -122,
-                    51,
-                    12
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "gray"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Яд I"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
-      },
-      {
-        "type": "enchantment_glint_override",
-        "data": true
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "netherite_sword",
-    "displayName": "Netherite Sword",
-    "stackSize": 1,
-    "maxDurability": 2031,
-    "slot": 19
-  },
+  null,
+  null,
+  null,
   null,
   null,
   null,
@@ -417,19 +49,10 @@
   null,
   null,
   {
-    "type": 874,
+    "type": 1165,
     "count": 1,
     "metadata": 0,
-    "nbt": {
-      "type": "compound",
-      "name": "",
-      "value": {
-        "Damage": {
-          "type": "int",
-          "value": 0
-        }
-      }
-    },
+    "nbt": null,
     "components": [
       {
         "type": "custom_data",
@@ -442,37 +65,48 @@
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
+                    -83,
+                    32,
+                    -12,
+                    -113,
+                    41,
+                    12,
+                    68,
+                    -87,
+                    -93,
                     -106,
-                    -2,
-                    38,
-                    -70,
-                    0,
-                    -47,
-                    67,
-                    -45,
-                    -106,
-                    75,
-                    -110,
-                    -68,
-                    -18,
-                    -15,
-                    127,
-                    52
+                    6,
+                    -116,
+                    -103,
+                    16,
+                    -20,
+                    -115
                   ]
                 }
               }
             }
           }
         }
+      },
+      {
+        "type": "stored_enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 1
+            }
+          ],
+          "showInTooltip": true
+        }
       }
     ],
     "removedComponents": [],
     "componentMap": {},
     "stackId": null,
-    "name": "netherite_sword",
-    "displayName": "Netherite Sword",
+    "name": "enchanted_book",
+    "displayName": "Enchanted Book",
     "stackSize": 1,
-    "maxDurability": 2031,
     "slot": 36
   },
   null,
@@ -504,35 +138,7 @@
     "stackSize": 16,
     "slot": 39
   },
-  {
-    "type": 874,
-    "count": 1,
-    "metadata": 0,
-    "nbt": {
-      "type": "compound",
-      "name": "",
-      "value": {
-        "Damage": {
-          "type": "int",
-          "value": 0
-        }
-      }
-    },
-    "components": [
-      {
-        "type": "damage",
-        "data": 3
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "netherite_sword",
-    "displayName": "Netherite Sword",
-    "stackSize": 1,
-    "maxDurability": 2031,
-    "slot": 40
-  },
+  null,
   null,
   null,
   null,

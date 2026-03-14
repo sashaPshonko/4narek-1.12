@@ -1087,43 +1087,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
-    // Получаем обычные зачарования (старый формат с числами)
-    const enchantments = item.nbt?.value?.Enchantments?.value?.value || [];
-    
-    // Получаем кастомные зачарования из PublicBukkitValues (НОВОЕ!)
-    const customEnchantments = [];
-    const publicBukkitValues = item.nbt?.value?.PublicBukkitValues?.value;
-    
-    if (publicBukkitValues) {
-        // Проверяем разные возможные пути для кастомных зачарований
-        for (const [key, value] of Object.entries(publicBukkitValues)) {
-            // Вариант 1: 'minecraft:custom-enchantments' (как в твоём примере)
-            if (key.includes('custom-enchantments') && value.type === 'list') {
-                const enchantList = value.value?.value || [];
-                for (const ench of enchantList) {
-                    if (ench.type === 'compound') {
-                        const enchValue = ench.value;
-                        // Ищем type и level в разных форматах
-                        const name = enchValue?.['minecraft:type']?.value || 
-                                    enchValue?.type?.value;
-                        const lvl = enchValue?.['minecraft:level']?.value || 
-                                   enchValue?.level?.value;
-                        
-                        if (name && lvl !== undefined) {
-                            customEnchantments.push({ name, lvl });
-                        }
-                    }
-                }
-            }
-            
-            // Вариант 2: прямые custom-enchantments где-то ещё
-            if (key.includes('enchant') && value.type === 'compound') {
-                // Здесь можно добавить другие форматы по мере появления
-            }
-        }
-    }
-
-    // Маппинг числовых ID в названия (ДОБАВЛЯЕМ!)
+    // Маппинг числовых ID в названия
     const numericToName = {
         32: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
@@ -1131,26 +1095,90 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         36: 'minecraft:sweeping',
         17: 'minecraft:knockback',
         18: 'minecraft:looting',
+        34: 'minecraft:unbreaking', 
     };
 
-    // Собираем все зачарования
-    const allEnchants = [
-        // Обычные зачарования (конвертируем числа в названия)
-        ...enchantments.map(e => {
-            let name = e.id?.value;
-            // Если это число - конвертируем
-            if (typeof name === 'number') {
-                name = numericToName[name] || `unknown:${name}`;
+    // Получаем обычные зачарования из компонента enchantments
+    const vanillaEnchants = [];
+    if (item.components) {
+        const enchComponent = item.components.find(c => c.type === 'enchantments');
+        if (enchComponent?.data?.enchantments) {
+            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
+                let name = e.id?.value;
+                if (typeof name === 'number') {
+                    name = numericToName[name] || `unknown:${name}`;
+                }
+                return { name, lvl: e.lvl?.value };
+            }));
+        }
+    }
+
+    // Получаем кастомные зачарования из LORE (текста описания)
+    const customEnchants = [];
+    const loreComponent = item.components?.find(c => c.type === 'lore');
+    
+    if (loreComponent?.data) {
+        const loreLines = loreComponent.data;
+        
+        for (const line of loreLines) {
+            // Извлекаем текст из сложной структуры JSON
+            let text = '';
+            
+            if (line.type === 'string') {
+                text = line.value;
+            } else if (line.type === 'compound' && line.value?.extra) {
+                // Обрабатываем compound с extra
+                const extra = line.value.extra;
+                if (extra.type === 'list' && extra.value?.value) {
+                    for (const extraItem of extra.value.value) {
+                        if (extraItem.type === 'compound' && extraItem.value?.text?.value) {
+                            text += extraItem.value.text.value;
+                        }
+                    }
+                }
             }
-            return { name, lvl: e.lvl?.value };
-        }),
-        // Кастомные зачарования (уже строки)
-        ...customEnchantments
-    ];
+            
+            // Ищем зачарования в тексте (формат "Название РимскаяЦифра")
+            // Например: "Окисление II", "Вампиризм II", "Яд III"
+            const enchantRegex = /^([А-Яа-яA-Za-z]+)\s+(I{1,3}|IV|V|VI{0,3})$/;
+            const match = text.trim().match(enchantRegex);
+            
+            if (match) {
+                const name = match[1].toLowerCase(); // Приводим к нижнему регистру
+                const romanNumeral = match[2];
+                const lvl = romanToArabic(romanNumeral);
+                
+                // Маппинг русских названий в английские (если нужно)
+                const nameMapping = {
+                    'окисление': 'poison',
+                    'вампиризм': 'vampirism',
+                    'яд': 'poison',
+                    'detection': 'detection'
+                };
+                
+                const mappedName = nameMapping[name] || name;
+                customEnchants.push({ name: mappedName, lvl });
+            }
+        }
+    }
 
+    // Функция для конвертации римских чисел в арабские
+    function romanToArabic(roman) {
+        const romanMap = {
+            'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6
+        };
+        return romanMap[roman] || 1;
+    }
+
+    // Собираем все зачарования
+    const allEnchants = [...vanillaEnchants, ...customEnchants];
+    
     // Логирование для отладки
-    // console.log('Найденные зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
+    console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
+    console.log('Кастомные зачарования:', customEnchants.map(e => `${e.name}:${e.lvl}`));
+    console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
 
+    // Продолжаем поиск подходящей конфигурации
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
 
@@ -1170,6 +1198,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
             if (hasMissingEnchants) continue;
         }
 
+        // Специальная проверка для кирки с silk touch
         if (item.name === 'netherite_pickaxe' &&
             allEnchants.some(en => en.name === 'minecraft:silk_touch') &&
             !allEnchants.some(en => en.name === 'melting')) {
