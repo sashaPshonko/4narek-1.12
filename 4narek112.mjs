@@ -362,10 +362,10 @@ async function launchBookBuyer(name, password, anarchy) {
         }, 10000);
 
         logger.info(`${name} успешно проник на сервер.`);
-        await delay(5000);
+        await delay(1000);
         bot.chat(loginCommand);
         await delay(300)
-        await delay(5000);
+        await delay(1000);
         bot.chat(anarchyCommand);
         // bot.acceptResourcePack()
        
@@ -417,6 +417,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (bot.menu) {
             case chooseBuying:
+                saveToJsonFile('iv.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${bot.menu}`);
@@ -1086,13 +1087,69 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
+    // Получаем обычные зачарования (старый формат с числами)
     const enchantments = item.nbt?.value?.Enchantments?.value?.value || [];
-    const customEnchantments = item.nbt?.value?.['custom-enchantments']?.value?.value || [];
+    
+    // Получаем кастомные зачарования из PublicBukkitValues (НОВОЕ!)
+    const customEnchantments = [];
+    const publicBukkitValues = item.nbt?.value?.PublicBukkitValues?.value;
+    
+    if (publicBukkitValues) {
+        // Проверяем разные возможные пути для кастомных зачарований
+        for (const [key, value] of Object.entries(publicBukkitValues)) {
+            // Вариант 1: 'minecraft:custom-enchantments' (как в твоём примере)
+            if (key.includes('custom-enchantments') && value.type === 'list') {
+                const enchantList = value.value?.value || [];
+                for (const ench of enchantList) {
+                    if (ench.type === 'compound') {
+                        const enchValue = ench.value;
+                        // Ищем type и level в разных форматах
+                        const name = enchValue?.['minecraft:type']?.value || 
+                                    enchValue?.type?.value;
+                        const lvl = enchValue?.['minecraft:level']?.value || 
+                                   enchValue?.level?.value;
+                        
+                        if (name && lvl !== undefined) {
+                            customEnchantments.push({ name, lvl });
+                        }
+                    }
+                }
+            }
+            
+            // Вариант 2: прямые custom-enchantments где-то ещё
+            if (key.includes('enchant') && value.type === 'compound') {
+                // Здесь можно добавить другие форматы по мере появления
+            }
+        }
+    }
 
+    // Маппинг числовых ID в названия (ДОБАВЛЯЕМ!)
+    const numericToName = {
+        32: 'minecraft:sharpness',
+        10: 'minecraft:fire_aspect',
+        39: 'minecraft:protection',
+        36: 'minecraft:sweeping',
+        17: 'minecraft:knockback',
+        18: 'minecraft:looting',
+    };
+
+    // Собираем все зачарования
     const allEnchants = [
-        ...enchantments.map(e => ({ name: e.id?.value, lvl: e.lvl?.value })),
-        ...customEnchantments.map(e => ({ name: e.type?.value, lvl: e.level?.value }))
+        // Обычные зачарования (конвертируем числа в названия)
+        ...enchantments.map(e => {
+            let name = e.id?.value;
+            // Если это число - конвертируем
+            if (typeof name === 'number') {
+                name = numericToName[name] || `unknown:${name}`;
+            }
+            return { name, lvl: e.lvl?.value };
+        }),
+        // Кастомные зачарования (уже строки)
+        ...customEnchantments
     ];
+
+    // Логирование для отладки
+    // console.log('Найденные зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
 
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
