@@ -417,7 +417,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (bot.menu) {
             case chooseBuying:
-                saveToJsonFile('iv.json', bot.inventory.slots)
+                // saveToJsonFile('iv.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${bot.menu}`);
@@ -983,7 +983,7 @@ async function getAHSlotsIDs(bot, itemPrices) {
 
 async function getBestAHSlot(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return null;
-    await saveToJsonFile('ah.json', bot.currentWindow?.slots)
+    // await saveToJsonFile('ah.json', bot.currentWindow?.slots)
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
@@ -1005,7 +1005,7 @@ async function getBestAHSlot(bot, itemPrices) {
         
         try {
             const price = await getBuyPrice(slotData);
-            console.log(`цена - ${price}`)
+            // console.log(`цена - ${price}`)
             if (!price || price >= config.priceSell - config.nacenka) continue;
             if (!config.priceSell) continue;
 
