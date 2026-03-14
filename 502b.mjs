@@ -37,10 +37,10 @@ const alertChatID = -4763690917
 const pomoikaChatID = -4896488855
 
 const bots = [
-//   { username: 'gorbnaobot137', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем" },
-//   { username: 'gorBBedFROG', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_починка" },
-//   { username: 'gorbOMPolbu', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_позорный" },
-  { username: 'nikusik_krasotka', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_позорный" },
+  { username: 'gorbnaobot137', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем" },
+  { username: 'gorBBedFROG', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3000, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_починка" },
+  { username: 'gorbOMPolbu', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_позорный" },
+//   { username: 'nikusik_krasotka', password: 'ggggg', anarchy: 502, type: '4narek112', inventoryPort: 3002, balance: undefined, msgID: 0, msgTime: null, isManualStop: false, itemPrices: items, item: 'netherite sword', ip: '192.168.8.117', itemID: "шлем_позорный" },
 ];
 
 
