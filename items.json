@@ -13,7 +13,7 @@
             },
             {
                 "name": "minecraft:sharpness",
-                "lvl": 5
+                "lvl": 6
             }
         ],
         "num": 1,
@@ -90,6 +90,10 @@
             {
                 "name": "minecraft:looting",
                 "lvl": 5
+            },
+            {
+                "name": "minecraft:sweeping",
+                "lvl": 3
             }
         ],
         "num": 4,
