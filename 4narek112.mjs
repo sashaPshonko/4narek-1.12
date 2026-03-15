@@ -1263,6 +1263,11 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         17: 'minecraft:knockback',
         18: 'minecraft:looting',
         34: 'minecraft:unbreaking',
+        27: "minecraft:protection",
+        26: "minecraft:projectile_protection",
+        22: "minecraft:mending",
+        38: "minecraft:thorns",
+        11: "minecraft:fire_protection",
     };
 
     // Маппинг русских названий кастомных зачарований в английские (из конфига)
