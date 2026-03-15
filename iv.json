@@ -28,20 +28,7 @@
   null,
   null,
   null,
-  {
-    "type": 837,
-    "count": 9,
-    "metadata": 0,
-    "nbt": null,
-    "components": [],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "emerald",
-    "displayName": "Emerald",
-    "stackSize": 64,
-    "slot": 29
-  },
+  null,
   null,
   null,
   null,
@@ -49,11 +36,64 @@
   null,
   null,
   {
-    "type": 1165,
+    "type": 874,
     "count": 1,
     "metadata": 0,
-    "nbt": null,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
     "components": [
+      {
+        "type": "enchantment_glint_override",
+        "data": true
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 4
+            },
+            {
+              "id": 27,
+              "level": 3
+            },
+            {
+              "id": 10,
+              "level": 3
+            },
+            {
+              "id": 32,
+              "level": 7
+            },
+            {
+              "id": 1,
+              "level": 5
+            },
+            {
+              "id": 34,
+              "level": 5
+            },
+            {
+              "id": 17,
+              "level": 2
+            },
+            {
+              "id": 18,
+              "level": 3
+            }
+          ],
+          "showTooltip": true
+        }
+      },
       {
         "type": "custom_data",
         "data": {
@@ -62,25 +102,103 @@
             "PublicBukkitValues": {
               "type": "compound",
               "value": {
+                "minecraft:custom-enchantments": {
+                  "type": "list",
+                  "value": {
+                    "type": "compound",
+                    "value": [
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "detection"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 1
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "sniper"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "poison"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 3
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "oxidation"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "vampirism"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "skilled"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      },
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "smelting"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                },
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    -83,
-                    32,
-                    -12,
-                    -113,
-                    41,
-                    12,
-                    68,
+                    33,
+                    77,
+                    39,
                     -87,
-                    -93,
-                    -106,
-                    6,
-                    -116,
-                    -103,
-                    16,
-                    -20,
-                    -115
+                    68,
+                    -126,
+                    67,
+                    70,
+                    -114,
+                    47,
+                    76,
+                    117,
+                    59,
+                    -16,
+                    14,
+                    37
                   ]
                 }
               }
@@ -89,55 +207,450 @@
         }
       },
       {
-        "type": "stored_enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 39,
-              "level": 1
+        "type": "damage",
+        "data": 254
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Снайпер II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
             }
-          ],
-          "showInTooltip": true
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Авто-Плавка"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Окисление II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Вампиризм II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Опытный II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Детекция I"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Яд III"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "light_purple"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "fff "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "blue"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "by forze "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "light_purple"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "fff"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": ""
+            }
+          }
         }
       }
     ],
     "removedComponents": [],
     "componentMap": {},
     "stackId": null,
-    "name": "enchanted_book",
-    "displayName": "Enchanted Book",
+    "name": "netherite_sword",
+    "displayName": "Netherite Sword",
     "stackSize": 1,
+    "maxDurability": 2031,
     "slot": 36
   },
   null,
-  {
-    "type": 1153,
-    "count": 61,
-    "metadata": 0,
-    "nbt": null,
-    "components": [],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "golden_carrot",
-    "displayName": "Golden Carrot",
-    "stackSize": 64,
-    "slot": 38
-  },
-  {
-    "type": 1185,
-    "count": 4,
-    "metadata": 0,
-    "nbt": null,
-    "components": [],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "white_banner",
-    "displayName": "White Banner",
-    "stackSize": 16,
-    "slot": 39
-  },
+  null,
+  null,
   null,
   null,
   null,

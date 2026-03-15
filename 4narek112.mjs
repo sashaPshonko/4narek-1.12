@@ -1098,34 +1098,62 @@ function romanToArabic(roman) {
  */
 function extractCustomEnchantsFromItem(item) {
     console.log('🔍 extractCustomEnchantsFromItem: начат поиск кастомных зачарований');
+    const result = [];
 
+    // 1. ПРОВЕРЯЕМ НАЛИЧИЕ СТРУКТУРИРОВАННЫХ ДАННЫХ (приоритет)
+    try {
+        const customDataComp = item.components?.find(c => c.type === 'custom_data');
+        const enchantsArray = customDataComp?.data?.value?.PublicBukkitValues?.value?.['minecraft:custom-enchantments']?.value?.value;
+        
+        if (Array.isArray(enchantsArray) && enchantsArray.length > 0) {
+            console.log('📦 Найдены структурированные кастомные зачарования:');
+            
+            for (const ench of enchantsArray) {
+                const name = ench['minecraft:type']?.value;
+                const lvl = ench['minecraft:level']?.value;
+                
+                if (name && typeof lvl === 'number') {
+                    console.log(`  ✅ ${name}:${lvl}`);
+                    result.push({ name, lvl });
+                }
+            }
+            
+            // Если нашли структурированные — возвращаем только их
+            console.log('🎯 Итоговые кастомные зачарования (из структуры):', result);
+            return result;
+        }
+    } catch (e) {
+        console.log('⚠️ Ошибка при парсинге структурированных данных:', e.message);
+    }
+
+    // 2. ЕСЛИ СТРУКТУРИРОВАННЫХ НЕТ — используем старый метод через JSON
+    console.log('⚠️ Структурированные данные не найдены, используем JSON-парсинг');
+    
     // Преобразуем весь объект в JSON-строку
     const jsonStr = JSON.stringify(item);
     
-    // Ищем все значения ключа "value" (предполагаем, что строки не содержат кавычек внутри)
-    // Регулярка: ищем "value":" затем захватываем всё до следующей кавычки
+    // Ищем все значения ключа "value"
     const valueRegex = /"value":"([^"]*)"/g;
     const matches = [];
     let match;
     while ((match = valueRegex.exec(jsonStr)) !== null) {
-        matches.push(match[1]); // захваченное содержимое
+        matches.push(match[1]);
     }
 
     console.log('📋 Все найденные значения из поля "value":', matches);
 
-    // Оставляем только те, которые содержат буквы (латиница или кириллица) и не начинаются с '#'
+    // Оставляем только те, которые содержат буквы и не начинаются с '#'
     const textStrings = matches.filter(s => {
         if (!s || typeof s !== 'string') return false;
         const trimmed = s.trim();
         if (!trimmed) return false;
-        if (/^#/.test(trimmed)) return false;   // отсекаем цвета типа "#FF6600"
-        return /[a-zA-Zа-яА-Я]/.test(trimmed);  // есть хотя бы одна буква
+        if (/^#/.test(trimmed)) return false;
+        return /[a-zA-Zа-яА-Я]/.test(trimmed);
     });
 
     console.log('📋 Отфильтрованные строки (с буквами):', textStrings);
 
     const romanRegex = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/;
-    const result = [];
 
     for (const str of textStrings) {
         const trimmed = str.trim();
@@ -1242,9 +1270,6 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         'Яд': 'poison',
         'Вампиризм': 'vampirism',
         'Детекция': 'detection',
-        'Окисление': 'oxidation',      // предположительно
-        'Опытный': 'experienced',       // если есть в конфиге
-        // Добавьте остальные по мере необходимости
     };
 
     // Получаем обычные зачарования из компонента enchantments
@@ -1355,74 +1380,9 @@ function getItemNacenka(item, itemPrices) {
     return config ? config.nacenka : 0;
 }
 
-function getMinSellPrice(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.minPrice : 0;
-}
 
 function isItemMatchingConfig(item, itemPrices) {
     return findMatchingConfigItem(item, itemPrices) !== null;
-}
-
-function getItemConfig(item, itemPrices) {
-    return findMatchingConfigItem(item, itemPrices);
-}
-
-
-
-async function getBuyPriceInStorage(slotData) {
-    const loreArray = slotData?.nbt?.value?.display?.value?.Lore?.value?.value;
-    if (!Array.isArray(loreArray)) return undefined;
-
-    for (const jsonString of loreArray) {
-        try {
-            const parsed = JSON.parse(jsonString);
-
-            if (parsed.text === '$' && parsed.extra?.[0]?.extra?.[0]?.extra?.[0]) {
-                const priceStr = parsed.extra[0].extra[0].extra[0];
-                if (typeof priceStr === 'string') {
-                    const price = parseInt(priceStr.replace(/[^\d]/g, ''));
-                    if (!isNaN(price)) return price;
-                }
-            }
-
-            function findPriceInExtra(obj) {
-                if (!obj) return null;
-                if (typeof obj === 'string') {
-                    const match = obj.match(/[\d,]+/);
-                    return match ? match[0] : null;
-                }
-                if (Array.isArray(obj)) {
-                    for (const item of obj) {
-                        const found = findPriceInExtra(item);
-                        if (found) return found;
-                    }
-                }
-                if (obj.extra && Array.isArray(obj.extra)) {
-                    for (const item of obj.extra) {
-                        const found = findPriceInExtra(item);
-                        if (found) return found;
-                    }
-                }
-                if (obj.text && typeof obj.text === 'string') {
-                    const match = obj.text.match(/[\d,]+/);
-                    if (match) return match[0];
-                }
-                return null;
-            }
-
-            const priceStr = findPriceInExtra(parsed);
-            if (priceStr) {
-                const price = parseInt(priceStr.replace(/[^\d]/g, ''));
-                if (!isNaN(price)) return price;
-            }
-        } catch (e) {
-            continue;
-        }
-    }
-
-    console.error('Цена не найдена');
-    return undefined;
 }
 
 function getRandomDelayInRange(min, max) {
