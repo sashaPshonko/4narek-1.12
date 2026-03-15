@@ -319,6 +319,7 @@ async function launchBookBuyer(name, password, anarchy) {
         version: '1.21.4',  // или 1.21.8
         chatLengthLimit: 256,
     });
+    bot.mu = false
 
     const loginCommand = `/l ${name}`;
     const anarchyCommand = `/an${anarchy}`;
