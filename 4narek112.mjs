@@ -1258,11 +1258,10 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     const numericToName = {
         32: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
-        39: 'minecraft:protection',
+        39: 'minecraft:unbreaking',
         36: 'minecraft:sweeping',
         17: 'minecraft:knockback',
         18: 'minecraft:looting',
-        34: 'minecraft:unbreaking',
         27: "minecraft:protection",
         26: "minecraft:projectile_protection",
         22: "minecraft:mending",
