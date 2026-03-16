@@ -29,7 +29,7 @@ try {
   items = [];
 }
 
-const token = '7590462636:AAHmzPTD5kOVTgoQAwEh8mcFN6JaOr1_XsY';
+const token = '8293242577:AAFMFGvnZE4vGnu9ukszz19tgjtuQOpiyRA';
 
 const tgBot = new TelegramBot(token, { polling: true });
 

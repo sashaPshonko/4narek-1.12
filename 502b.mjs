@@ -28,7 +28,7 @@ let botsStarted = false;
 
 
 // Telegram конфигурация
-const token = '7443919586:AAFR57rTaD7rvqA6I8D9Z9LCal2cb3WSsnI';
+const token = '8629785801:AAHIxOpsbvoY0CuIbOgfSVnEog6AJoB5N24';
 const tgBot = new TelegramBot(token, { polling: true });
 
 const infoChatID = -4709535234;
