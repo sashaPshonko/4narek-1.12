@@ -10,238 +10,30 @@ import { generateKey } from 'crypto';
 import protodef from 'protodef';
 import zlib from 'zlib';
 
-// ========== ГЛОБАЛЬНЫЙ ПЕРЕХВАТЧИК ВСЕХ ОШИБОК ==========
-// process.on('uncaughtException', (err) => {
-//     // Специально для 593716016
-//     if (err.message?.includes('593716016')) {
-//         console.log(`⚠️ Игнорируем ошибку с числом 593716016`);
-//         return;
-//     }
-    
-//     // Остальные проверки
-//     const ignoreList = [
-//         'PartialReadError',
-//         'Unexpected buffer end',
-//         'varint is too big',
-//         'array size is abnormally large',
-//         'Invalid tag',
-//         'Read error for undefined',
-//         'offset is out of range',
-//         'Chunk size is',
-//         'entity_equipment',
-//         'window_items',
-//         'set_slot',
-//         'Missing characters in string',
-//         '593913446',
-//         '205876835',
-//         'incorrect header check',
-//         'Z_DATA_ERROR',
-//         'socketClosed',
-//         'read ECONNRESET'
-//     ];
-    
-//     const shouldIgnore = ignoreList.some(msg => 
-//         err.message?.includes(msg) || err.stack?.includes(msg)
-//     );
-    
-//     if (shouldIgnore) {
-//         console.log(`⚠️ Игнорируем ошибку: ${err.message?.substring(0, 100) || 'no message'}`);
-//         return;
-//     }
-    
-//     console.error('💥 Критическая ошибка:', err);
-// });
-
-// process.on('unhandledRejection', (err) => {
-//     console.log(`⚠️ Игнорируем rejection: ${err?.message?.substring(0, 100) || 'no message'}`);
-// });
-
-// ========== ПАТЧ ZLIB ==========
-// const originalInflate = zlib.inflate;
-// const originalInflateSync = zlib.inflateSync;
-// const originalUnzip = zlib.unzip;
-
-// zlib.inflate = function(buffer, options, callback) {
-//     try {
-//         return originalInflate.call(this, buffer, options, callback);
-//     } catch (err) {
-//         console.log(`⚠️ Zlib inflate error ignored: ${err.message}`);
-//         if (callback) callback(null, Buffer.alloc(0));
-//     }
-// };
-
-// zlib.inflateSync = function(buffer, options) {
-//     try {
-//         return originalInflateSync.call(this, buffer, options);
-//     } catch (err) {
-//         console.log(`⚠️ Zlib inflateSync error ignored: ${err.message}`);
-//         return Buffer.alloc(0);
-//     }
-// };
-
-// zlib.unzip = function(buffer, options, callback) {
-//     try {
-//         return originalUnzip.call(this, buffer, options, callback);
-//     } catch (err) {
-//         console.log(`⚠️ Zlib unzip error ignored: ${err.message}`);
-//         if (callback) callback(null, Buffer.alloc(0));
-//     }
-// };
-
-// console.log('✅ Zlib патч добавлен');
-
-// ========== ПАТЧ PROTODEF ==========
-// try {
-//     const proto = protodef;
-    
-//     // Патчим readVarInt
-//     const originalReadVarInt = proto.readVarInt;
-//     proto.readVarInt = function(buffer, offset) {
-//         try {
-//             if (offset < 0) offset = 0;
-//             return originalReadVarInt.call(this, buffer, offset);
-//         } catch (err) {
-//             if (err.message.includes('Unexpected buffer end') || 
-//                 err.message.includes('varint is too big')) {
-//                 return { value: 0, size: 1 };
-//             }
-//             throw err;
-//         }
-//     };
-    
-//    // Патчим byteArray (УЛЬТРА-ЗАЩИТА)
-// // ========== УЛЬТРА-ПАТЧ ДЛЯ BYTEARRAY ==========
-// try {
-//     const proto = protodef;
-    
-//     // Полностью переопределяем функцию byteArray
-//     if (proto.types?.byteArray) {
-//         proto.types.byteArray.read = function(buffer, offset, { count }) {
-//             try {
-//                 // Проверяем, не является ли count аномальным
-//                 if (count === 593716016 || count === 593913446 || count > 1000000 || count < 0) {
-//                     console.log(`⚠️ ByteArray: заблокировано аномальное значение ${count}`);
-//                     return { value: Buffer.alloc(0), size: 1 };
-//                 }
-                
-//                 // Проверяем выход за границы
-//                 if (offset + count > buffer.length) {
-//                     console.log(`⚠️ ByteArray: выход за границы буфера`);
-//                     const available = buffer.length - offset;
-//                     if (available > 0) {
-//                         return { value: buffer.slice(offset, offset + available), size: available };
-//                     }
-//                     return { value: Buffer.alloc(0), size: 1 };
-//                 }
-                
-//                 // Нормальное чтение
-//                 return { value: buffer.slice(offset, offset + count), size: count };
-//             } catch (err) {
-//                 console.log(`⚠️ ByteArray: ошибка, возвращаем пустой буфер`);
-//                 return { value: Buffer.alloc(0), size: 1 };
-//             }
-//         };
-//         console.log('✅ ByteArray УЛЬТРА-патч');
-//     }
-// } catch (e) {
-//     console.log('⚠️ Ошибка при патче byteArray:', e.message);
-// }
-    
-//     // Патчим nbt
-//     if (proto.types?.nbt?.read) {
-//         const originalNbt = proto.types.nbt.read;
-//         proto.types.nbt.read = function(buffer, offset) {
-//             try {
-//                 return originalNbt.call(this, buffer, offset);
-//             } catch (err) {
-//                 if (err.message.includes('abnormally large')) {
-//                     return { value: {}, size: 0 };
-//                 }
-//                 throw err;
-//             }
-//         };
-//         console.log('✅ NBT патч');
-//     }
-    
-//     // Патчим longArray
-//     if (proto.types?.longArray?.read) {
-//         const originalLongArray = proto.types.longArray.read;
-//         proto.types.longArray.read = function(buffer, offset, { type, endian } = {}) {
-//             try {
-//                 const { value: length, size: lengthSize } = this.readVarInt(buffer, offset);
-                
-//                 if (length > 1000000) {
-//                     console.log(`⚠️ LongArray: слишком большой размер ${length}, пропускаем`);
-//                     return { value: [], size: 1 };
-//                 }
-                
-//                 offset += lengthSize;
-//                 const array = [];
-                
-//                 for (let i = 0; i < length; i++) {
-//                     const { value, size } = this.read(buffer, offset, type, { endian });
-//                     array.push(value);
-//                     offset += size;
-//                 }
-                
-//                 return { value: array, size: offset - (offset - lengthSize) };
-//             } catch (err) {
-//                 if (err.message.includes('abnormally large')) {
-//                     console.log(`⚠️ LongArray: ошибка чтения, возвращаем пустой массив`);
-//                     return { value: [], size: 1 };
-//                 }
-//                 throw err;
-//             }
-//         };
-//         console.log('✅ LongArray патч');
-//     }
-    
-//     // Патчим list
-//     if (proto.types?.list?.read) {
-//         const originalList = proto.types.list.read;
-//         proto.types.list.read = function(buffer, offset, { type }) {
-//             try {
-//                 const { value: typeId, size: typeSize } = this.read(buffer, offset, 'byte');
-//                 offset += typeSize;
-//                 const { value: length, size: lengthSize } = this.readVarInt(buffer, offset);
-                
-//                 if (length > 1000000) {
-//                     console.log(`⚠️ List: слишком большой размер ${length}, пропускаем`);
-//                     return { value: [], size: offset - typeSize };
-//                 }
-                
-//                 offset += lengthSize;
-//                 const values = [];
-                
-//                 for (let i = 0; i < length; i++) {
-//                     const { value, size } = this.read(buffer, offset, type, { type: typeId });
-//                     values.push(value);
-//                     offset += size;
-//                 }
-                
-//                 return { value: values, size: offset - (offset - typeSize - lengthSize) };
-//             } catch (err) {
-//                 if (err.message.includes('abnormally large')) {
-//                     console.log(`⚠️ List: ошибка чтения, возвращаем пустой массив`);
-//                     return { value: [], size: 1 };
-//                 }
-//                 throw err;
-//             }
-//         };
-//         console.log('✅ List патч');
-//     }
-    
-//     console.log('✅ Protodef полностью пропатчен');
-// } catch (e) {
-//     console.log('⚠️ Не удалось пропатчить protodef:', e.message);
-// }
-
-// ========== ОСНОВНОЙ КОД БОТА ==========
+// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 let itemPrices = workerData.itemPrices;
 let itemsBuying = [];
 let needReset = false;
 let mu = false
 let netakbistro = true
+
+// Глобальные переменные для состояния бота
+let botStartTime = Date.now() - 55000
+let botAhFull = false
+let botTimeReset = Date.now()
+let botLogin = true
+let botTimeActive = Date.now()
+let botTimeLogin = Date.now()
+let botPrices = []
+let botCount = 0
+let botAh = []
+let botNeedSell = false
+let botStartClickTime = null
+let botUpdateWindow = false
+let botMenu = 'Выбор скупки ресурсов'
+let botKey = null
+let botType = ""
+let botTypeSell = null
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -318,7 +110,7 @@ async function launchBookBuyer(name, password, anarchy) {
         port: 25565,
         username: name,
         password: password,
-        version: '1.21.4',  // или 1.21.8
+        version: '1.21.4',
         chatLengthLimit: 256,
     });
 
@@ -330,25 +122,19 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.once('login', async () => {
         bot.loadPlugin(autoEat);
-        bot.startTime = Date.now() - 55000;
-        bot.ahFull = false;
-        bot.timeReset = Date.now();
-        bot.login = true;
-        bot.timeActive = Date.now();
-        bot.timeLogin = Date.now();
-        bot.prices = [];
-        bot.count = 0;
-        bot.ah = [];
-        bot.needSell = false;
-        bot.startClickTime = null;
-        bot.updateWindow = false;
-        //  bot._client.once('resource_pack_send', (packet) => {
-        //     console.log('📦 Получен ресурспак, подтверждаем...');
-        //     bot._client.write('resource_pack_receive', {
-        //         uuid: packet.uuid || 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6',
-        //         result: 3
-        //     });
-        // });
+        botStartTime = Date.now() - 55000;
+        botAhFull = false;
+        botTimeReset = Date.now();
+        botLogin = true;
+        botTimeActive = Date.now();
+        botTimeLogin = Date.now();
+        botPrices = [];
+        botCount = 0;
+        botAh = [];
+        botNeedSell = false;
+        botStartClickTime = null;
+        botUpdateWindow = false;
+        
         setInterval(() => {
             const inv = [];
             for (let i = 0; i <= lastInventorySlot; i++) {
@@ -367,7 +153,6 @@ async function launchBookBuyer(name, password, anarchy) {
         await delay(300)
         await delay(1000);
         bot.chat(anarchyCommand);
-        // bot.acceptResourcePack()
        
         console.log('anarchy')
         await delay(8000);
@@ -377,12 +162,12 @@ async function launchBookBuyer(name, password, anarchy) {
     bot.on("resourcePack", (u, h) => {
         console.log(u, h)
         if (bot._client) {
-        bot._client.write('resource_pack_receive', {
-            uuid: h.ascii, // UUID из кика
-            result: 0 // 0 = успешно загружен
-        });
-        console.log('✅ Отправлено подтверждение загрузки ресурспака');
-    }
+            bot._client.write('resource_pack_receive', {
+                uuid: h.ascii,
+                result: 0
+            });
+            console.log('✅ Отправлено подтверждение загрузки ресурспака');
+        }
     })
 
     bot.on('end', (reason) => {
@@ -401,102 +186,101 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-        if (Date.now() - bot.timeActive > 90000) {
-            bot.timeActive = Date.now();
-            bot.menu = analysisAH;
+        if (Date.now() - botTimeActive > 90000) {
+            botTimeActive = Date.now();
+            botMenu = analysisAH;
             mu = false;
             await safeAH(bot);
         }
     });
 
-    bot.menu = chooseBuying;
+    botMenu = chooseBuying;
     let slotToBuy = undefined;
-    bot.startTime = Date.now() - 240000;
+    botStartTime = Date.now() - 240000;
 
     bot.on('windowOpen', async () => {
         let key = "";
-        switch (bot.menu) {
+        switch (botMenu) {
             case chooseBuying:
-                // saveToJsonFile('iv.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = setSectionFarmer;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = setSectionFarmer;
                 await safeClick(bot, slotToChooseBuying, minDelay);
                 break;
 
             case setSectionFarmer:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = sectionFarmer;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = sectionFarmer;
                 await safeClick(bot, slotToSetSectionFarmer, minDelay);
                 break;
 
             case sectionFarmer:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = setSectionFood;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = setSectionFood;
                 await safeClick(bot, slotToLeaveSection, minDelay);
                 break;
 
             case setSectionFood:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = sectionFood;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = sectionFood;
                 await safeClick(bot, slotToSetSectionFood, minDelay);
                 break;
 
             case sectionFood:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = setSectionResources;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = setSectionResources;
                 await safeClick(bot, slotToLeaveSection, minDelay);
                 break;
 
             case setSectionResources:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = sectionResources;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = sectionResources;
                 await delay(getRandomDelayInRange(1000, 2500));
                 await safeClick(bot, slotToSetSectionResources, minDelay);
                 break;
 
             case sectionResources:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = setSectionLoot;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = setSectionLoot;
                 await delay(getRandomDelayInRange(1000, 2500));
                 await safeClick(bot, slotToLeaveSection, minDelay);
                 break;
 
             case setSectionLoot:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = sectionLoot;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = sectionLoot;
                 await delay(getRandomDelayInRange(1000, 2500));
                 await safeClick(bot, slotToSetSectionLoot, minDelay);
                 break;
 
             case sectionLoot:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = analysisAH;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = analysisAH;
                 await delay(5000);
                 bot.closeWindow(bot.currentWindow);
                 await delay(500);
-                while (Date.now() - bot.timeLogin < 13000) await delay(1000);
+                while (Date.now() - botTimeLogin < 13000) await delay(1000);
                 await safeAH(bot);
                 break;
 
             case analysisAH:
-                logger.info(`${name} - ${bot.menu}`);
-                bot.timeActive = Date.now();
+                logger.info(`${name} - ${botMenu}`);
+                botTimeActive = Date.now();
                 generateRandomKey(bot);
-                key = bot.key;
-                const resetime = Math.floor((Date.now() - bot.timeReset) / 1000);
+                key = botKey;
+                const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
                 
                 if (resetime > 60 || needReset) {
                     logger.info(`${name} - ресет`);
                     await delay(500);
-                    bot.menu = myItems;
+                    botMenu = myItems;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                     break;
                 }
                 
-                const uptime = Math.floor((Date.now() - bot.startTime) / 1000);
-                if (uptime > 55 || bot.needSell) {
+                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
+                if (uptime > 55 || botNeedSell) {
                     logger.info(`${name} - продажа`);
                     await sellItems(bot, itemPrices);
                     break;
@@ -507,7 +291,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     if (bot.inventory.slots[i]) count++;
                 }
                 
-                if (count >= 36 - bot.count) {
+                if (count >= 36 - botCount) {
                     logger.error('Инвентарь заполнен');
                     await sellItems(bot, itemPrices);
                     break;
@@ -518,7 +302,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
                 switch (slotToBuy) {
                     case null:
-                        bot.menu = analysisAH;
+                        botMenu = analysisAH;
                         await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                         break;
                     default:
@@ -535,20 +319,18 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case myItems:
-                // saveToJsonFile('storage.json', bot.currentWindow.slots)
-                // return
                 generateRandomKey(bot);
-                key = bot.key;
+                key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
                     break;
                 }
                 await delay(500);
                 needReset = false;
-                logger.info(`${name} - ${bot.menu}`);
+                logger.info(`${name} - ${botMenu}`);
                 
-                bot.count = 0;
-                bot.ah = [];
+                botCount = 0;
+                botAh = [];
                 let slot = null;
 
                 for (let i = 0; i < 8; i++) {
@@ -560,16 +342,16 @@ async function launchBookBuyer(name, password, anarchy) {
 
                     if (priceSell !== priceOnAH) {
                         logger.error(`chnge ${priceSell} ${priceOnAH}`);
-                        bot.ahFull = false;
+                        botAhFull = false;
                         slot = i;
                         break;
                     }
                 }
 
                 if (slot !== null) {
-                    bot.ahFull = false;
-                    bot.needSell = true;
-                    bot.menu = myItems;
+                    botAhFull = false;
+                    botNeedSell = true;
+                    botMenu = myItems;
                     await safeClickBuy(bot, slot, getRandomDelayInRange(700, 1300), key);
                     break;
                 }
@@ -577,58 +359,58 @@ async function launchBookBuyer(name, password, anarchy) {
                 for (let i = 0; i < 8; i++) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (currentSlot) {
-                        bot.count++;
+                        botCount++;
                         const id = getIDByEnchantments(currentSlot, itemPrices);
-                        bot.ah.push(id);
+                        botAh.push(id);
                     } else break;
                 }
 
-                parentPort.postMessage({ name: 'items', username: bot.username, items: bot.ah });
+                parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
 
-                if (Math.floor((Date.now() - bot.timeReset) / 1000) > 60) {
-                    bot.menu = setAH;
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                    botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
                 } else {
-                    bot.menu = analysisAH;
+                    botMenu = analysisAH;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                 }
                 break;
 
             case setAH:
                 generateRandomKey(bot);
-                key = bot.key;
-                logger.info(`${name} - ${bot.menu}`);
-                bot.menu = analysisAH;
+                key = botKey;
+                logger.info(`${name} - ${botMenu}`);
+                botMenu = analysisAH;
                 await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
                 break;
 
             case "clan":
-                logger.info(`${bot.username} ${bot.menu}`);
+                logger.info(`${bot.username} ${botMenu}`);
                 generateRandomKey(bot);
                 
                 let countItems = countTotalItemsInWindow(bot, itemPrices);
-                if (bot.ahFull && countItems === 0) {
+                if (botAhFull && countItems === 0) {
                     const slot = findFirstMatchingSlotInInventory(bot, itemPrices);
                     if (slot) {
                         logger.info(`${bot.username} добавил`);
-                        await safeClickBuy(bot, slot, 500, bot.key);
+                        await safeClickBuy(bot, slot, 500, botKey);
                     }
-                } else if (!bot.ahFull && countItems > 0) {
+                } else if (!botAhFull && countItems > 0) {
                     const slot = findFirstMatchingSlotInWindow(bot, itemPrices);
                     if (slot) {
                         logger.info(`${bot.username} забрал`);
-                        bot.needSell = true;
-                        await safeClickBuy(bot, slot, 500, bot.key);
+                        botNeedSell = true;
+                        await safeClickBuy(bot, slot, 500, botKey);
                     }
                 }
                 logger.info(`${bot.username} никуда не кликнул`);
                 await delay(300);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-                bot.startTime = Date.now();
+                botStartTime = Date.now();
                 mu = false;
                 logger.info(`${bot.username} - мьютекс снят`);
                 await delay(500);
-                bot.menu = analysisAH;
+                botMenu = analysisAH;
                 await safeAH(bot);
                 break;
         }
@@ -639,12 +421,12 @@ async function launchBookBuyer(name, password, anarchy) {
         console.log(messageText);
 
         if (messageText.includes('[☃] Вы успешно купили')) {
-            bot.needSell = true;
+            botNeedSell = true;
             let balanceStr = messageText;
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
-            parentPort.postMessage({ name: 'buy', id: bot.type, price: balance });
+            parentPort.postMessage({ name: 'buy', id: botType, price: balance });
             return;
         }
 
@@ -670,14 +452,14 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('Сервер заполнен')) {
             mu = false;
-            bot.startTime = Date.now() - 240000;
-            bot.ahFull = false;
-            bot.timeReset = Date.now() - 60000;
-            bot.login = true;
-            bot.timeActive = Date.now();
-            bot.timeLogin = Date.now();
-            bot.prices = [];
-            bot.count = 0;
+            botStartTime = Date.now() - 240000;
+            botAhFull = false;
+            botTimeReset = Date.now() - 60000;
+            botLogin = true;
+            botTimeActive = Date.now();
+            botTimeLogin = Date.now();
+            botPrices = [];
+            botCount = 0;
             netakbistro = true;
             await delay(minDelay);
             bot.chat(anarchyCommand);
@@ -685,22 +467,22 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
-            bot.ahFull = false;
+            botAhFull = false;
             let balanceStr = messageText;
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             const id = getIdBySellPrice(itemPrices, balance);
             parentPort.postMessage({ name: 'sell', id: id, price: balance });
-            bot.needSell = true;
+            botNeedSell = true;
             return;
         }
 
         if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
-            if (bot.typeSell) {
-                parentPort.postMessage({ name: 'try-sell', id: bot.typeSell });
+            if (botTypeSell) {
+                parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
             }
-            bot.count++;
+            botCount++;
             return;
         }
 
@@ -719,14 +501,14 @@ async function launchBookBuyer(name, password, anarchy) {
                 await walk(bot);
             }
             
-            bot.menu = analysisAH;
+            botMenu = analysisAH;
             await safeAH(bot);
             return;
         }
 
         if (messageText.includes('[☃] Не удалось выставить') ||
             messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
-            bot.ahFull = true;
+            botAhFull = true;
             return;
         }
 
@@ -736,7 +518,7 @@ async function launchBookBuyer(name, password, anarchy) {
             await delay(getRandomDelayInRange(500, 700));
             bot.chat('/clan withdraw 3000000');
             await delay(getRandomDelayInRange(500, 700));
-            bot.menu = analysisAH;
+            botMenu = analysisAH;
             await safeAH(bot);
             return;
         }
@@ -744,7 +526,7 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[⚠] Данной команды не существует!')) {
             bot.chat(anarchyCommand);
             await delay(11000);
-            await safeAH();
+            await safeAH(bot);
             return;
         }
 
@@ -825,7 +607,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
-    bot.needSell = false;
+    botNeedSell = false;
     if (mu) {
         await delay(500);
         await safeAH(bot);
@@ -836,18 +618,18 @@ async function sellItems(bot, itemPrices) {
     logger.info(`${bot.username} - прогулка завершена`);
 
     try {
-        while (Date.now() - bot.timeLogin < 13000) await delay(1000);
-        bot.timeActive = Date.now();
+        while (Date.now() - botTimeLogin < 13000) await delay(1000);
+        botTimeActive = Date.now();
         if (bot.currentWindow) {
             bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(300, 500));
         }
 
-        while (!bot.ahFull) {
+        while (!botAhFull) {
             let soldAnything = false;
 
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
-                if (bot.ahFull) break;
+                if (botAhFull) break;
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
                 if (!item) continue;
@@ -869,7 +651,7 @@ async function sellItems(bot, itemPrices) {
                 }
             }
 
-            if (!bot.ahFull) {
+            if (!botAhFull) {
                 let freeSlot = null;
                 for (let i = 0; i < 9; i++) {
                     if (!bot.inventory.slots[i + firstSellSlot]) {
@@ -880,7 +662,7 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = 0; invSlot < 27; invSlot++) {
-                        if (bot.ahFull) break;
+                        if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
 
@@ -924,7 +706,7 @@ async function sellItems(bot, itemPrices) {
         bot.chat('/balance');
         await delay(500);
         await delay(300);
-        bot.menu = 'clan';
+        botMenu = 'clan';
         bot.chat('/clan storage');
     }
 }
@@ -944,7 +726,7 @@ function getID(item, itemPrices) {
 }
 
 function generateRandomKey(bot) {
-    bot.key = Math.random().toString(36).substring(2, 15);
+    botKey = Math.random().toString(36).substring(2, 15);
 }
 
 async function delay(time) {
@@ -954,7 +736,7 @@ async function delay(time) {
 async function safeClick(bot, slot, time) {
     await delay(time);
     if (bot.currentWindow) {
-        bot.timeActive = Date.now();
+        botTimeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, noShift);
     }
 }
@@ -962,11 +744,11 @@ async function safeClick(bot, slot, time) {
 async function safeAH(bot) {
     if (mu) return;
     netakbistro = true;
-    let key = bot.key;
-    bot.timeActive = Date.now();
-    bot.menu = analysisAH;
-    bot.updateWindow = true;
-    while (key === bot.key) {
+    let key = botKey;
+    botTimeActive = Date.now();
+    botMenu = analysisAH;
+    botUpdateWindow = true;
+    while (key === botKey) {
         bot.chat(ahCommand);
         await delay(1000);
     }
@@ -985,7 +767,6 @@ async function getAHSlotsIDs(bot, itemPrices) {
 
 async function getBestAHSlot(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return null;
-    // await saveToJsonFile('ah.json', bot.currentWindow?.slots)
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
@@ -1007,14 +788,13 @@ async function getBestAHSlot(bot, itemPrices) {
         if (!config) continue;
         
         try {
-            // const price = 0
             const price = getPriceFromItem(slotData);
             console.log(`цена - ${price}`)
             if (!price || price >= config.priceSell - config.nacenka) continue;
             if (!config.priceSell) continue;
 
-            bot.type = config.id;
-            if (!bot.type) logger.error('id undefined');
+            botType = config.id;
+            if (!botType) logger.error('id undefined');
             
             parentPort.postMessage({ name: 'buying', data: currentUUID });
             return slotData.slot;
@@ -1028,19 +808,15 @@ async function getBestAHSlot(bot, itemPrices) {
 
 function getItemUUID(item) {
     try {
-        // Ищем компонент custom_data
         const customDataComp = item.components?.find(c => c.type === 'custom_data');
         if (!customDataComp) return null;
 
-        // Достаём значение PublicBukkitValues
         const pubBukkit = customDataComp.data?.value?.PublicBukkitValues?.value;
         if (!pubBukkit) return null;
 
-        // Берём массив auctions:if-uuid
         const uuidArray = pubBukkit['auctions:if-uuid']?.value;
         if (!Array.isArray(uuidArray)) return null;
 
-        // Преобразуем в строку через запятую
         return uuidArray.join(',');
     } catch (e) {
         console.log('Ошибка при получении UUID:', e.message);
@@ -1080,10 +856,6 @@ function getNacenkaByEnchantments(slotData, itemPrices) {
     return getItemNacenka(slotData, itemPrices);
 }
 
-
-/**
- * Преобразует римскую цифру в число (поддерживает I..X)
- */
 function romanToArabic(roman) {
     const map = {
         'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
@@ -1092,15 +864,10 @@ function romanToArabic(roman) {
     return map[roman] || 1;
 }
 
-/**
- * Извлекает кастомные зачарования из предмета, используя цвет "gray" как маркер.
- * Возвращает массив { name, lvl }.
- */
 function extractCustomEnchantsFromItem(item) {
     console.log('🔍 extractCustomEnchantsFromItem: начат поиск кастомных зачарований');
     const result = [];
 
-    // 1. ПРОВЕРЯЕМ НАЛИЧИЕ СТРУКТУРИРОВАННЫХ ДАННЫХ (приоритет)
     try {
         const customDataComp = item.components?.find(c => c.type === 'custom_data');
         const enchantsArray = customDataComp?.data?.value?.PublicBukkitValues?.value?.['minecraft:custom-enchantments']?.value?.value;
@@ -1118,7 +885,6 @@ function extractCustomEnchantsFromItem(item) {
                 }
             }
             
-            // Если нашли структурированные — возвращаем только их
             console.log('🎯 Итоговые кастомные зачарования (из структуры):', result);
             return result;
         }
@@ -1126,13 +892,9 @@ function extractCustomEnchantsFromItem(item) {
         console.log('⚠️ Ошибка при парсинге структурированных данных:', e.message);
     }
 
-    // 2. ЕСЛИ СТРУКТУРИРОВАННЫХ НЕТ — используем старый метод через JSON
     console.log('⚠️ Структурированные данные не найдены, используем JSON-парсинг');
     
-    // Преобразуем весь объект в JSON-строку
     const jsonStr = JSON.stringify(item);
-    
-    // Ищем все значения ключа "value"
     const valueRegex = /"value":"([^"]*)"/g;
     const matches = [];
     let match;
@@ -1142,7 +904,6 @@ function extractCustomEnchantsFromItem(item) {
 
     console.log('📋 Все найденные значения из поля "value":', matches);
 
-    // Оставляем только те, которые содержат буквы и не начинаются с '#'
     const textStrings = matches.filter(s => {
         if (!s || typeof s !== 'string') return false;
         const trimmed = s.trim();
@@ -1158,7 +919,6 @@ function extractCustomEnchantsFromItem(item) {
     for (const str of textStrings) {
         const trimmed = str.trim();
 
-        // Пытаемся найти в конце римскую цифру после пробела
         const lastSpaceIndex = trimmed.lastIndexOf(' ');
         if (lastSpaceIndex !== -1) {
             const possibleRoman = trimmed.substring(lastSpaceIndex + 1);
@@ -1171,7 +931,6 @@ function extractCustomEnchantsFromItem(item) {
             }
         }
 
-        // Если нет римской цифры в конце, считаем уровень 1
         console.log(`✅ Найдено кастомное зачарование (без уровня): "${trimmed}" ур. 1`);
         result.push({ name: trimmed, lvl: 1 });
     }
@@ -1180,41 +939,31 @@ function extractCustomEnchantsFromItem(item) {
     return result;
 }
 
-/**
- * Извлекает цену из объекта предмета Minecraft (структура с компонентами).
- * @param {Object} item - объект предмета, содержащий components.
- * @returns {number|null} - цена в виде числа или null, если не найдена.
- */
 function getPriceFromItem(item) {
-  // 1. Находим компонент lore
-  const loreComp = item.components?.find(c => c.type === 'lore');
-  if (!loreComp || !Array.isArray(loreComp.data)) return null;
+    const loreComp = item.components?.find(c => c.type === 'lore');
+    if (!loreComp || !Array.isArray(loreComp.data)) return null;
 
-  // 2. Перебираем все записи lore (строки описания)
-  for (const loreEntry of loreComp.data) {
-    const strings = [];
-    extractStrings(loreEntry, strings);
+    for (const loreEntry of loreComp.data) {
+        const strings = [];
+        extractStrings(loreEntry, strings);
 
-    // 3. Проверяем, есть ли в этой записи маркер цены (например, "Цена:" или "Ценa:")
-    const hasPriceMarker = strings.some(s => typeof s === 'string' && s.includes('Цен'));
-    if (!hasPriceMarker) continue;
+        const hasPriceMarker = strings.some(s => typeof s === 'string' && s.includes('Цен'));
+        if (!hasPriceMarker) continue;
 
-    // 4. Ищем строку, которая выглядит как число (только цифры, запятые, максимум одна точка)
-    for (const s of strings) {
-      if (typeof s !== 'string') continue;
-      const trimmed = s.trim();
-      if (trimmed === '') continue;
+        for (const s of strings) {
+            if (typeof s !== 'string') continue;
+            const trimmed = s.trim();
+            if (trimmed === '') continue;
 
-      // Убираем запятые (разделители тысяч) и проверяем формат
-      const withoutCommas = trimmed.replace(/,/g, '');
-      if (/^\d*\.?\d+$/.test(withoutCommas)) {
-        const num = parseFloat(withoutCommas);
-        if (!isNaN(num)) return num;
-      }
+            const withoutCommas = trimmed.replace(/,/g, '');
+            if (/^\d*\.?\d+$/.test(withoutCommas)) {
+                const num = parseFloat(withoutCommas);
+                if (!isNaN(num)) return num;
+            }
+        }
     }
-  }
 
-  return null;
+    return null;
 }
 
 function extractStrings(node, out) {
@@ -1242,10 +991,6 @@ function extractStrings(node, out) {
     }
 }
 
-// Пример использования:
-// const price = findPrice(item);
-// console.log(price); // 3490000
-
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
 
@@ -1254,7 +999,6 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
-    // Маппинг числовых ID в названия (ванильные)
     const numericToName = {
         32: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
@@ -1269,14 +1013,12 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         11: "minecraft:fire_protection",
     };
 
-    // Маппинг русских названий кастомных зачарований в английские (из конфига)
     const customNameMap = {
         'Яд': 'poison',
         'Вампиризм': 'vampirism',
         'Детекция': 'detection',
     };
 
-    // Получаем обычные зачарования из компонента enchantments
     const vanillaEnchants = [];
     if (item.components && Array.isArray(item.components)) {
         const enchComponent = item.components.find(c => c && c.type === 'enchantments');
@@ -1299,36 +1041,26 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         }
     }
 
-    // Получаем кастомные зачарования из LORE (теперь они возвращаются с русскими названиями)
     const rawCustomEnchants = extractCustomEnchantsFromItem(item);
 
-    // Преобразуем русские названия в английские согласно словарю
     const customEnchants = rawCustomEnchants.map(ench => {
         const englishName = customNameMap[ench.name];
         if (englishName) {
             return { name: englishName, lvl: ench.lvl };
         } else {
-            // Если нет в словаре, оставляем как есть (может, это неизвестное зачарование,
-            // но в конфиге его не будет, так что оно просто не совпадёт)
             console.log(`⚠️ Неизвестное кастомное зачарование: "${ench.name}" (уровень ${ench.lvl}) — оставляем без перевода`);
-            return ench; // или можно вернуть null, но лучше оставить для отладки
+            return ench;
         }
     });
 
-    // Функция для конвертации римских чисел в арабские (оставлена для совместимости, но уже не нужна здесь, т.к. extractCustomEnchantsFromItem сама преобразует)
-    // function romanToArabic(roman) { ... }
-
-    // Собираем все зачарования
     const allEnchants = [...vanillaEnchants, ...customEnchants];
     
-    // Логирование для отладки
     if (vanillaEnchants.length > 0 || customEnchants.length > 0) {
         console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
         console.log('Кастомные зачарования (после перевода):', customEnchants.map(e => `${e.name}:${e.lvl}`));
         console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
     }
 
-    // Продолжаем поиск подходящей конфигурации
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
 
@@ -1348,7 +1080,6 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
             if (hasMissingEnchants) continue;
         }
 
-        // Специальная проверка для кирки с silk touch
         if (item.name === 'netherite_pickaxe' &&
             allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
             !allEnchants.some(en => en && en.name === 'melting')) {
@@ -1369,6 +1100,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
     return null;
 }
+
 function getSellPrice(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     return config ? config.priceSell : 0;
@@ -1383,7 +1115,6 @@ function getItemNacenka(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     return config ? config.nacenka : 0;
 }
-
 
 function isItemMatchingConfig(item, itemPrices) {
     return findMatchingConfigItem(item, itemPrices) !== null;
@@ -1408,11 +1139,11 @@ async function longWalk(bot) {
     await delay(500);
     let timeTP = Date.now();
     bot.autoEat.enableAuto();
-    bot.timeActive = Date.now();
+    botTimeActive = Date.now();
     logger.info(`${bot.username} - все забито. Гуляем.`);
     
-    while (bot.ahFull) {
-        const resetime = Math.floor((Date.now() - bot.timeReset) / 1000);
+    while (botAhFull) {
+        const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
         if (resetime > 60 || needReset) {
             await delay(500);
             ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
@@ -1465,23 +1196,23 @@ async function walk(bot) {
 
 async function safeClickBuy(bot, slot, time, key) {
     let timeDelay = time;
-    if (bot.updateWindow) {
-        bot.updateWindow = false;
-        bot.startClickTime = Date.now();
+    if (botUpdateWindow) {
+        botUpdateWindow = false;
+        botStartClickTime = Date.now();
     } else {
-        timeDelay = time - (Date.now() - bot.startClickTime);
+        timeDelay = time - (Date.now() - botStartClickTime);
         if (timeDelay <= 0) timeDelay = 0;
     }
             
     await delay(timeDelay);
-    if (bot.key != key) {
+    if (botKey != key) {
         console.log('твари ах обновили и теперь так');
         return;
     }
-    if (slot === 52) bot.timeReset = Date.now();
-    bot.updateWindow = true;
+    if (slot === 52) botTimeReset = Date.now();
+    botUpdateWindow = true;
     if (bot.currentWindow) {
-        bot.timeActive = Date.now();
+        botTimeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, 1);
     }
 }
@@ -1563,6 +1294,6 @@ async function saveToJsonFile(filePath, data) {
         console.log('✅ Данные успешно сохранены:', filePath);
     } catch (error) {
         console.error('❌ Ошибка при сохранении:', error);
-        try { await unlink(tempPath); } catch {}
+        try { await fs.unlink(tempPath); } catch {}
     }
 }
