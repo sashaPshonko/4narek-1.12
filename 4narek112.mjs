@@ -241,6 +241,7 @@ let itemPrices = workerData.itemPrices;
 let itemsBuying = [];
 let needReset = false;
 let mu = false
+let netakbistro = true
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -337,7 +338,6 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.timeLogin = Date.now();
         bot.prices = [];
         bot.count = 0;
-        bot.netakbistro = true;
         bot.ah = [];
         bot.needSell = false;
         bot.startClickTime = null;
@@ -522,8 +522,8 @@ async function launchBookBuyer(name, password, anarchy) {
                         await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                         break;
                     default:
-                        if (bot.netakbistro) {
-                            bot.netakbistro = false;
+                        if (netakbistro) {
+                            netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 1655, key);
                         } else if (slotToBuy < 9) {
                             await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(100, 150) * (slotToBuy + 1), key);
@@ -678,7 +678,7 @@ async function launchBookBuyer(name, password, anarchy) {
             bot.timeLogin = Date.now();
             bot.prices = [];
             bot.count = 0;
-            bot.netakbistro = true;
+            netakbistro = true;
             await delay(minDelay);
             bot.chat(anarchyCommand);
             return;
@@ -961,7 +961,7 @@ async function safeClick(bot, slot, time) {
 
 async function safeAH(bot) {
     if (mu) return;
-    bot.netakbistro = true;
+    netakbistro = true;
     let key = bot.key;
     bot.timeActive = Date.now();
     bot.menu = analysisAH;
