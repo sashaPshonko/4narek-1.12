@@ -240,6 +240,7 @@ import zlib from 'zlib';
 let itemPrices = workerData.itemPrices;
 let itemsBuying = [];
 let needReset = false;
+let mu = false
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -319,7 +320,6 @@ async function launchBookBuyer(name, password, anarchy) {
         version: '1.21.4',  // или 1.21.8
         chatLengthLimit: 256,
     });
-    bot.mu = false
 
     const loginCommand = `/l ${name}`;
     const anarchyCommand = `/an${anarchy}`;
@@ -329,7 +329,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.once('login', async () => {
         bot.loadPlugin(autoEat);
-        bot.mu = false;
         bot.startTime = Date.now() - 55000;
         bot.ahFull = false;
         bot.timeReset = Date.now();
@@ -405,7 +404,7 @@ async function launchBookBuyer(name, password, anarchy) {
         if (Date.now() - bot.timeActive > 90000) {
             bot.timeActive = Date.now();
             bot.menu = analysisAH;
-            bot.mu = false;
+            mu = false;
             await safeAH(bot);
         }
     });
@@ -626,7 +625,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 await delay(300);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
                 bot.startTime = Date.now();
-                bot.mu = false;
+                mu = false;
                 logger.info(`${bot.username} - мьютекс снят`);
                 await delay(500);
                 bot.menu = analysisAH;
@@ -670,7 +669,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Сервер заполнен')) {
-            bot.mu = false;
+            mu = false;
             bot.startTime = Date.now() - 240000;
             bot.ahFull = false;
             bot.timeReset = Date.now() - 60000;
@@ -827,12 +826,12 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     bot.needSell = false;
-    if (bot.mu) {
+    if (mu) {
         await delay(500);
         await safeAH(bot);
         return;
     }
-    bot.mu = true;
+    mu = true;
     await walk(bot);
     logger.info(`${bot.username} - прогулка завершена`);
 
@@ -961,7 +960,7 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    if (bot.mu) return;
+    if (mu) return;
     bot.netakbistro = true;
     let key = bot.key;
     bot.timeActive = Date.now();
