@@ -31,9 +31,7 @@ let botsStarted = false;
 const token = '8629785801:AAHIxOpsbvoY0CuIbOgfSVnEog6AJoB5N24';
 const tgBot = new TelegramBot(token, { polling: true });
 
-const infoChatID = -4709535234;
-const alertChatID = -4763690917;
-const pomoikaChatID = -4896488855;
+const alertChatID = -1003827870631;
 
 // Функция загрузки конфигурации ботов
 async function loadBotsConfig() {
