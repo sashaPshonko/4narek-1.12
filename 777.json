@@ -1,0 +1,684 @@
+[
+  null,
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 903,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 22,
+              "level": 1
+            }
+          ],
+          "showTooltip": true
+        }
+      },
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    64,
+                    -91,
+                    33,
+                    22,
+                    93,
+                    -34,
+                    71,
+                    -39,
+                    -82,
+                    -25,
+                    -81,
+                    -22,
+                    43,
+                    87,
+                    -46,
+                    83
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "golden_helmet",
+    "displayName": "Golden Helmet",
+    "stackSize": 1,
+    "maxDurability": 77,
+    "slot": 5
+  },
+  {
+    "type": 802,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "damage",
+        "data": 33
+      },
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    -77,
+                    45,
+                    -66,
+                    104,
+                    -75,
+                    111,
+                    64,
+                    26,
+                    -108,
+                    -8,
+                    -37,
+                    0,
+                    88,
+                    113,
+                    108,
+                    63
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 5
+            },
+            {
+              "id": 22,
+              "level": 1
+            }
+          ],
+          "showTooltip": true
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "elytra",
+    "displayName": "Elytra",
+    "stackSize": 1,
+    "maxDurability": 432,
+    "slot": 6
+  },
+  {
+    "type": 909,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 4
+            },
+            {
+              "id": 27,
+              "level": 4
+            },
+            {
+              "id": 11,
+              "level": 4
+            },
+            {
+              "id": 26,
+              "level": 4
+            }
+          ],
+          "showTooltip": true
+        }
+      },
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    81,
+                    -20,
+                    -16,
+                    93,
+                    -23,
+                    -124,
+                    69,
+                    93,
+                    -123,
+                    68,
+                    -125,
+                    11,
+                    -42,
+                    16,
+                    10,
+                    -127
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "netherite_leggings",
+    "displayName": "Netherite Leggings",
+    "stackSize": 1,
+    "maxDurability": 555,
+    "slot": 7
+  },
+  {
+    "type": 910,
+    "count": 1,
+    "metadata": 0,
+    "nbt": {
+      "type": "compound",
+      "name": "",
+      "value": {
+        "Damage": {
+          "type": "int",
+          "value": 0
+        }
+      }
+    },
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:custom-enchantments": {
+                  "type": "list",
+                  "value": {
+                    "type": "compound",
+                    "value": [
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "jumping"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      }
+                    ]
+                  }
+                },
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    -38,
+                    126,
+                    -91,
+                    59,
+                    -46,
+                    -19,
+                    75,
+                    82,
+                    -118,
+                    -5,
+                    -58,
+                    120,
+                    -70,
+                    -93,
+                    21,
+                    100
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Попрыгун II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "enchantment_glint_override",
+        "data": true
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "dark_blue"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "Luna"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": ""
+            }
+          }
+        }
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 5
+            },
+            {
+              "id": 27,
+              "level": 5
+            },
+            {
+              "id": 7,
+              "level": 2
+            }
+          ],
+          "showTooltip": true
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "netherite_boots",
+    "displayName": "Netherite Boots",
+    "stackSize": 1,
+    "maxDurability": 481,
+    "slot": 8
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 1165,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    -98,
+                    30,
+                    47,
+                    0,
+                    -24,
+                    68,
+                    77,
+                    104,
+                    -69,
+                    13,
+                    -37,
+                    82,
+                    -77,
+                    82,
+                    -78,
+                    -13
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "stored_enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 9,
+              "level": 3
+            }
+          ],
+          "showInTooltip": true
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "enchanted_book",
+    "displayName": "Enchanted Book",
+    "stackSize": 1,
+    "slot": 22
+  },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 1153,
+    "count": 57,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "/// "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "white"
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "Ponos777 "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "///"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": ""
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "golden_carrot",
+    "displayName": "Golden Carrot",
+    "stackSize": 64,
+    "slot": 36
+  },
+  null,
+  null,
+  null,
+  null,
+  {
+    "type": 883,
+    "count": 64,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "gunpowder",
+    "displayName": "Gunpowder",
+    "stackSize": 64,
+    "slot": 41
+  },
+  {
+    "type": 883,
+    "count": 64,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "gunpowder",
+    "displayName": "Gunpowder",
+    "stackSize": 64,
+    "slot": 42
+  },
+  {
+    "type": 883,
+    "count": 64,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "gunpowder",
+    "displayName": "Gunpowder",
+    "stackSize": 64,
+    "slot": 43
+  },
+  {
+    "type": 883,
+    "count": 64,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "gunpowder",
+    "displayName": "Gunpowder",
+    "stackSize": 64,
+    "slot": 44
+  },
+  null
+]

@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 // Пути к JSON файлам
 const itemsPath = join(__dirname, 'items.json');
-const botsPath = join(__dirname, '502b.json');
+const botsPath = join(__dirname, '503b.json');
 
 // Глобальные переменные
 let items = [];
@@ -28,7 +28,7 @@ let botsStarted = false;
 
 
 // Telegram конфигурация
-const token = '8629785801:AAHIxOpsbvoY0CuIbOgfSVnEog6AJoB5N24';
+const token = '8293242577:AAFMFGvnZE4vGnu9ukszz19tgjtuQOpiyRA';
 const tgBot = new TelegramBot(token, { polling: true });
 
 const alertChatID = -1003827870631;
