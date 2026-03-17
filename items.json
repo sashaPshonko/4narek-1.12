@@ -132,7 +132,7 @@
         "nacenka": 300000
     },
     {
-        "name": "netherite_chestplate",
+        "name": "netherite_helmet",
         "id": "шлем_позорный-1.21",
         "effects": [
             {
@@ -148,7 +148,7 @@
         "nacenka": 300000
     },
     {
-        "name": "netherite_chestplate",
+        "name": "netherite_helmet",
         "id": "шлем-1.21",
         "effects": [
             {
