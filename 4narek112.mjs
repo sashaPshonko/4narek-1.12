@@ -1022,6 +1022,8 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         'Яд': 'poison',
         'Вампиризм': 'vampirism',
         'Детекция': 'detection',
+        'Тяжелый': 'heavy',
+        'Нестабильный': 'unstable',
     };
 
     const vanillaEnchants = [];
