@@ -942,7 +942,10 @@ function extractCustomEnchantsFromItem(item) {
 
 function getPriceFromItem(item) {
     const loreComp = item.components?.find(c => c.type === 'lore');
-    if (!loreComp || !Array.isArray(loreComp.data)) return null;
+    if (!loreComp || !Array.isArray(loreComp.data)) {
+        parentPort.postMessage(`нет лора для предмета ${item.name}: ${JSON.stringify(item)}`);
+        return null;
+    }
 
     for (const loreEntry of loreComp.data) {
         const strings = [];
@@ -959,11 +962,20 @@ function getPriceFromItem(item) {
             const withoutCommas = trimmed.replace(/,/g, '');
             if (/^\d*\.?\d+$/.test(withoutCommas)) {
                 const num = parseFloat(withoutCommas);
-                if (!isNaN(num)) return num;
+                if (!isNaN(num)) {
+                    if (num > 10000) {
+                        return num; // нормальная цена
+                    } else {
+                        parentPort.postMessage(`подозрительная цена ${num} для ${item.name}: ${JSON.stringify(item)}`);
+                        return null;
+                    }
+                }
             }
         }
     }
 
+    // Цена не найдена ни в одной строке с маркером
+    parentPort.postMessage(`не удалось извлечь цену для ${item.name} (нет подходящей строки с числом): ${JSON.stringify(item)}`);
     return null;
 }
 
