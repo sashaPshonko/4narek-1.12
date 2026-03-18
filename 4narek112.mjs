@@ -963,7 +963,7 @@ function getPriceFromItem(item) {
             if (/^\d*\.?\d+$/.test(withoutCommas)) {
                 const num = parseFloat(withoutCommas);
                 if (!isNaN(num)) {
-                    if (num > 10000) {
+                    if (num > 50000) {
                         return num; // нормальная цена
                     } else {
                         parentPort.postMessage(`подозрительная цена ${num} для ${item.name}: ${JSON.stringify(item)}`);
