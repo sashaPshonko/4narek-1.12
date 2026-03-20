@@ -33,6 +33,7 @@ let botMenu = 'Выбор скупки ресурсов'
 let botKey = null
 let botType = ""
 let botTypeSell = null
+let botLogin = false;
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
