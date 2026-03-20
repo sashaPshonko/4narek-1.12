@@ -34,6 +34,7 @@ let botKey = null
 let botType = ""
 let botTypeSell = null
 let botLogin = false;
+let botPrices = []
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
