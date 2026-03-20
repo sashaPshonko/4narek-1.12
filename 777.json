@@ -91,8 +91,24 @@
     },
     "components": [
       {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 5
+            },
+            {
+              "id": 22,
+              "level": 1
+            }
+          ],
+          "showTooltip": true
+        }
+      },
+      {
         "type": "damage",
-        "data": 33
+        "data": 298
       },
       {
         "type": "custom_data",
@@ -126,22 +142,6 @@
               }
             }
           }
-        }
-      },
-      {
-        "type": "enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 39,
-              "level": 5
-            },
-            {
-              "id": 22,
-              "level": 1
-            }
-          ],
-          "showTooltip": true
         }
       }
     ],
@@ -253,110 +253,6 @@
     },
     "components": [
       {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "jumping"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 2
-                        }
-                      }
-                    ]
-                  }
-                },
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    -38,
-                    126,
-                    -91,
-                    59,
-                    -46,
-                    -19,
-                    75,
-                    82,
-                    -118,
-                    -5,
-                    -58,
-                    120,
-                    -70,
-                    -93,
-                    21,
-                    100
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "gray"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Попрыгун II"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
-      },
-      {
         "type": "enchantment_glint_override",
         "data": true
       },
@@ -429,6 +325,110 @@
           ],
           "showTooltip": true
         }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Попрыгун II"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:custom-enchantments": {
+                  "type": "list",
+                  "value": {
+                    "type": "compound",
+                    "value": [
+                      {
+                        "minecraft:type": {
+                          "type": "string",
+                          "value": "jumping"
+                        },
+                        "minecraft:level": {
+                          "type": "int",
+                          "value": 2
+                        }
+                      }
+                    ]
+                  }
+                },
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    -38,
+                    126,
+                    -91,
+                    59,
+                    -46,
+                    -19,
+                    75,
+                    82,
+                    -118,
+                    -5,
+                    -58,
+                    120,
+                    -70,
+                    -93,
+                    21,
+                    100
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     ],
     "removedComponents": [],
@@ -440,25 +440,24 @@
     "maxDurability": 481,
     "slot": 8
   },
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
-  null,
   {
     "type": 1165,
     "count": 1,
     "metadata": 0,
     "nbt": null,
     "components": [
+      {
+        "type": "stored_enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 33,
+              "level": 1
+            }
+          ],
+          "showInTooltip": true
+        }
+      },
       {
         "type": "custom_data",
         "data": {
@@ -470,39 +469,27 @@
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    -98,
-                    30,
-                    47,
-                    0,
-                    -24,
-                    68,
-                    77,
-                    104,
-                    -69,
-                    13,
-                    -37,
-                    82,
-                    -77,
-                    82,
-                    -78,
-                    -13
+                    117,
+                    -9,
+                    -75,
+                    -4,
+                    38,
+                    48,
+                    78,
+                    -56,
+                    -89,
+                    -99,
+                    -8,
+                    -119,
+                    -111,
+                    110,
+                    115,
+                    34
                   ]
                 }
               }
             }
           }
-        }
-      },
-      {
-        "type": "stored_enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 9,
-              "level": 3
-            }
-          ],
-          "showInTooltip": true
         }
       }
     ],
@@ -512,8 +499,21 @@
     "name": "enchanted_book",
     "displayName": "Enchanted Book",
     "stackSize": 1,
-    "slot": 22
+    "slot": 9
   },
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
   null,
   null,
   null,
@@ -529,7 +529,7 @@
   null,
   {
     "type": 1153,
-    "count": 57,
+    "count": 32,
     "metadata": 0,
     "nbt": null,
     "components": [
@@ -620,12 +620,993 @@
     "stackSize": 64,
     "slot": 36
   },
-  null,
-  null,
-  null,
-  null,
   {
-    "type": 883,
+    "type": 1215,
+    "count": 1,
+    "metadata": 0,
+    "nbt": null,
+    "components": [
+      {
+        "type": "custom_model_data",
+        "data": {
+          "floats": [
+            7
+          ],
+          "flags": [],
+          "strings": [],
+          "colors": []
+        }
+      },
+      {
+        "type": "custom_name",
+        "data": {
+          "type": "compound",
+          "value": {
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#A80B0B"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "xxx"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#A80B0B"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#A80E21"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "Т"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#A91138"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "а"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#A9144E"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "л"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AA1765"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "и"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AA197B"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "с"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AB1C92"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "м"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AB1FA8"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "а"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AC22BF"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "н"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#AC25D5"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#9B2FD4"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "К"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#8938D3"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "а"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#7842D1"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "р"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#664BD0"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "а"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#5555CF"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "т"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#435ECE"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "е"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#3268CC"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "л"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#2071CB"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "я"
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#0F7BCA"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": " "
+                    }
+                  },
+                  {
+                    "italic": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "underlined": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "bold": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "color": {
+                      "type": "string",
+                      "value": "#0F7BCA"
+                    },
+                    "obfuscated": {
+                      "type": "byte",
+                      "value": 1
+                    },
+                    "strikethrough": {
+                      "type": "byte",
+                      "value": 0
+                    },
+                    "text": {
+                      "type": "string",
+                      "value": "xxx"
+                    }
+                  }
+                ]
+              }
+            },
+            "text": {
+              "type": "string",
+              "value": ""
+            }
+          }
+        }
+      },
+      {
+        "type": "attribute_modifiers",
+        "data": {
+          "attributes": [
+            {
+              "typeId": 2,
+              "name": "minecraft:d9bfbef4-9ce8-362b-aa34-93c5ce9b6e9c",
+              "value": 7,
+              "operation": "add",
+              "slot": "off_hand"
+            },
+            {
+              "typeId": 18,
+              "name": "minecraft:673c881f-4886-3a40-acbb-b70ffbc8fbec",
+              "value": -4,
+              "operation": "add",
+              "slot": "off_hand"
+            },
+            {
+              "typeId": 21,
+              "name": "minecraft:9f2df2a4-cfaf-3f7b-976d-4a62afe70562",
+              "value": 0.1,
+              "operation": "multiply_base",
+              "slot": "off_hand"
+            }
+          ],
+          "showTooltip": true
+        }
+      },
+      {
+        "type": "enchantments",
+        "data": {
+          "enchantments": [
+            {
+              "id": 39,
+              "level": 3
+            }
+          ],
+          "showTooltip": false
+        }
+      },
+      {
+        "type": "lore",
+        "data": [
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Несёт строгий приговор,"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Карая всех врагов,"
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          },
+          {
+            "type": "compound",
+            "value": {
+              "extra": {
+                "type": "list",
+                "value": {
+                  "type": "compound",
+                  "value": [
+                    {
+                      "italic": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "underlined": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "bold": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "color": {
+                        "type": "string",
+                        "value": "gray"
+                      },
+                      "obfuscated": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "strikethrough": {
+                        "type": "byte",
+                        "value": 0
+                      },
+                      "text": {
+                        "type": "string",
+                        "value": "Но ослабляя тело."
+                      }
+                    }
+                  ]
+                }
+              },
+              "text": {
+                "type": "string",
+                "value": ""
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "custom_data",
+        "data": {
+          "type": "compound",
+          "value": {
+            "PublicBukkitValues": {
+              "type": "compound",
+              "value": {
+                "minecraft:ftid": {
+                  "type": "string",
+                  "value": "tal-karatel"
+                },
+                "minecraft:s": {
+                  "type": "byteArray",
+                  "value": [
+                    -84,
+                    70,
+                    127,
+                    36,
+                    57,
+                    53,
+                    74,
+                    115,
+                    -112,
+                    69,
+                    0,
+                    -30,
+                    -72,
+                    119,
+                    -63,
+                    -91
+                  ]
+                },
+                "minecraft:tslevel": {
+                  "type": "int",
+                  "value": 3
+                },
+                "minecraft:don-item": {
+                  "type": "string",
+                  "value": "tal-karatel"
+                }
+              }
+            },
+            "VB|Protocol1_21_6To1_21_5|original_hashes": {
+              "type": "compound",
+              "value": {
+                "0": {
+                  "type": "int",
+                  "value": 1982859772
+                },
+                "5": {
+                  "type": "int",
+                  "value": 283925714
+                },
+                "8": {
+                  "type": "int",
+                  "value": -380874184
+                },
+                "10": {
+                  "type": "int",
+                  "value": -19184125
+                },
+                "13": {
+                  "type": "int",
+                  "value": -1442131842
+                },
+                "14": {
+                  "type": "int",
+                  "value": -233828525
+                },
+                "15": {
+                  "type": "int",
+                  "value": -2064977432
+                },
+                "removed": {
+                  "type": "intArray",
+                  "value": []
+                }
+              }
+            },
+            "VB|Protocol1_21_5To1_21_4|backup": {
+              "type": "compound",
+              "value": {
+                "hidden_components": {
+                  "type": "intArray",
+                  "value": [
+                    10
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "totem_of_undying",
+    "displayName": "Totem of Undying",
+    "stackSize": 1,
+    "slot": 37
+  },
+  {
+    "type": 834,
+    "count": 41,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "coal",
+    "displayName": "Coal",
+    "stackSize": 64,
+    "slot": 38
+  },
+  {
+    "type": 1163,
+    "count": 39,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "firework_rocket",
+    "displayName": "Firework Rocket",
+    "stackSize": 64,
+    "slot": 39
+  },
+  {
+    "type": 838,
     "count": 64,
     "metadata": 0,
     "nbt": null,
@@ -633,52 +1614,40 @@
     "removedComponents": [],
     "componentMap": {},
     "stackId": null,
-    "name": "gunpowder",
-    "displayName": "Gunpowder",
+    "name": "lapis_lazuli",
+    "displayName": "Lapis Lazuli",
+    "stackSize": 64,
+    "slot": 40
+  },
+  {
+    "type": 680,
+    "count": 28,
+    "metadata": 0,
+    "nbt": null,
+    "components": [],
+    "removedComponents": [],
+    "componentMap": {},
+    "stackId": null,
+    "name": "redstone",
+    "displayName": "Redstone Dust",
     "stackSize": 64,
     "slot": 41
   },
   {
-    "type": 883,
-    "count": 64,
+    "type": 1047,
+    "count": 15,
     "metadata": 0,
     "nbt": null,
     "components": [],
     "removedComponents": [],
     "componentMap": {},
     "stackId": null,
-    "name": "gunpowder",
-    "displayName": "Gunpowder",
+    "name": "glass_bottle",
+    "displayName": "Glass Bottle",
     "stackSize": 64,
     "slot": 42
   },
-  {
-    "type": 883,
-    "count": 64,
-    "metadata": 0,
-    "nbt": null,
-    "components": [],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "gunpowder",
-    "displayName": "Gunpowder",
-    "stackSize": 64,
-    "slot": 43
-  },
-  {
-    "type": 883,
-    "count": 64,
-    "metadata": 0,
-    "nbt": null,
-    "components": [],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "gunpowder",
-    "displayName": "Gunpowder",
-    "stackSize": 64,
-    "slot": 44
-  },
+  null,
+  null,
   null
 ]

@@ -16,15 +16,14 @@ let itemsBuying = [];
 let needReset = false;
 let mu = false
 let netakbistro = true
+let isKrush = false
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
 let botTimeReset = Date.now()
-let botLogin = true
 let botTimeActive = Date.now()
 let botTimeLogin = Date.now()
-let botPrices = []
 let botCount = 0
 let botAh = []
 let botNeedSell = false
@@ -46,8 +45,6 @@ parentPort.on('message', (data) => {
 });
 
 const minDelay = 500;
-const AHDelay = 2000;
-const loadingDelay = 100;
 
 const chooseBuying = 'Выбор скупки ресурсов';
 const setSectionFarmer = 'Установка секции "фермер"';
@@ -59,7 +56,6 @@ const sectionResources = 'Секция "ценные ресурсы"';
 const setSectionLoot = 'Установка секции "добыча"';
 const sectionLoot = 'Секция "добыча"';
 const analysisAH = 'Анализ аукциона';
-const buy = 'Покупка';
 const myItems = 'Хранилище';
 const setAH = 'Установка аукциона';
 
@@ -587,6 +583,14 @@ async function launchBookBuyer(name, password, anarchy) {
             const basePrice = Math.ceil(balance / 10000) * 10000;
             const marker = currentPrice % 100;
             let finalPrice = basePrice + marker + nacenka;
+            if (JSON.stringify(bot.inventory.slots[slot]).includes('krush')) {
+                isKrush = true
+                bot.chat(`ah sell ${finalPrice}`)
+                await delay(100)
+                bot.chat(`ah sell ${finalPrice}`)
+                isKrush = false
+                return
+            }
             
             parentPort.postMessage({ name: "set_min_price", type: id, price: finalPrice });
             return;
@@ -635,6 +639,7 @@ async function sellItems(bot, itemPrices) {
             let soldAnything = false;
 
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
+                while (isKrush) await delay(100)
                 if (botAhFull) break;
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
@@ -668,6 +673,7 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = 0; invSlot < 27; invSlot++) {
+                        while (isKrush) await delay(100)
                         if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
@@ -1033,6 +1039,9 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         30: "minecraft:respiration",
         7: "minecraft:depth_strider",
         9: "minecraft:feather_falling",
+        8: "minecraft:efficiency",
+        13: "minecraft:fortune",
+        33: "minecraft:silk_touch",
     };
 
     const customNameMap = {
@@ -1041,6 +1050,10 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         'Детекция': 'detection',
         'Тяжелый': 'heavy',
         'Нестабильный': 'unstable',
+        'Магнит': 'magnet',
+        'Авто-плавка': 'smelting',
+        'Паутина': 'web',
+        'Бульдозер': 'buldozing',
     };
 
     const vanillaEnchants = [];
@@ -1106,13 +1119,13 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
         if (item.name === 'netherite_pickaxe' &&
             allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
-            !allEnchants.some(en => en && en.name === 'melting')) {
+            !allEnchants.some(en => en && en.name === 'smelting')) {
             continue;
         }
 
         if (options.checkDurability && item.maxDurability) {
             let coefficient = 0.9;
-            if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.75;
+            if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.85;
             const damageComp = item.components?.find(c => c.type === 'damage');
             const damage = damageComp?.data || 0;
             const durabilityLeft = item.maxDurability - damage;

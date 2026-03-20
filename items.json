@@ -222,5 +222,121 @@
         ],
         "num": 1,
         "nacenka": 300000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 6
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 3
+            }
+        ],
+        "num": 1,
+        "nacenka": 200000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка_починка-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 2,
+        "nacenka": 300000
+    },
+    {
+        "name": "netherite_pickaxe",
+        "id": "кирка_крутая-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:efficiency",
+                "lvl": 6
+            },
+            {
+                "name": "minecraft:fortune",
+                "lvl": 3
+            },
+            {
+                "name": "buldozing",
+                "lvl": 2
+            },
+            {
+                "name": "web",
+                "lvl": 1
+            },
+            {
+                "name": "magnet",
+                "lvl": 1
+            },
+            {
+                "name": "smelting",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
+        "nacenka": 400000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra-1.21",
+        "effects": [
+        ],
+        "num": 1,
+        "nacenka": 200000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra3-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 3
+            }
+        ],
+        "num": 2,
+        "nacenka": 300000
+    },
+    {
+        "name": "elytra",
+        "id": "elytra_mending-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 5
+            },
+            {
+                "name": "minecraft:mending",
+                "lvl": 1
+            }
+        ],
+        "num": 3,
+        "nacenka": 300000
     }
 ]
