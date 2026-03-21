@@ -36,6 +36,7 @@ let botType = ""
 let botTypeSell = null
 let botLogin = false;
 let botPrices = []
+let lastWarpTP = Date.now() - 40000
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -1192,10 +1193,11 @@ async function walk(bot) {
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-    
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-    bot.chat(`/warp ${warp}`);
-    await delay(8000);
+    if (Date.now() - lastWarpTP > 40000) {
+        const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+        bot.chat(`/warp ${warp}`);
+        await delay(8000);
+    }
     bot.autoEat.disableAuto();
 }
 
