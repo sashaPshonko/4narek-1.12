@@ -21,6 +21,7 @@ let isKrush = false
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
+let enoughItems = false
 let botTimeReset = Date.now()
 let botTimeActive = Date.now()
 let botTimeLogin = Date.now()
@@ -270,7 +271,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
                 
-                if (resetime > 60 || needReset) {
+                if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     botMenu = myItems;
@@ -344,7 +345,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     const priceOnAH = getPriceFromItem(currentSlot);
                     const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
 
-                    if (priceSell !== priceOnAH) {
+                    if (priceSell !== priceOnAH || enoughItems) {
                         logger.error(`chnge ${priceSell} ${priceOnAH}`);
                         botAhFull = false;
                         slot = i;
@@ -458,6 +459,7 @@ async function launchBookBuyer(name, password, anarchy) {
             mu = false;
             botStartTime = Date.now() - 240000;
             botAhFull = false;
+            enoughItems = false
             botTimeReset = Date.now() - 60000;
             botLogin = true;
             botTimeActive = Date.now();
@@ -471,6 +473,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
+            enoughItems = false
             botAhFull = false;
             let balanceStr = messageText;
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
@@ -512,6 +515,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('[☃] Не удалось выставить') ||
             messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+            enoughItems = true
             botAhFull = true;
             return;
         }
@@ -1172,44 +1176,6 @@ function getRandomElement(array) {
         throw new Error("Input must be a non-empty array");
     }
     return array[Math.floor(Math.random() * array.length)];
-}
-
-async function longWalk(bot) {
-    await delay(500);
-    let timeTP = Date.now();
-    bot.autoEat.enableAuto();
-    botTimeActive = Date.now();
-    logger.info(`${bot.username} - все забито. Гуляем.`);
-    
-    while (botAhFull) {
-        const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
-        if (resetime > 60 || needReset) {
-            await delay(500);
-            ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-            await delay(500);
-            await safeAH(bot);
-            bot.autoEat.disableAuto();
-            return;
-        }
-
-        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-        bot.setControlState(randomMove, true);
-        await delay(500);
-        bot.setControlState(randomMove, false);
-        
-        if (Date.now() - timeTP > 10000) {
-            await delay(500);
-            timeTP = Date.now();
-            const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-            bot.chat(`/warp ${warp}`);
-            await delay(8000);
-        }
-        await delay(500);
-    }
-
-    logger.info(`${bot.username} - опять работать.`);
-    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-    bot.autoEat.disableAuto();
 }
 
 async function walk(bot) {
