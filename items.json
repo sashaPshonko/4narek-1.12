@@ -321,22 +321,6 @@
             }
         ],
         "num": 2,
-        "nacenka": 300000
-    },
-    {
-        "name": "elytra",
-        "id": "elytra_mending-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:mending",
-                "lvl": 1
-            }
-        ],
-        "num": 3,
-        "nacenka": 300000
+        "nacenka": 200000
     }
 ]
