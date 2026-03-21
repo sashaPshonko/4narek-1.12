@@ -37,6 +37,7 @@ let botTypeSell = null
 let botLogin = false;
 let botPrices = []
 let lastWarpTP = Date.now() - 40000
+let needSendAH = true
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
@@ -273,6 +274,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
                 
                 if (resetime > 60 || needReset || enoughItems) {
+                    needSendAH = true
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     botMenu = myItems;
@@ -331,6 +333,21 @@ async function launchBookBuyer(name, password, anarchy) {
                     logger.error('суки обновили аукцион');
                     break;
                 }
+
+                if (needSendAH) {
+                    for (let i = 0; i < 8; i++) {
+                        const currentSlot = bot.currentWindow?.slots[i];
+                        if (currentSlot) {
+                            botCount++;
+                            const id = getIDByEnchantments(currentSlot, itemPrices);
+                            botAh.push(id);
+                        } else break;
+                    }
+
+                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
+                    needSendAH = false
+                    }
+
                 await delay(500);
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
@@ -361,17 +378,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     await safeClickBuy(bot, slot, getRandomDelayInRange(700, 1300), key);
                     break;
                 }
-
-                for (let i = 0; i < 8; i++) {
-                    const currentSlot = bot.currentWindow?.slots[i];
-                    if (currentSlot) {
-                        botCount++;
-                        const id = getIDByEnchantments(currentSlot, itemPrices);
-                        botAh.push(id);
-                    } else break;
-                }
-
-                parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
