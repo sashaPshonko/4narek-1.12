@@ -260,6 +260,13 @@ async function launchBookBuyer(name, password, anarchy) {
                 generateRandomKey(bot);
                 key = botKey;
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
+
+                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
+                if (uptime > 55 || botNeedSell) {
+                    logger.info(`${name} - продажа`);
+                    await sellItems(bot, itemPrices);
+                    break;
+                }
                 
                 if (resetime > 60 || needReset || enoughItems) {
                     needSendAH = true
@@ -267,13 +274,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     await delay(500);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
-                    break;
-                }
-                
-                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                if (uptime > 55 || botNeedSell) {
-                    logger.info(`${name} - продажа`);
-                    await sellItems(bot, itemPrices);
                     break;
                 }
 
