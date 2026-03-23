@@ -139,7 +139,6 @@ async function launchBookBuyer(name, password, anarchy) {
         logger.info(`${name} успешно проник на сервер.`);
         await delay(1000);
         bot.chat(loginCommand);
-        await delay(300)
         await delay(1000);
         bot.chat(anarchyCommand);
        
@@ -258,7 +257,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 botTimeActive = Date.now();
                 generateRandomKey(bot);
                 key = botKey;
-                const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
                 if (uptime > 55 || botNeedSell) {
@@ -267,10 +265,10 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
                 
+                const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
                 if (resetime > 60 || needReset || enoughItems) {
                     needSendAH = true
                     logger.info(`${name} - ресет`);
-                    await delay(500);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key);
                     break;
@@ -451,15 +449,10 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('[✘] Ошибка! По такой цене')) {
-            console.log('[✘] Ошибка! По такой цене ', workerData.itemID);
-            return;
-        }
-
-        if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000));
-            return;
-        }
+        // if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
+        //     await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000));
+        //     return;
+        // }
 
         if (messageText.includes('[$] Ваш баланс:')) {
             let balanceStr = messageText;
@@ -492,11 +485,11 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[☃] У Вас купили')) {
             botAhFull = false;
             let balanceStr = messageText;
+            botNeedSell = true;
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             const id = getIdBySellPrice(itemPrices, balance);
             parentPort.postMessage({ name: 'sell', id: id, price: balance });
-            botNeedSell = true;
             return;
         }
 
@@ -1234,6 +1227,19 @@ async function walk(bot) {
         const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
         bot.chat(`/warp ${warp}`);
         await delay(8000);
+        const endTime = Date.now() + 3000;
+
+        await bot.setControlState('sneak', true)
+        await delay(100)
+        while (Date.now() < endTime) {
+            const movements = ['forward', 'back', 'left', 'right'];
+            const randomMove = movements[Math.floor(Math.random() * movements.length)];
+            bot.setControlState(randomMove, true);
+            await delay(500);
+            bot.setControlState(randomMove, false);
+
+            await delay(100);
+        }
     }
     bot.autoEat.disableAuto();
 }
