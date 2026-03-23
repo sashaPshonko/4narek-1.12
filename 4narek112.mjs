@@ -708,7 +708,7 @@ async function sellItems(bot, itemPrices) {
 
         const balance = extractBalance(bot.scoreboard.sidebar.items)
         const infa = bot.scoreboard.sidebar.items
-        if (!balance) parentPort.postMessage(`баланс не найден ${infa}`)
+        if (!balance) parentPort.postMessage(`баланс не найден ${JSON.stringify(infa)}`)
 
         if (balance - minBalance >= 10000000) {
             await delay(200)
