@@ -16,6 +16,7 @@ let itemsBuying = [];
 let needReset = false;
 let netakbistro = true
 let isKrush = false
+let balance = 0
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -459,6 +460,18 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
+        if (messageText.includes('[$] Ваш баланс:')) {
+            let balanceStr = messageText;
+            balanceStr = balanceStr.replace(/\D/g, '');
+            const currentBalance = parseInt(balanceStr);
+            if (isNaN(currentBalance)) {
+                logger.error('баланс NAN');
+                return;
+            }
+            balance = currentBalance
+            return;
+        }
+
         if (messageText.includes('Сервер заполнен')) {
             botStartTime = Date.now() - 240000;
             botAhFull = false;
@@ -706,10 +719,8 @@ async function sellItems(bot, itemPrices) {
             }
         }
 
-        const balance = extractBalance(bot.scoreboard.sidebar.items)
-        const infa = bot.scoreboard
-        if (!balance) parentPort.postMessage(`баланс не найден ${JSON.stringify(infa)}`)
-
+        bot.chat('/balance')
+        await delay(300)
         if (balance - minBalance >= 10000000) {
             await delay(200)
             bot.chat(`/clan invest ${balance - minBalance}`)
