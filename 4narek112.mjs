@@ -290,7 +290,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (bot.currentWindow.slots[0] && 
                     bot.currentWindow.slots[0].name &&
                     bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 31, getRandomDelayInRange(150, 300), key)
+                    await safeClickBuy(bot, 31, getRandomDelayInRange(150, 500), key)
                     break
                 }
 
@@ -648,18 +648,18 @@ async function sellItems(bot, itemPrices) {
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
                     if (bot.quickBarSlot !== quickSlot) {
-                        await bot.setQuickBarSlot(quickSlot);
                         await delay(getRandomDelayInRange(400, 600));
+                        await bot.setQuickBarSlot(quickSlot);
                     }
+                    await delay(getRandomDelayInRange(400, 600));
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(100, 200));
+                    await delay(getRandomDelayInRange(200, 400));
                     bot.chat(`/ah sell ${price}`);
 
                     soldAnything = true;
-                    await delay(getRandomDelayInRange(200, 400));
                 } else {
+                    await delay(getRandomDelayInRange(300, 800));
                     await bot.tossStack(item);
-                    await delay(getRandomDelayInRange(200, 400));
                 }
             }
 
@@ -682,20 +682,21 @@ async function sellItems(bot, itemPrices) {
 
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
-                            await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
+                            await bot.setQuickBarSlot(freeSlot);
+                            await delay(getRandomDelayInRange(300, 500));
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(200, 400));
 
+                            await delay(getRandomDelayInRange(300, 500));
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(100, 200));
+                            await delay(getRandomDelayInRange(200, 300));
+
                             bot.chat(`/ah sell ${price}`);
 
                             soldAnything = true;
-                            await delay(getRandomDelayInRange(200, 400));
                         } else {
-                            await bot.tossStack(item);
                             await delay(getRandomDelayInRange(200, 400));
+                            await bot.tossStack(item);
                         }
                     }
                 }
