@@ -14,7 +14,6 @@ import zlib from 'zlib';
 let itemPrices = workerData.itemPrices;
 let itemsBuying = [];
 let needReset = false;
-let mu = false
 let netakbistro = true
 let isKrush = false
 
@@ -177,7 +176,6 @@ async function launchBookBuyer(name, password, anarchy) {
         if (Date.now() - botTimeActive > 90000) {
             botTimeActive = Date.now();
             botMenu = analysisAH;
-            mu = false;
             await safeAH(bot);
         }
     });
@@ -421,7 +419,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 await delay(300);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
                 botStartTime = Date.now();
-                mu = false;
                 logger.info(`${bot.username} - мьютекс снят`);
                 await delay(500);
                 botMenu = analysisAH;
@@ -464,7 +461,6 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Сервер заполнен')) {
-            mu = false;
             botStartTime = Date.now() - 240000;
             botAhFull = false;
             enoughItems = false
@@ -622,18 +618,19 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
-    if (mu) {
-        await delay(500);
-        await safeAH(bot);
-        return;
+    if (bot.currentWindow) {
+        bot.closeWindow(bot.currentWindow)
     }
-    mu = true;
+
     await walk(bot);
     logger.info(`${bot.username} - прогулка завершена`);
 
     try {
-        while (Date.now() - botTimeLogin < 13000) await delay(1000);
+        while (Date.now() - botTimeLogin < 13000) {
+            await delay(1000);
+        }
         botTimeActive = Date.now();
+
         if (bot.currentWindow) {
             bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(300, 500));
@@ -645,6 +642,7 @@ async function sellItems(bot, itemPrices) {
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
                 while (isKrush) await delay(100)
                 if (botAhFull) break;
+
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
                 if (!item) continue;
@@ -653,11 +651,12 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     if (bot.quickBarSlot !== quickSlot) {
                         await bot.setQuickBarSlot(quickSlot);
-                        await delay(getRandomDelayInRange(200, 400));
+                        await delay(getRandomDelayInRange(400, 600));
                     }
                     bot.chat(`/ah sell ${price}`);
                     await delay(getRandomDelayInRange(100, 200));
                     bot.chat(`/ah sell ${price}`);
+
                     soldAnything = true;
                     await delay(getRandomDelayInRange(200, 400));
                 } else {
@@ -679,6 +678,7 @@ async function sellItems(bot, itemPrices) {
                     for (let invSlot = 0; invSlot < 27; invSlot++) {
                         while (isKrush) await delay(100)
                         if (botAhFull) break;
+
                         const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
 
@@ -687,10 +687,12 @@ async function sellItems(bot, itemPrices) {
                             await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(200, 350));
+                            await delay(getRandomDelayInRange(200, 400));
+
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(100, 150));
+                            await delay(getRandomDelayInRange(100, 200));
                             bot.chat(`/ah sell ${price}`);
+
                             soldAnything = true;
                             await delay(getRandomDelayInRange(200, 400));
                         } else {
@@ -705,24 +707,61 @@ async function sellItems(bot, itemPrices) {
         }
     } catch (error) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
+        parentPort.postMessage(error.stack || error)
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
-        await delay(500);
+
+        await delay(300)
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
             const slotData = bot.inventory.slots[i];
             if (!slotData) continue;
+
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await bot.tossStack(slotData);
-                await delay(300);
+                await bot.tossStack(slotData)
+                await delay(300)
             }
         }
 
-        bot.chat('/balance');
-        await delay(300);
-        botMenu = 'clan';
-        bot.chat('/clan storage');
+        const balance = extractBalance(bot.scoreboard.sidebar.items)
+        if (!balance) parentPort.postMessage(`баланс не найден ${bot.scoreboard.sidebar.items}`)
+
+        if (balance - minBalance >= 10000000) {
+            await delay(200)
+            bot.chat(`/clan invest ${balance - minBalance}`)
+        }
+
+        await delay(300)
+        botMenu = 'clan'
+        bot.chat('/clan storage')
     }
+}
+
+function extractBalance(lines) {
+    for (const line of lines) {
+        const extra = line.displayName?.json?.extra;
+        if (!Array.isArray(extra)) continue;
+
+        let foundLabel = false;
+
+        for (const part of extra) {
+            const text = part?.text;
+            if (typeof text !== 'string') continue;
+
+            if (text.includes('Монет')) {
+                foundLabel = true;
+                continue;
+            }
+
+            if (foundLabel && /\d/.test(text)) {
+                // Extract only digits and convert to number
+                const cleaned = text.replace(/[^\d]/g, '');
+                return cleaned ? Number(cleaned) : 0;
+            }
+        }
+    }
+
+    return 0;
 }
 
 function transform(num) {
@@ -756,7 +795,6 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    if (mu) return;
     netakbistro = true;
     let key = botKey;
     botTimeActive = Date.now();
