@@ -17,6 +17,7 @@ let needReset = false;
 let netakbistro = true
 let isKrush = false
 let balance = 0
+let mu = false
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -614,6 +615,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
+    botAhFull = false
     if (bot.currentWindow) {
         bot.closeWindow(bot.currentWindow)
     }
