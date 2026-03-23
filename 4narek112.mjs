@@ -322,6 +322,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     logger.error('суки обновили аукцион');
                     break;
                 }
+                if (!bot.currentWindow.slots[0]) enoughItems = false
 
                 if (needSendAH) {
                     for (let i = 0; i < 8; i++) {
@@ -480,7 +481,6 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
-            enoughItems = false
             botAhFull = false;
             let balanceStr = messageText;
             balanceStr = balanceStr.replace(/\D/g, '');
