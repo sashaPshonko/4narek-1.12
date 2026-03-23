@@ -376,16 +376,16 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(300, 800), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(300, 600), key);
                     break;
                 }
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(300, 800), key);
+                    await safeClickBuy(bot, 52, getRandomDelayInRange(300, 600), key);
                 } else {
                     botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(300, 800), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 }
                 break;
 
@@ -394,7 +394,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = analysisAH;
-                await safeClickBuy(bot, 46, getRandomDelayInRange(300, 800), key);
+                await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 break;
 
             case "clan":
@@ -1212,18 +1212,24 @@ function getRandomElement(array) {
 async function walk(bot) {
     await delay(500);
     bot.autoEat.enableAuto();
-    const endTime = Date.now() + 4000;
+    const endTime = Date.now() + 3000;
 
+    await bot.setControlState('sneak', true)
+    await delay(100)
     while (Date.now() < endTime) {
-        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        const movements = ['forward', 'back', 'left', 'right'];
+        const randomMove = movements[Math.floor(Math.random() * movements.length)];
         bot.setControlState(randomMove, true);
         await delay(500);
         bot.setControlState(randomMove, false);
-        await delay(500);
+
+        await delay(100);
     }
 
-    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-    if (Date.now() - lastWarpTP > 40000) {
+    ['forward', 'back', 'left', 'right', 'sneak'].forEach(async move =>
+        await bot.setControlState(move, false)
+    );
+    if (Date.now() - lastWarpTP > 60000) {
         const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
         bot.chat(`/warp ${warp}`);
         await delay(8000);
