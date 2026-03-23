@@ -348,7 +348,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     parentPort.postMessage(msg)
                     }
 
-                await delay(500);
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
                 
@@ -356,7 +355,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                for (let i = 0; i < 8; i++) {
+                for (let i = 0; i < 19; i++) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) break;
 
@@ -529,22 +528,6 @@ async function launchBookBuyer(name, password, anarchy) {
             bot.chat(anarchyCommand);
             await delay(11000);
             await safeAH(bot);
-            return;
-        }
-
-        if (messageText.includes('[$] Ваш баланс:')) {
-            let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
-            balanceStr = balanceStr.replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-            if (isNaN(balance)) {
-                logger.error('баланс NAN');
-                return;
-            }
-            if (balance - minBalance >= 10000000) {
-                await delay(500);
-                bot.chat(`/clan invest ${balance - minBalance}`);
-            }
             return;
         }
 
@@ -724,7 +707,8 @@ async function sellItems(bot, itemPrices) {
         }
 
         const balance = extractBalance(bot.scoreboard.sidebar.items)
-        if (!balance) parentPort.postMessage(`баланс не найден ${bot.scoreboard.sidebar.items}`)
+        const infa = bot.scoreboard.sidebar.items
+        if (!balance) parentPort.postMessage(`баланс не найден ${infa}`)
 
         if (balance - minBalance >= 10000000) {
             await delay(200)
