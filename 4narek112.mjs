@@ -148,17 +148,17 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on("resourcePack", (u, h) => {
-        if (bot._client) {
-            bot._client.write('resource_pack_receive', {
-                uuid: h.ascii,
-                result: 0
-            });
-            console.log('✅ Отправлено подтверждение загрузки ресурспака');
-        } else {
-            logger.error('no client')
-        }
-        console.log(u, h)
-        // bot.acceptResourcePack()
+            // if (bot._client) {
+            //     bot._client.write('resource_pack_receive', {
+            //         uuid: h.ascii,
+            //         result: 0
+            //     });
+            //     console.log('✅ Отправлено подтверждение загрузки ресурспака');
+            // } else {
+            //     logger.error('no client')
+            // }
+            // console.log(u, h)
+        bot.acceptResourcePack()
     })
 
     bot.on('end', (reason) => {
