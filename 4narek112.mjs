@@ -111,7 +111,7 @@ async function launchBookBuyer(name, password, anarchy) {
         port: 25565,
         username: name,
         password: password,
-        version: '1.21.8',
+        version: '1.21.4',
         chatLengthLimit: 256,
     });
 

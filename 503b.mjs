@@ -230,7 +230,7 @@ async function runWorker(bot) {
                     setTimeout(() => {
                         console.log(`🔁 Перезапуск ${username}`);
                         runWorker(bot);
-                    }, 60000);
+                    }, 10000);
                 }
             });
 
