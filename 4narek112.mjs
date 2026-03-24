@@ -110,7 +110,6 @@ async function launchBookBuyer(name, password, anarchy) {
         host: 'mc.funtime.su',
         port: 25565,
         username: name,
-        password: password,
         version: '1.21.4',
         chatLengthLimit: 256,
     });
@@ -148,16 +147,16 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on("resourcePack", (u, h) => {
-            if (bot._client) {
-                bot._client.write('resource_pack_receive', {
-                    uuid: h.ascii,
-                    result: 0
-                });
-                console.log('✅ Отправлено подтверждение загрузки ресурспака');
-            } else {
-                logger.error('no client')
-            }
-            console.log(u, h)
+        if (bot._client) {
+            bot._client.write('resource_pack_receive', {
+                uuid: h.ascii,
+                result: 0
+            });
+            console.log('✅ Отправлено подтверждение загрузки ресурспака');
+        } else {
+            logger.error('no client')
+        }
+        console.log(u, h)
         // bot.acceptResourcePack()
     })
 
@@ -1198,7 +1197,7 @@ function getRandomElement(array) {
 async function walk(bot) {
     await delay(500);
     bot.autoEat.enableAuto();
-    const endTime = Date.now() + 3000;
+    const endTime = Date.now() + 5000;
 
     await bot.setControlState('sneak', true)
     await delay(100)
@@ -1206,7 +1205,7 @@ async function walk(bot) {
         const movements = ['forward', 'back', 'left', 'right'];
         const randomMove = movements[Math.floor(Math.random() * movements.length)];
         bot.setControlState(randomMove, true);
-        await delay(500);
+        await delay(1000);
         bot.setControlState(randomMove, false);
 
         await delay(100);
@@ -1219,7 +1218,7 @@ async function walk(bot) {
         const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
         bot.chat(`/warp ${warp}`);
         await delay(8000);
-        const endTime = Date.now() + 3000;
+        const endTime = Date.now() + 5000;
 
         await bot.setControlState('sneak', true)
         await delay(100)
@@ -1227,11 +1226,14 @@ async function walk(bot) {
             const movements = ['forward', 'back', 'left', 'right'];
             const randomMove = movements[Math.floor(Math.random() * movements.length)];
             bot.setControlState(randomMove, true);
-            await delay(500);
+            await delay(1000);
             bot.setControlState(randomMove, false);
 
             await delay(100);
         }
+        ['forward', 'back', 'left', 'right', 'sneak'].forEach(async move =>
+        await bot.setControlState(move, false)
+    );
     }
     bot.autoEat.disableAuto();
 }
