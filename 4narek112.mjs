@@ -154,6 +154,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 result: 2
             });
             console.log('✅ Отправлено подтверждение загрузки ресурспака');
+        } else {
+            logger.error('no client')
         }
         console.log(u, h)
         // bot.acceptResourcePack()
