@@ -12,7 +12,7 @@ const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
 const itemsPath = join(__dirname, 'items.json');
-const botsPath = join(__dirname, './bots/505b.json');
+const botsPath = join(__dirname, './bots/506b.json');
 const token = '8703392993:AAHWKcw2eu6nz9XY3nwxgH1IYD_gjZ_ExLg';
 const alertChatID = -1003827870631;
 const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
