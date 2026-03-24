@@ -49,21 +49,6 @@ parentPort.on('message', (data) => {
     }
 });
 
-
-function uuidToIntArray(uuidString) {
-    // Убираем дефисы и берем первые 32 символа
-    const hex = uuidString.replace(/-/g, '');
-    
-    // Разбиваем на 4 части по 8 символов (32 бита каждая)
-    const parts = [];
-    for (let i = 0; i < 16; i += 4) {
-        const hexPart = hex.slice(i * 2, (i + 4) * 2);
-        parts.push(parseInt(hexPart, 16));
-    }
-    
-    return parts; // [int1, int2, int3, int4]
-}
-
 const minDelay = 500;
 
 const chooseBuying = 'Выбор скупки ресурсов';
@@ -162,33 +147,19 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.chat(shopCommand);
     });
 
-    // Функция конвертации UUID строки в int-array
-
-
-// Использование в обработчике
-bot.on('resourcePack', (url, hash) => {
-    // Извлекаем UUID строку
-    let uuidString = null;
-    if (typeof hash === 'string') uuidString = hash;
-    else if (hash?.ascii) uuidString = hash.ascii;
-    else if (hash?.toString) uuidString = hash.toString();
-    
-    if (!uuidString) {
-        console.log('⚠️ Не удалось извлечь UUID');
-        return;
-    }
-    
-    // Конвертируем в int-array для 1.21.8
-    const uuidArray = uuidToIntArray(uuidString);
-    
-    if (bot._client) {
-        bot._client.write('resource_pack_receive', {
-            uuid: uuidArray,  // ← массив из 4 чисел
-            result: 0        // или 2 для отказа
-        });
-        console.log('✅ Отправлено подтверждение ресурспака (int-array)');
-    }
-});
+    bot.on("resourcePack", (u, h) => {
+        if (bot._client) {
+            bot._client.write('resource_pack_receive', {
+                uuid: h.ascii,
+                result: 0
+            });
+            console.log('✅ Отправлено подтверждение загрузки ресурспака');
+        } else {
+            logger.error('no client')
+        }
+        console.log(u, h)
+        // bot.acceptResourcePack()
+    })
 
     bot.on('end', (reason) => {
         console.log(`⚠️ Соединение закрыто: ${reason || 'без причины'}`)
