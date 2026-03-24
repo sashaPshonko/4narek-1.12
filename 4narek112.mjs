@@ -305,7 +305,7 @@ async function launchBookBuyer(name, password, anarchy) {
                             netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 1655, key);
                         } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(200, 250) * (slotToBuy + 2), key);
+                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(300, 500) * (slotToBuy + 2), key);
                         } else {
                             await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                         }

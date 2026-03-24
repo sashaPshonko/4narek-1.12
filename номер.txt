@@ -9,7 +9,7 @@
 э7у5пп5 бульдозер2 автоплавка магнит паутина
 
 
-nohup bash scripts/503.sh > bot.log 2>&1 &
+nohup bash scripts/505.sh > bot.log 2>&1 &
 tail -f bot.log
 pkill -f "503.mjs"
 ps aux | grep node
