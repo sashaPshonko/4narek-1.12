@@ -1,0 +1,17 @@
+мечи
+о6п4
+о7п4
+07п5д5
+
+кирки
+э6у3п5
+э7у5пп5
+э7у5пп5 бульдозер2 автоплавка магнит паутина
+
+
+nohup bash scripts/503.sh > bot.log 2>&1 &
+tail -f bot.log
+pkill -f "503.mjs"
+ps aux | grep node
+
+sshuttle -r root@193.222.62.77 0.0.0.0/0 
