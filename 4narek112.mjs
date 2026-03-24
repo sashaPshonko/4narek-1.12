@@ -151,7 +151,7 @@ async function launchBookBuyer(name, password, anarchy) {
         if (bot._client) {
             bot._client.write('resource_pack_receive', {
                 uuid: h.ascii,
-                result: 2
+                result: 0
             });
             console.log('✅ Отправлено подтверждение загрузки ресурспака');
         } else {
