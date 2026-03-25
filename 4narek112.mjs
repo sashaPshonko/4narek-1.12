@@ -1195,47 +1195,62 @@ function getRandomElement(array) {
 }
 
 async function walk(bot) {
-    await delay(500);
-    bot.autoEat.enableAuto();
-    const endTime = Date.now() + 5000;
+    try {
+        await delay(500);
+        
+        // Проверяем наличие autoEat плагина
+        if (bot.autoEat) {
+            bot.autoEat.enableAuto();
+        }
+        
+        // Выносим движение в отдельную функцию
+        await performRandomMovement(bot, 5000);
+        
+        // Проверяем варп только если прошло достаточно времени
+        if (Date.now() - lastWarpTP > 60000) {
+            const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+            bot.chat(`/warp ${warp}`);
+            await delay(8000);
+            await performRandomMovement(bot, 5000);
+            lastWarpTP = Date.now(); // Обновляем время последнего варпа
+        }
+        
+        // Останавливаем все движения
+        for (const move of ['forward', 'back', 'left', 'right', 'sneak']) {
+            await bot.setControlState(move, false);
+        }
+        
+    } catch (error) {
+        console.error(`Ошибка в walk для ${bot.username}:`, error);
+        // Принудительно останавливаем движения в случае ошибки
+        for (const move of ['forward', 'back', 'left', 'right', 'sneak']) {
+            await bot.setControlState(move, false).catch(() => {});
+        }
+    } finally {
+        if (bot.autoEat) {
+            bot.autoEat.disableAuto();
+        }
+    }
+}
 
-    await bot.setControlState('sneak', true)
-    await delay(100)
+// Выносим логику случайного движения
+async function performRandomMovement(bot, duration) {
+    const endTime = Date.now() + duration;
+    
+    // Включаем приседание
+    await bot.setControlState('sneak', true);
+    await delay(100);
+    
     while (Date.now() < endTime) {
         const movements = ['forward', 'back', 'left', 'right'];
         const randomMove = movements[Math.floor(Math.random() * movements.length)];
+        
         bot.setControlState(randomMove, true);
         await delay(1000);
         bot.setControlState(randomMove, false);
-
+        
         await delay(100);
     }
-
-    ['forward', 'back', 'left', 'right', 'sneak'].forEach(async move =>
-        await bot.setControlState(move, false)
-    );
-    if (Date.now() - lastWarpTP > 60000) {
-        const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-        bot.chat(`/warp ${warp}`);
-        await delay(8000);
-        const endTime = Date.now() + 5000;
-
-        await bot.setControlState('sneak', true)
-        await delay(100)
-        while (Date.now() < endTime) {
-            const movements = ['forward', 'back', 'left', 'right'];
-            const randomMove = movements[Math.floor(Math.random() * movements.length)];
-            bot.setControlState(randomMove, true);
-            await delay(1000);
-            bot.setControlState(randomMove, false);
-
-            await delay(100);
-        }
-        ['forward', 'back', 'left', 'right', 'sneak'].forEach(async move =>
-        await bot.setControlState(move, false)
-    );
-    }
-    bot.autoEat.disableAuto();
 }
 
 async function safeClickBuy(bot, slot, time, key) {
