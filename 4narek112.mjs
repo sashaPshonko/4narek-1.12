@@ -110,6 +110,7 @@ async function launchBookBuyer(name, password, anarchy) {
         username: name,
         version: '1.21.4',
         chatLengthLimit: 256,
+        viewDistance: 'tiny',
     });
 
     const loginCommand = `/l ${name}`;
@@ -173,17 +174,18 @@ async function launchBookBuyer(name, password, anarchy) {
         process.exit(1);
     });
 
-    // bot.on('physicsTick', async () => {
-    //     if (Date.now()-timeReload > 5000 && bot.menu === analysisAH) {
-    //         await safeClickBuy(bot, slotToReloadAH, 0, key)
-    //     }
-    // });
+    bot.on('physicsTick', async () => {
+        if (Date.now()-botTimeActive > 30000) {
+            await sellItems(bot, itemPrices)
+        }
+    });
 
     botMenu = chooseBuying;
     let slotToBuy = undefined;
     botStartTime = Date.now() - 240000;
 
     bot.on('windowOpen', async () => {
+        botTimeActive = Date.now()
         let key = "";
         switch (botMenu) {
             case chooseBuying:
@@ -542,7 +544,13 @@ async function launchBookBuyer(name, password, anarchy) {
         } // 
 
         if (messageText.includes('[⚠] Здесь нет команд!')) {
-            await sellItems(bot, itemPrices)
+            await walk(bot)
+
+            bot.chat(anarchyCommand)
+            await delay(1000)
+            botTimeLogin = Date.now()
+            while (Date.now() - botTimeLogin < 13000) await delay(1000);
+            await safeAH(bot);
             return;
         }
 
@@ -615,6 +623,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
+    botTimeActive = Date.now()
      logger.info(`${bot.username} - начало продажи`)
 
     botNeedSell = false;
