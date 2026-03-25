@@ -504,10 +504,10 @@ async function launchBookBuyer(name, password, anarchy) {
             await delay(getRandomDelayInRange(500, 700));
             
             if (messageText.includes('После входа')) {
-                await walk(bot);
+                await sellItems(bot);
                 await delay(10000);
             } else {
-                await walk(bot);
+                await sellItems(bot);
             }
             
             botMenu = analysisAH;
@@ -700,6 +700,7 @@ async function sellItems(bot, itemPrices) {
             if (!soldAnything) break;
         }
     } catch (error) {
+    
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
         parentPort.postMessage(error.stack || error)
     } finally {
@@ -844,6 +845,7 @@ async function getBestAHSlot(bot, itemPrices) {
             parentPort.postMessage({ name: 'buying', data: currentUUID });
             return slotData.slot;
         } catch (error) {
+            parentPort.postMessage(`ошибка получаения цены ${error}`)
             console.error(error);
             continue;
         }
@@ -864,6 +866,7 @@ function getItemUUID(item) {
 
         return uuidArray.join(',');
     } catch (e) {
+        parentPort.postMessage(`ошибка получаения uuid ${error}`)
         console.log('Ошибка при получении UUID:', e.message);
         return null;
     }
@@ -1283,73 +1286,6 @@ async function safeClickBuy(bot, slot, time, key) {
     }
 }
 
-function normalizeItemData(obj) {
-    if (!obj) return null;
-    const result = JSON.parse(JSON.stringify(obj));
-    delete result.slot;
-    try {
-        const loreEntries = result.nbt.value.display.value.Lore.value.value;
-        const secondsLeft = extractTimeToSeconds(result);
-        const timeIndex = loreEntries.findIndex(entry =>
-            entry.includes('Истeкaeт:') || entry.includes('Истекает:') ||
-            entry.includes('expires:') || entry.includes('⟲')
-        );
-        if (timeIndex !== -1 && secondsLeft !== null) {
-            const expirationTimestamp = Date.now() + (secondsLeft * 1000);
-            loreEntries[timeIndex] = `{"text":"EXP_TS:${expirationTimestamp}"}`;
-        }
-    } catch (error) {
-        console.warn('Ошибка при нормализации времени:', error.message);
-    }
-    return result;
-}
-
-function extractTimeToSeconds(nbtData) {
-    try {
-        const loreList = nbtData?.nbt?.value?.display?.value?.Lore?.value?.value;
-        if (!loreList) throw new Error('Lore не найден');
-
-        let timeLine = "";
-
-        for (const rawEntry of loreList) {
-            try {
-                const parsed = JSON.parse(rawEntry);
-                let fullText = parsed.text || "";
-                if (parsed.extra) fullText += parsed.extra.map(e => e.text).join("");
-                if (/Ист.к.ет:/i.test(fullText)) {
-                    timeLine = fullText;
-                    break;
-                }
-            } catch (e) {
-                if (/Ист.к.ет:/i.test(rawEntry)) {
-                    timeLine = rawEntry;
-                    break;
-                }
-            }
-        }
-
-        if (!timeLine) return null;
-
-        const hMatch = timeLine.match(/(\d+)\s*ч/i);
-        const mMatch = timeLine.match(/(\d+)\s*мин/i);
-        const sMatch = timeLine.match(/(\d+)\s*сек/i);
-
-        const hours = hMatch ? parseInt(hMatch[1], 10) : 0;
-        const minutes = mMatch ? parseInt(mMatch[1], 10) : 0;
-        const seconds = sMatch ? parseInt(sMatch[1], 10) : 0;
-
-        const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
-
-        if (totalSeconds === 0 && !timeLine.includes('0')) {
-            throw new Error('Цифры времени не обнаружены в строке: ' + timeLine);
-        }
-
-        return totalSeconds;
-    } catch (error) {
-        console.error('Ошибка парсинга:', error.message);
-        return null;
-    }
-}
 
 async function saveToJsonFile(filePath, data) {
     const tempPath = `${filePath}.tmp`;
