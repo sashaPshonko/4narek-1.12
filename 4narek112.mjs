@@ -609,6 +609,12 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
+    if (mu) {
+        await delay(500);
+        await safeAH(bot);
+        return;
+    }
+    mu = true;
     botNeedSell = false;
     botAhFull = false
     if (bot.currentWindow) {
@@ -789,6 +795,7 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
+    if (mu) return;
     netakbistro = true;
     let key = botKey;
     botTimeActive = Date.now();
