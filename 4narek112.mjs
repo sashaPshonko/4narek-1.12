@@ -17,7 +17,6 @@ let needReset = false;
 let netakbistro = true
 let isKrush = false
 let balance = 0
-let timeReload = Date.now()
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
@@ -253,9 +252,9 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case analysisAH:
                 generateRandomKey(bot);
+                botMenu = analysisAH;
                 logger.info(`${name} - ${botMenu}`);
                 botTimeActive = Date.now();
-                timeReload = Date.now
                 key = botKey;
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
@@ -384,7 +383,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     await safeClickBuy(bot, 52, getRandomDelayInRange(300, 600), key);
                 } else {
                     botMenu = analysisAH;
-                    timeReload = Date.now()
                     await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 }
                 break;
@@ -394,7 +392,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 generateRandomKey(bot);
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
-                timeReload = Date.now()
                 botMenu = analysisAH;
                 await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 break;
@@ -456,7 +453,7 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
             const currentKey = botKey
             await delay(3000)
-            if (key === currentKey)
+            if (botKey === currentKey)
             await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
             return;
         }
@@ -509,10 +506,10 @@ async function launchBookBuyer(name, password, anarchy) {
             await delay(getRandomDelayInRange(500, 700));
             
             if (messageText.includes('После входа')) {
-                await sellItems(bot);
+                await sellItems(bot, itemPrices);
                 await delay(10000);
             } else {
-                await sellItems(bot);
+                await sellItems(bot, itemPrices);
             }
 
             await safeAH(bot);
@@ -795,7 +792,6 @@ async function safeClick(bot, slot, time) {
 
 async function safeAH(bot) {
     console.log('save ah')
-    timeReload = Date.now()
     netakbistro = true;
     let key = botKey;
     botTimeActive = Date.now();
