@@ -252,10 +252,10 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case analysisAH:
+                generateRandomKey(bot);
                 logger.info(`${name} - ${botMenu}`);
                 botTimeActive = Date.now();
                 timeReload = Date.now
-                generateRandomKey(bot);
                 key = botKey;
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
@@ -454,7 +454,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            const currentKey = key
+            const currentKey = botKey
             await delay(3000)
             if (key === currentKey)
             await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
