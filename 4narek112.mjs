@@ -314,7 +314,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
-                console.log(`${bot.username} - ${bot.menu}`)
+                console.log(`${bot.username} - ${botMenu}`)
                 key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
@@ -388,7 +388,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case setAH:
-                console.log(`${bot.username} - ${bot.menu}`)
+                console.log(`${bot.username} - ${botMenu}`)
                 generateRandomKey(bot);
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
@@ -397,7 +397,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case "clan":
-                console.log(`${bot.username} - ${bot.menu}`)
+                console.log(`${bot.username} - ${botMenu}`)
                 logger.info(`${bot.username} ${botMenu}`);
                 generateRandomKey(bot);
                 
@@ -454,7 +454,7 @@ async function launchBookBuyer(name, password, anarchy) {
             const currentKey = botKey
             await delay(3000)
             if (botKey === currentKey)
-            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
+            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000));
             return;
         }
 
