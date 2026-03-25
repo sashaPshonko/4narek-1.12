@@ -1198,10 +1198,6 @@ async function walk(bot) {
     try {
         await delay(500);
         
-        // Проверяем наличие autoEat плагина
-        if (bot.autoEat) {
-            bot.autoEat.enableAuto();
-        }
         
         // Выносим движение в отдельную функцию
         await performRandomMovement(bot, 5000);
@@ -1238,7 +1234,7 @@ async function performRandomMovement(bot, duration) {
     const endTime = Date.now() + duration;
     
     // Включаем приседание
-    await bot.setControlState('sneak', true);
+    // await bot.setControlState('sneak', true);
     await delay(100);
     
     while (Date.now() < endTime) {
