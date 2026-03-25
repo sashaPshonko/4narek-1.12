@@ -533,10 +533,16 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('[⚠] Данной команды не существует!')) {
+        if (messageText.includes('[⚠] Данной команды не существует!')
+        ) {
             bot.chat(anarchyCommand);
             await delay(11000);
             await safeAH(bot);
+            return;
+        } // 
+
+        if (messageText.includes('[⚠] Здесь нет команд!')) {
+            await sellItems(bot, itemPrices)
             return;
         }
 
@@ -1113,7 +1119,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         if (englishName) {
             return { name: englishName, lvl: ench.lvl };
         } else {
-            console.log(`⚠️ Неизвестное кастомное зачарование: "${ench.name}" (уровень ${ench.lvl}) — оставляем без перевода`);
+            // console.log(`⚠️ Неизвестное кастомное зачарование: "${ench.name}" (уровень ${ench.lvl}) — оставляем без перевода`);
             return ench;
         }
     });
