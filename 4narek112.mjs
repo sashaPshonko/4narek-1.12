@@ -1198,8 +1198,13 @@ async function walk(bot) {
     try {
         await delay(500);
         
+        // Проверяем, что бот в мире
+        if (!bot.entity || !bot.entity.position) {
+            parentPort.postMessage(`Ошибка walk: ${bot.username} - бот не в мире`);
+            return;
+        }
         
-        // Выносим движение в отдельную функцию
+        // Выполняем случайное движение
         await performRandomMovement(bot, 5000);
         
         // Проверяем варп только если прошло достаточно времени
@@ -1208,44 +1213,50 @@ async function walk(bot) {
             bot.chat(`/warp ${warp}`);
             await delay(8000);
             await performRandomMovement(bot, 5000);
-            lastWarpTP = Date.now(); // Обновляем время последнего варпа
-        }
-        
-        // Останавливаем все движения
-        for (const move of ['forward', 'back', 'left', 'right', 'sneak']) {
-            await bot.setControlState(move, false);
+            lastWarpTP = Date.now();
         }
         
     } catch (error) {
-        console.error(`Ошибка в walk для ${bot.username}:`, error);
-        // Принудительно останавливаем движения в случае ошибки
-        for (const move of ['forward', 'back', 'left', 'right', 'sneak']) {
-            await bot.setControlState(move, false).catch(() => {});
-        }
+        parentPort.postMessage(`Ошибка walk: ${bot.username} - ${error.message}`);
     } finally {
-        if (bot.autoEat) {
-            bot.autoEat.disableAuto();
-        }
+        // Останавливаем все активные движения последовательно
+        await stopAllMovements(bot);
     }
 }
 
-// Выносим логику случайного движения
 async function performRandomMovement(bot, duration) {
     const endTime = Date.now() + duration;
-    
-    // Включаем приседание
-    // await bot.setControlState('sneak', true);
-    await delay(100);
+    const movements = ['forward', 'back', 'left', 'right'];
     
     while (Date.now() < endTime) {
-        const movements = ['forward', 'back', 'left', 'right'];
+        // Выбираем случайное направление
         const randomMove = movements[Math.floor(Math.random() * movements.length)];
         
+        // Включаем движение
         bot.setControlState(randomMove, true);
-        await delay(1000);
+        
+        // Двигаемся случайное время (800-1200 мс)
+        const moveDuration = getRandomDelayInRange(800, 1200);
+        await delay(moveDuration);
+        
+        // Выключаем текущее движение
         bot.setControlState(randomMove, false);
         
-        await delay(100);
+        // Пауза между движениями
+        await delay(getRandomDelayInRange(100, 300));
+    }
+}
+
+async function stopAllMovements(bot) {
+    // Список активных движений, которые нужно остановить
+    const controlStates = ['forward', 'back', 'left', 'right'];
+    
+    // Последовательно отключаем каждое активное состояние
+    for (const state of controlStates) {
+        if (bot.getControlState(state)) {
+            bot.setControlState(state, false);
+            await delay(50);
+        }
     }
 }
 
