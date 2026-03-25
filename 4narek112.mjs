@@ -17,8 +17,7 @@ let needReset = false;
 let netakbistro = true
 let isKrush = false
 let balance = 0
-let mu = false
-
+let timeReload = Date.now()
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
@@ -175,13 +174,11 @@ async function launchBookBuyer(name, password, anarchy) {
         process.exit(1);
     });
 
-    bot.on('physicsTick', async () => {
-        if (Date.now() - botTimeActive > 90000) {
-            botTimeActive = Date.now();
-            botMenu = analysisAH;
-            await safeAH(bot);
-        }
-    });
+    // bot.on('physicsTick', async () => {
+    //     if (Date.now()-timeReload > 5000 && bot.menu === analysisAH) {
+    //         await safeClickBuy(bot, slotToReloadAH, 0, key)
+    //     }
+    // });
 
     botMenu = chooseBuying;
     let slotToBuy = undefined;
@@ -257,6 +254,7 @@ async function launchBookBuyer(name, password, anarchy) {
             case analysisAH:
                 logger.info(`${name} - ${botMenu}`);
                 botTimeActive = Date.now();
+                timeReload = Date.now
                 generateRandomKey(bot);
                 key = botKey;
 
@@ -317,6 +315,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
+                console.log(`${bot.username} - ${bot.menu}`)
                 key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
@@ -385,19 +384,23 @@ async function launchBookBuyer(name, password, anarchy) {
                     await safeClickBuy(bot, 52, getRandomDelayInRange(300, 600), key);
                 } else {
                     botMenu = analysisAH;
+                    timeReload = Date.now()
                     await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 }
                 break;
 
             case setAH:
+                console.log(`${bot.username} - ${bot.menu}`)
                 generateRandomKey(bot);
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
+                timeReload = Date.now()
                 botMenu = analysisAH;
                 await safeClickBuy(bot, 46, getRandomDelayInRange(300, 600), key);
                 break;
 
             case "clan":
+                console.log(`${bot.username} - ${bot.menu}`)
                 logger.info(`${bot.username} ${botMenu}`);
                 generateRandomKey(bot);
                 
@@ -422,7 +425,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 botStartTime = Date.now();
                 logger.info(`${bot.username} - мьютекс снят`);
                 await delay(500);
-                botMenu = analysisAH;
                 await safeAH(bot);
                 break;
         }
@@ -451,10 +453,13 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        // if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-        //     await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000));
-        //     return;
-        // }
+        if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
+            const currentKey = key
+            await delay(3000)
+            if (key === currentKey)
+            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(500, 1000), key);
+            return;
+        }
 
         if (messageText.includes('[$] Ваш баланс:')) {
             let balanceStr = messageText;
@@ -509,8 +514,7 @@ async function launchBookBuyer(name, password, anarchy) {
             } else {
                 await sellItems(bot);
             }
-            
-            botMenu = analysisAH;
+
             await safeAH(bot);
             return;
         }
@@ -528,7 +532,6 @@ async function launchBookBuyer(name, password, anarchy) {
             await delay(getRandomDelayInRange(500, 700));
             bot.chat('/clan withdraw 3000000');
             await delay(getRandomDelayInRange(500, 700));
-            botMenu = analysisAH;
             await safeAH(bot);
             return;
         }
@@ -609,12 +612,8 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
-    if (mu) {
-        await delay(500);
-        await safeAH(bot);
-        return;
-    }
-    mu = true;
+     logger.info(`${bot.username} - начало продажи`)
+
     botNeedSell = false;
     botAhFull = false
     if (bot.currentWindow) {
@@ -795,7 +794,8 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    if (mu) return;
+    console.log('save ah')
+    timeReload = Date.now()
     netakbistro = true;
     let key = botKey;
     botTimeActive = Date.now();
@@ -1124,12 +1124,6 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
     const allEnchants = [...vanillaEnchants, ...customEnchants];
     
-    if (vanillaEnchants.length > 0 || customEnchants.length > 0) {
-        console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
-        console.log('Кастомные зачарования (после перевода):', customEnchants.map(e => `${e.name}:${e.lvl}`));
-        console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
-    }
-
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
 
