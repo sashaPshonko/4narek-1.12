@@ -814,18 +814,26 @@ async function safeClick(bot, slot, time) {
 }
 
 async function safeAH(bot) {
-    console.log('save ah')
-    netakbistro = true;
+    netakbistro = true
     let key = botKey;
     botTimeActive = Date.now();
-    botMenu = analysisAH;
-    botUpdateWindow = true;
+    botMenu = analysisAH
+    botUpdateWindow = true
+    let count = 0
     while (key === botKey) {
+        count++
+        if (count === 6) {
+            botTimeActive = Date.now()
+            botTimeLogin = Date.now()
+            await delay(200)
+            bot.chat(anarchyCommand)
+            break
+        }
+        await delay(getRandomDelayInRange(500, 1000));
+        botMenu = analysisAH
         bot.chat(ahCommand);
-        await delay(1000);
     }
 }
-
 async function getAHSlotsIDs(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return [];
     const ids = [];
