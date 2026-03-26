@@ -1211,18 +1211,16 @@ function getRandomElement(array) {
 
 async function walk(bot) {
     try {
+        if (bot.autoEat) bot.autoEat.enableAuto();
         await delay(500);
         
-        // Проверяем, что бот в мире
         if (!bot.entity || !bot.entity.position) {
             parentPort.postMessage(`Ошибка walk: ${bot.username} - бот не в мире`);
             return;
         }
         
-        // Выполняем случайное движение
         await performRandomMovement(bot, 5000);
         
-        // Проверяем варп только если прошло достаточно времени
         if (Date.now() - lastWarpTP > 60000) {
             const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
             bot.chat(`/warp ${warp}`);
@@ -1234,8 +1232,32 @@ async function walk(bot) {
     } catch (error) {
         parentPort.postMessage(`Ошибка walk: ${bot.username} - ${error.message}`);
     } finally {
-        // Останавливаем все активные движения последовательно
         await stopAllMovements(bot);
+        if (bot.autoEat) bot.autoEat.disableAuto();
+    }
+}
+
+async function performRandomMovement(bot, duration) {
+    const endTime = Date.now() + duration;
+    const movements = ['forward', 'back', 'left', 'right'];
+    
+    while (Date.now() < endTime) {
+        const randomMove = movements[Math.floor(Math.random() * movements.length)];
+        bot.setControlState(randomMove, true);
+        const moveDuration = getRandomDelayInRange(800, 1200);
+        await delay(moveDuration);
+        bot.setControlState(randomMove, false);
+        await delay(getRandomDelayInRange(500, 1000)); // увеличенная пауза
+    }
+}
+
+async function stopAllMovements(bot) {
+    const controlStates = ['forward', 'back', 'left', 'right', 'jump', 'sprint'];
+    for (const state of controlStates) {
+        if (bot.getControlState(state)) {
+            bot.setControlState(state, false);
+            await delay(50);
+        }
     }
 }
 
