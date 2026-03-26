@@ -884,7 +884,7 @@ function getItemUUID(item) {
 
         return uuidArray.join(',');
     } catch (e) {
-        parentPort.postMessage(`ошибка получаения uuid ${error}`)
+        parentPort.postMessage(`ошибка получаения uuid ${e}`)
         console.log('Ошибка при получении UUID:', e.message);
         return null;
     }
@@ -1237,6 +1237,20 @@ async function walk(bot) {
     }
 }
 
+async function performRandomMovement(bot, duration) {
+    const endTime = Date.now() + duration;
+    const movements = ['forward', 'back', 'left', 'right'];
+    
+    while (Date.now() < endTime) {
+        const randomMove = movements[Math.floor(Math.random() * movements.length)];
+        bot.setControlState(randomMove, true);
+        const moveDuration = getRandomDelayInRange(800, 1200);
+        await delay(moveDuration);
+        bot.setControlState(randomMove, false);
+        await delay(getRandomDelayInRange(500, 1000)); // увеличенная пауза
+    }
+}
+
 async function stopAllMovements(bot) {
     const controlStates = ['forward', 'back', 'left', 'right', 'jump', 'sprint'];
     for (const state of controlStates) {
@@ -1247,26 +1261,16 @@ async function stopAllMovements(bot) {
     }
 }
 
-async function performRandomMovement(bot, duration) {
-    const endTime = Date.now() + duration;
-    const movements = ['forward', 'back', 'left', 'right'];
+async function stopAllMovements(bot) {
+    // Список активных движений, которые нужно остановить
+    const controlStates = ['forward', 'back', 'left', 'right'];
     
-    while (Date.now() < endTime) {
-        // Выбираем случайное направление
-        const randomMove = movements[Math.floor(Math.random() * movements.length)];
-        
-        // Включаем движение
-        bot.setControlState(randomMove, true);
-        
-        // Двигаемся случайное время (800-1200 мс)
-        const moveDuration = getRandomDelayInRange(800, 1200);
-        await delay(moveDuration);
-        
-        // Выключаем текущее движение
-        bot.setControlState(randomMove, false);
-        
-        // Пауза между движениями
-        await delay(getRandomDelayInRange(100, 300));
+    // Последовательно отключаем каждое активное состояние
+    for (const state of controlStates) {
+        if (bot.getControlState(state)) {
+            bot.setControlState(state, false);
+            await delay(50);
+        }
     }
 }
 
