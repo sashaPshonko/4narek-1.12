@@ -183,7 +183,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
     botMenu = chooseBuying;
     let slotToBuy = undefined;
-    botStartTime = Date.now() - 240000;
 
     bot.on('windowOpen', async () => {
         botTimeActive = Date.now()
@@ -625,6 +624,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 async function sellItems(bot, itemPrices) {
     botTimeActive = Date.now()
      logger.info(`${bot.username} - начало продажи`)
+     botStartTime = Date.now()
 
     botNeedSell = false;
     botAhFull = false
