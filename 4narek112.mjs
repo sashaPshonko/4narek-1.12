@@ -1270,19 +1270,6 @@ async function performRandomMovement(bot, duration) {
     }
 }
 
-async function stopAllMovements(bot) {
-    // Список активных движений, которые нужно остановить
-    const controlStates = ['forward', 'back', 'left', 'right'];
-    
-    // Последовательно отключаем каждое активное состояние
-    for (const state of controlStates) {
-        if (bot.getControlState(state)) {
-            bot.setControlState(state, false);
-            await delay(50);
-        }
-    }
-}
-
 async function safeClickBuy(bot, slot, time, key) {
     let timeDelay = time;
     if (botUpdateWindow) {
