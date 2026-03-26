@@ -175,7 +175,7 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-        if (Date.now()-botTimeActive > 30000) {
+        if (Date.now()-botTimeActive > 60000) {
             botTimeActive = Date.now()
             await sellItems(bot, itemPrices)
         }
@@ -400,7 +400,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
             case "clan":
-                console.log(`${bot.username} - ${botMenu}`)
                 logger.info(`${bot.username} ${botMenu}`);
                 generateRandomKey(bot);
                 
