@@ -176,6 +176,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.on('physicsTick', async () => {
         if (Date.now()-botTimeActive > 30000) {
+            botTimeActive = Date.now()
             await sellItems(bot, itemPrices)
         }
     });
