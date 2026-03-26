@@ -89,6 +89,8 @@ const firstAHSlot = 0;
 const lastAHSlot = 44;
 const firstSellSlot = 36;
 
+const anarchyCommand = `/an${anarchy}`;
+
 const logger = createLogger({
     level: 'info',
     format: format.combine(
@@ -115,7 +117,7 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     const loginCommand = `/l ${name}`;
-    const anarchyCommand = `/an${anarchy}`;
+
     const shopCommand = '/shop';
 
     console.warn = () => {};
