@@ -16,6 +16,7 @@ let itemsBuying = [];
 let needReset = false;
 let mu = false
 let netakbistro = true
+let enoughItems = false
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -271,8 +272,15 @@ async function launchBookBuyer(name, password, anarchy) {
                 generateRandomKey(bot);
                 key = botKey;
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
+
+                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
+                if (uptime > 55 || botNeedSell) {
+                    logger.info(`${name} - продажа`);
+                    await sellItems(bot, itemPrices);
+                    break;
+                }
                 
-                if (resetime > 60 || needReset) {
+                if (resetime > 60 || needReset && enoughItems) {
                     logger.info(`${name} - ресет`);
                     await delay(500);
                     botMenu = myItems;
@@ -280,12 +288,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
                 
-                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                if (uptime > 55 || botNeedSell) {
-                    logger.info(`${name} - продажа`);
-                    await sellItems(bot, itemPrices);
-                    break;
-                }
+                
 
                 let count = 0;
                 for (let i = firstInventorySlot; i <= lastInventorySlot; i++) {
@@ -316,7 +319,7 @@ async function launchBookBuyer(name, password, anarchy) {
                             netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 1655, key);
                         } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(150, 200) * (slotToBuy + 2), key);
+                            await safeClickBuy(bot, slotToBuy, getRandomDelayInRange(300, 500) * (slotToBuy + 2), key);
                         } else {
                             await safeClickBuy(bot, slotToReloadAH, getRandomDelayInRange(1500, 4500), key);
                         }
@@ -326,6 +329,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
+                if (!bot.currentWindow?.slots[0]) enoughItems = false
                 key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
@@ -346,7 +350,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     const priceOnAH = getPriceFromItem(currentSlot);
                     const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
 
-                    if (priceSell !== priceOnAH) {
+                    if (priceSell !== priceOnAH && enoughItems) {
                         logger.error(`chnge ${priceSell} ${priceOnAH}`);
                         botAhFull = false;
                         slot = i;
@@ -452,7 +456,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 3000));
+            await safeClick(bot, slotToReloadAH, getRandomDelayInRange(1500, 4000));
             return;
         }
 
@@ -473,6 +477,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
+            
             botAhFull = false;
             let balanceStr = messageText;
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
@@ -514,6 +519,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('[☃] Не удалось выставить') ||
             messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+            enoughItems = true
             botAhFull = true;
             return;
         }
