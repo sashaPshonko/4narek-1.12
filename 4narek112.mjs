@@ -895,7 +895,6 @@ function romanToArabic(roman) {
 }
 
 function extractCustomEnchantsFromItem(item) {
-    console.log('🔍 extractCustomEnchantsFromItem: начат поиск кастомных зачарований');
     const result = [];
 
     try {
@@ -903,26 +902,21 @@ function extractCustomEnchantsFromItem(item) {
         const enchantsArray = customDataComp?.data?.value?.PublicBukkitValues?.value?.['minecraft:custom-enchantments']?.value?.value;
         
         if (Array.isArray(enchantsArray) && enchantsArray.length > 0) {
-            console.log('📦 Найдены структурированные кастомные зачарования:');
             
             for (const ench of enchantsArray) {
                 const name = ench['minecraft:type']?.value;
                 const lvl = ench['minecraft:level']?.value;
                 
                 if (name && typeof lvl === 'number') {
-                    console.log(`  ✅ ${name}:${lvl}`);
                     result.push({ name, lvl });
                 }
             }
             
-            console.log('🎯 Итоговые кастомные зачарования (из структуры):', result);
             return result;
         }
     } catch (e) {
-        console.log('⚠️ Ошибка при парсинге структурированных данных:', e.message);
     }
 
-    console.log('⚠️ Структурированные данные не найдены, используем JSON-парсинг');
     
     const jsonStr = JSON.stringify(item);
     const valueRegex = /"value":"([^"]*)"/g;
@@ -932,7 +926,6 @@ function extractCustomEnchantsFromItem(item) {
         matches.push(match[1]);
     }
 
-    console.log('📋 Все найденные значения из поля "value":', matches);
 
     const textStrings = matches.filter(s => {
         if (!s || typeof s !== 'string') return false;
@@ -942,7 +935,6 @@ function extractCustomEnchantsFromItem(item) {
         return /[a-zA-Zа-яА-Я]/.test(trimmed);
     });
 
-    console.log('📋 Отфильтрованные строки (с буквами):', textStrings);
 
     const romanRegex = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/;
 
@@ -955,17 +947,14 @@ function extractCustomEnchantsFromItem(item) {
             if (romanRegex.test(possibleRoman)) {
                 const name = trimmed.substring(0, lastSpaceIndex).trim();
                 const lvl = romanToArabic(possibleRoman);
-                console.log(`✅ Найдено кастомное зачарование: "${name}" уровень ${lvl} (римская: ${possibleRoman})`);
                 result.push({ name, lvl });
                 continue;
             }
         }
 
-        console.log(`✅ Найдено кастомное зачарование (без уровня): "${trimmed}" ур. 1`);
         result.push({ name: trimmed, lvl: 1 });
     }
 
-    console.log('🎯 Итоговый массив кастомных зачарований:', result);
     return result;
 }
 
@@ -1096,18 +1085,11 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         if (englishName) {
             return { name: englishName, lvl: ench.lvl };
         } else {
-            console.log(`⚠️ Неизвестное кастомное зачарование: "${ench.name}" (уровень ${ench.lvl}) — оставляем без перевода`);
             return ench;
         }
     });
 
     const allEnchants = [...vanillaEnchants, ...customEnchants];
-    
-    if (vanillaEnchants.length > 0 || customEnchants.length > 0) {
-        console.log('Ванильные зачарования:', vanillaEnchants.map(e => `${e.name}:${e.lvl}`));
-        console.log('Кастомные зачарования (после перевода):', customEnchants.map(e => `${e.name}:${e.lvl}`));
-        console.log('Все зачарования:', allEnchants.map(e => `${e.name}:${e.lvl}`));
-    }
 
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
