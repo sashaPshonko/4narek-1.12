@@ -92,6 +92,8 @@ const firstAHSlot = 0;
 const lastAHSlot = 44;
 const firstSellSlot = 36;
 
+const anarchyCommand = `/an${anarchy}`;
+
 const logger = createLogger({
     level: 'info',
     format: format.combine(
@@ -118,7 +120,6 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     const loginCommand = `/l ${name}`;
-    const anarchyCommand = `/an${anarchy}`;
     const shopCommand = '/shop';
 
     console.warn = () => {};
@@ -524,6 +525,16 @@ async function launchBookBuyer(name, password, anarchy) {
             enoughItems = true
             botAhFull = true;
             return;
+        }
+
+        if (messageText.includes('[⚠] Здесь нет команд!')) {
+            await walk(bot)
+            await delay(300)
+            botTimeLogin = Date.now()
+            botTimeActive = Date.now()
+            bot.chat(anarchyCommand)
+            await delay(300)
+            await safeAH(bot)
         }
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
