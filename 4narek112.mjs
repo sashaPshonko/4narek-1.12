@@ -322,6 +322,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 generateRandomKey(bot);
 
                 if (needSendAH) {
+                    botAh = []
                     for (let i = 0; i < 8; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
                         if (currentSlot) {
