@@ -102,14 +102,6 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 5
-            },
-            {
-                "name": "minecraft:projectile_protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:fire_protection",
-                "lvl": 5
             }
         ],
         "num": 2,
