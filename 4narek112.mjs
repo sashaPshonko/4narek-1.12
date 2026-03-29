@@ -435,7 +435,6 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[☃] Вы успешно купили')) {
             botNeedSell = true;
             let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             parentPort.postMessage({ name: 'buy', id: botType, price: balance });
@@ -482,7 +481,6 @@ async function launchBookBuyer(name, password, anarchy) {
             
             botAhFull = false;
             let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             const id = getIdBySellPrice(itemPrices, balance);
@@ -680,7 +678,7 @@ async function sellItems(bot, itemPrices) {
                     await delay(getRandomDelayInRange(100, 200));
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
-                    await delay(getRandomDelayInRange(600, 800));
+                    await delay(getRandomDelayInRange(300, 500));
                 } else {
                     await bot.tossStack(item);
                     await delay(getRandomDelayInRange(300, 500));
