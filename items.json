@@ -17,7 +17,7 @@
             }
         ],
         "num": 3,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_sword",
@@ -49,7 +49,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 500000
+        "nacenka": 300000
     },
    {
         "name": "netherite_leggings",
@@ -65,7 +65,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 400000
+        "nacenka": 300000
     },
     {
         "name": "netherite_leggings",

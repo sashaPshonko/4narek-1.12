@@ -326,7 +326,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     logger.error('суки обновили аукцион');
                     break;
                 }
-                await delay(500);
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
                 
@@ -354,7 +353,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 700), key);
                     break;
                 }
 
@@ -388,10 +387,10 @@ async function launchBookBuyer(name, password, anarchy) {
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 52, getRandomDelayInRange(400, 700), key);
                 } else {
                     botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(400, 700), key);
                 }
                 break;
             case setAH:
@@ -399,7 +398,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = analysisAH;
-                await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
+                await safeClickBuy(bot, 46, getRandomDelayInRange(400, 700), key);
                 break;
 
             case "clan":
