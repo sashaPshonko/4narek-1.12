@@ -320,6 +320,34 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
+
+                if (needSendAH) {
+                    for (let i = 0; i < 8; i++) {
+                        const currentSlot = bot.currentWindow?.slots[i];
+                        if (currentSlot) {
+                            botCount++;
+                            const id = getIDByEnchantments(currentSlot, itemPrices);
+                            botAh.push(id);
+                        } else break;
+                    }
+
+                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
+                    needSendAH = false
+                    
+                    const inv = []
+                    for (let i = 0; i <= lastInventorySlot; i++) {
+                        const slotData = bot.inventory.slots[i];
+                        if (!slotData) continue;
+                        
+                        const config = findMatchingConfigItem(slotData, itemPrices);
+                        if (config) {
+                            inv.push(config.id);
+                        }
+                    }
+                    const msg = {name: "inventory", data: inv, username: bot.username}
+                    parentPort.postMessage(msg)
+                }
+
                 if (!bot.currentWindow?.slots[0]) enoughItems = false
                 key = botKey;
                 if (bot.currentWindow.slots[27]) {
@@ -358,32 +386,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 // ← ВОТ ЭТУ ЧАСТЬ ВЕРНУТЬ
-                if (needSendAH) {
-                    for (let i = 0; i < 8; i++) {
-                        const currentSlot = bot.currentWindow?.slots[i];
-                        if (currentSlot) {
-                            botCount++;
-                            const id = getIDByEnchantments(currentSlot, itemPrices);
-                            botAh.push(id);
-                        } else break;
-                    }
 
-                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
-                    needSendAH = false
-                    
-                    const inv = []
-                    for (let i = 0; i <= lastInventorySlot; i++) {
-                        const slotData = bot.inventory.slots[i];
-                        if (!slotData) continue;
-                        
-                        const config = findMatchingConfigItem(slotData, itemPrices);
-                        if (config) {
-                            inv.push(config.id);
-                        }
-                    }
-                    const msg = {name: "inventory", data: inv, username: bot.username}
-                    parentPort.postMessage(msg)
-                }
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botMenu = setAH;
@@ -640,6 +643,7 @@ function countTotalItemsInWindow(bot, itemPrices) {
 
 async function sellItems(bot, itemPrices) {
     botNeedSell = false;
+    needSendAH = true
     if (mu) {
         await delay(500);
         await safeAH(bot);
