@@ -145,15 +145,15 @@
         "effects": [
             {
                 "name": "minecraft:unbreaking",
-                "lvl": 5
+                "lvl": 4
             },
             {
                 "name": "minecraft:protection",
-                "lvl": 5
+                "lvl": 4
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "netherite_helmet",
@@ -166,18 +166,10 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 5
-            },
-            {
-                "name": "minecraft:respiration",
-                "lvl": 2
-            },
-            {
-                "name": "minecraft:aqua_affinity",
-                "lvl": 1
             }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 200000
     },
       {
         "name": "netherite_boots",
