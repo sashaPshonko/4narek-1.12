@@ -42,14 +42,10 @@
             {
                 "name": "vampirism",
                 "lvl": 2
-            },
-            {
-                "name": "detection",
-                "lvl": 2
             }
         ],
         "num": 5,
-        "nacenka": 300000
+        "nacenka": 400000
     },
    {
         "name": "netherite_leggings",
