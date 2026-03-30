@@ -273,9 +273,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
-                    await delay(500);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(700, 1300), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                     break;
                 }
                 
@@ -293,7 +292,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 31, getRandomDelayInRange(150, 500), key)
+                    await safeClickBuy(bot, 31, getRandomDelayInRange(200, 800), key)
                     break
                 }
 
