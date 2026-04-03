@@ -61,7 +61,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_leggings",
@@ -85,7 +85,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_chestplate",
@@ -101,7 +101,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_chestplate",
@@ -125,7 +125,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -141,7 +141,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_helmet",
@@ -157,7 +157,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     },
       {
         "name": "netherite_boots",
@@ -177,7 +177,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_boots",
@@ -201,7 +201,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 300000
     },
     {
         "name": "netherite_pickaxe",
@@ -289,7 +289,7 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 150000
+        "nacenka": 200000
     },
     {
         "name": "elytra",
@@ -301,6 +301,6 @@
             }
         ],
         "num": 2,
-        "nacenka": 200000
+        "nacenka": 300000
     }
 ]
