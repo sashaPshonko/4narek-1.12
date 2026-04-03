@@ -389,6 +389,12 @@ async function launchBookBuyer(name, password, anarchy) {
 
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                    botTimeReset = Date.now();
+                    if (!bot.currentWindow?.slots[0]) {
+                        botMenu = analysisAH;
+                        await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
+                        break
+                    }
                     botMenu = setAH;
                     await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
                 } else {
@@ -1253,7 +1259,6 @@ async function safeClickBuy(bot, slot, time, key) {
         console.log('твари ах обновили и теперь так');
         return;
     }
-    if (slot === 52) botTimeReset = Date.now();
     botUpdateWindow = true;
     if (bot.currentWindow) {
         botTimeActive = Date.now();
