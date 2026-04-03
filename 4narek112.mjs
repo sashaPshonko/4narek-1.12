@@ -1226,21 +1226,24 @@ async function longWalk(bot) {
 async function walk(bot) {
     await delay(500);
     bot.autoEat.enableAuto();
+
+    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    bot.chat(`/warp ${warp}`);
+    await delay(8000);
+
     const endTime = Date.now() + 4000;
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
         bot.setControlState(randomMove, true);
-        await delay(500);
+        await delay(600);
         bot.setControlState(randomMove, false);
         await delay(500);
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
     
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-    bot.chat(`/warp ${warp}`);
-    await delay(8000);
+
     bot.autoEat.disableAuto();
 }
 
