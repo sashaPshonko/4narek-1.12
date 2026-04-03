@@ -47,6 +47,70 @@
         "num": 5,
         "nacenka": 400000
     },
+        {
+        "name": "netherite_sword",
+        "id": "megasword-2-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 3
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "poison",
+                "lvl": 2
+            },
+            {
+                "name": "vampirism",
+                "lvl": 2
+            },
+            {
+                "name": "detection",
+                "lvl": 1
+            }
+        ],
+        "num": 5,
+        "nacenka": 400000
+    },
+        {
+        "name": "netherite_sword",
+        "id": "pochti-megasword-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 3
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 7
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "poison",
+                "lvl": 1
+            },
+            {
+                "name": "vampirism",
+                "lvl": 1
+            },
+            {
+                "name": "detection",
+                "lvl": 1
+            }
+        ],
+        "num": 4,
+        "nacenka": 400000
+    },
    {
         "name": "netherite_leggings",
         "id": "штаны-1.21",
