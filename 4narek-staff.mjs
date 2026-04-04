@@ -646,7 +646,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (pass === 1 && isSellingActive) {
                     logger.info(`${name} - отправляем /ah sellgui ${currentSellPrice} для второго прохода`);
                     await delay(getRandomDelayInRange(2000, 4000));
-                    bot.chat(`/ah sellgui ${currentSellPrice}`);
+                    const command = `/ah sellgui ${currentSellPrice}`
+                    bot.chat(command);
                     await delay(getRandomDelayInRange(2000, 4000));
                 }
             }
@@ -919,7 +920,8 @@ async function sellItems(bot) {
         
         // Устанавливаем режим и открываем окно продажи с ценой
         botMenu = "sell";
-        bot.chat(`/ah sellgui ${currentSellPrice}`);
+        const command = `/ah sellgui ${currentSellPrice}`
+        bot.chat(command);
         
     } catch (error) {
         parentPort.postMessage(`ошибка продажи ${error}`);

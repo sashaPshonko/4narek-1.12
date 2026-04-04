@@ -21,6 +21,6 @@ echo "Node.js установлен!"
 
 git clone https://github.com/sashaPshonko/4narek-1.12
 
-# nohup bash scripts/503.sh > bot.log 2>&1 &
+# nohup bash scripts/508.sh > bot.log 2>&1 &
 
 # buldak_gribnoi
