@@ -444,10 +444,10 @@ async function launchBookBuyer(name, password, anarchy) {
                 
                 break;
 
-    case "sell":
+case "sell":
     logger.info(`${name} - режим продажи, заполняем GUI (продаём только ${sellItemId})`);
 
-     if (isSellingInProgress) {
+    if (isSellingInProgress) {
         logger.info(`${name} - продажа уже выполняется, пропускаем`);
         break;
     }
@@ -457,32 +457,19 @@ async function launchBookBuyer(name, password, anarchy) {
         let totalItemsPlacedAllPasses = 0;
         
         try {
-            // ОЧИСТКА ИНВЕНТАРЯ ОТ НЕНУЖНЫХ ПРЕДМЕТОВ
-            await safeCloseWindow(bot);
-            
-            for (let i = 0; i <= lastInventorySlot; i++) {
-                const slotData = bot.inventory.slots[i];
-                if (!slotData) continue;
-                
-                const config = findMatchingConfigItem(slotData, itemPrices);
-                const shouldSell = config && config.id === sellItemId;
-                
-                if (!shouldSell) {
-                    logger.info(`${name} - выбрасываем ${slotData.name} x${slotData.count} из слота ${i}`);
-                    await bot.tossStack(slotData);
-                    await delay(getRandomDelayInRange(200, 500));
-                }
-            }
-            
             // Сбрасываем флаги перед продажей
             botAhFull = false;
             enoughItems = false;
             
+            // ОТПРАВЛЯЕМ КОМАНДУ
+            const command = `/ah sellgui ${currentSellPrice}`;
+            logger.info(`${name} - отправляем команду: ${command}`);
+            bot.chat(command);
+            await delay(getRandomDelayInRange(2000, 4000));
+            
             // Два прохода
             for (let pass = 1; pass <= 2 && isSellingActive; pass++) {
                 logger.info(`${name} - проход ${pass} из 2`);
-                
-                await delay(getRandomDelayInRange(1000, 2000));
                 
                 let waitAttempts = 0;
                 while (!bot.currentWindow && waitAttempts < 30 && isSellingActive) {
@@ -606,15 +593,12 @@ async function launchBookBuyer(name, password, anarchy) {
                         let delayMs = 0;
                         
                         if (i === 0) {
-                            // Первый клик после взятия стака — большая задержка (движение от инвентаря до первого слота)
+                            // Первый клик после взятия стака — большая задержка
                             delayMs = getRandomDelayInRange(800, 1500);
                         } else {
-                            // Определяем задержку по строке
                             if (targetRow === lastTargetRow) {
-                                // Тот же ряд — маленькая задержка
                                 delayMs = getRandomDelayInRange(50, 120);
                             } else {
-                                // Другой ряд — средняя задержка
                                 delayMs = getRandomDelayInRange(250, 500);
                             }
                         }
@@ -646,29 +630,26 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (pass === 1 && isSellingActive) {
                     logger.info(`${name} - отправляем /ah sellgui ${currentSellPrice} для второго прохода`);
                     await delay(getRandomDelayInRange(2000, 4000));
-                    const command = `/ah sellgui ${currentSellPrice}`
-                    bot.chat(command);
+                    bot.chat(`/ah sellgui ${currentSellPrice}`);
                     await delay(getRandomDelayInRange(2000, 4000));
                 }
             }
             
             if (isSellingActive) {
                 logger.info(`${name} - всего размещено за 2 прохода: ${totalItemsPlacedAllPasses} предметов`);
-                await finishSelling(bot);
-            } else {
-                logger.info(`${name} - продажа прервана, перезапуск`);
             }
             
         } catch (error) {
             logger.error(`${name} - ошибка в режиме продажи: ${error.stack || error}`);
             await safeCloseWindow(bot);
+        } finally {
+            // ОЧИСТКА ИНВЕНТАРЯ ПОСЛЕ ПРОДАЖИ (когда окно закрыто)
+            await finishSelling(bot);
             isSellingInProgress = false;
-            if (isSellingActive) {
-                await finishSelling(bot);
-            }
         }
     })();
     break;
+
 }
     });
 
