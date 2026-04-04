@@ -1,23 +1,18 @@
 [
 {
-    "username": "chainyigrib17",
+    "username": "nosvnavoze",
     "password": "ggggg",
     "anarchy": 508,
-    "type": "4narek112",
-    "item": "netherite boots"
+    "type": "4narek-staff",
+    "item": "явная пыль",
+    "sellItemId": "пыль"
   },
-  {
-    "username": "zhopamuraviya",
+{
+    "username": "macan_suprime777",
     "password": "ggggg",
     "anarchy": 508,
-    "type": "4narek112",
-    "item": "netherite boots"
-  },
-  {
-    "username": "kisl0rot",
-    "password": "ggggg",
-    "anarchy": 508,
-    "type": "4narek112",
-    "item": "netherite boots"
+    "type": "4narek-staff",
+    "item": "дезориентация",
+    "sellItemId": "дезориентация"
   }
 ]

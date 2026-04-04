@@ -353,18 +353,22 @@
         "effects": [
         ],
         "num": 1,
-        "nacenka": 200000
+        "nacenka": 100000
     },
-    {
-        "name": "elytra",
-        "id": "elytra3-1.21",
+        {
+        "name": "sugar",
+        "id": "пыль",
         "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 3
-            }
         ],
         "num": 2,
-        "nacenka": 300000
+        "nacenka": 30000
+    },
+    {
+        "name": "ender_eye",
+        "id": "дезориентация",
+        "effects": [
+        ],
+        "num": 2,
+        "nacenka": 30000
     }
 ]
