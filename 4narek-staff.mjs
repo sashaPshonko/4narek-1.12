@@ -445,6 +445,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
 case "sell":
+    await delay(2000)
     logger.info(`${name} - режим продажи, заполняем GUI (продаём только ${sellItemId})`);
 
     if (isSellingInProgress) {
