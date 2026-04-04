@@ -662,6 +662,7 @@ async function launchBookBuyer(name, password, anarchy) {
         } catch (error) {
             logger.error(`${name} - ошибка в режиме продажи: ${error.stack || error}`);
             await safeCloseWindow(bot);
+            isSellingInProgress = false;
             if (isSellingActive) {
                 await finishSelling(bot);
             }
