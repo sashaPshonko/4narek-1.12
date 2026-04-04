@@ -921,6 +921,7 @@ async function sellItems(bot) {
         // Устанавливаем режим и открываем окно продажи с ценой
         botMenu = "sell";
         const command = `/ah sellgui ${currentSellPrice}`
+        console.log(command)
         bot.chat(command);
         
     } catch (error) {
