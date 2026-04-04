@@ -330,32 +330,38 @@ async function launchBookBuyer(name, password, anarchy) {
                 generateRandomKey(bot);
 
                 if (needSendAH) {
-                    botAh = []
+                    botAh = [];
                     for (let i = 0; i < 8; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
                         if (currentSlot) {
                             botCount++;
                             const id = getIDByEnchantments(currentSlot, itemPrices);
-                            botAh.push(id);
+                            // Добавляем id столько раз, сколько предметов в стаке
+                            for (let j = 0; j < currentSlot.count; j++) {
+                                botAh.push(id);
+                            }
                         } else break;
                     }
 
-                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
-                    needSendAH = false
-                    
-                    const inv = []
-                    for (let i = 0; i <= lastInventorySlot; i++) {
-                        const slotData = bot.inventory.slots[i];
-                        if (!slotData) continue;
-                        
-                        const config = findMatchingConfigItem(slotData, itemPrices);
-                        if (config) {
-                            inv.push(config.id);
-                        }
-                    }
-                    const msg = {name: "inventory", data: inv, username: bot.username}
-                    parentPort.postMessage(msg)
-                }
+    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
+    needSendAH = false;
+
+    const inv = [];
+    for (let i = 0; i <= lastInventorySlot; i++) {
+        const slotData = bot.inventory.slots[i];
+        if (!slotData) continue;
+        const config = findMatchingConfigItem(slotData, itemPrices);
+        if (config) {
+            const id = config.id;
+            // Разворачиваем стак в массив
+            for (let j = 0; j < slotData.count; j++) {
+                inv.push(id);
+            }
+        }
+    }
+    const msg = { name: "inventory", data: inv, username: bot.username };
+    parentPort.postMessage(msg);
+}
 
                 if (!bot.currentWindow?.slots[0]) enoughItems = false
                 key = botKey;
@@ -531,7 +537,7 @@ case "sell":
                     // Свободные слоты в зоне продажи
                     const freeSellSlots = [];
                     for (const slot of sellSlots) {
-                        if (slot < bot.currentWindow?.slots.length && !bot.currentWindow.slots[slot]) {
+                        if (slot < bot.currentWindow?.slots.length && !bot.currentWindow?.slots[slot]) {
                             freeSellSlots.push(slot);
                         }
                     }
