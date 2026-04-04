@@ -1477,6 +1477,7 @@ async function finishSelling(bot) {
     logger.info(`${bot.username} - мьютекс снят`);
     await delay(getRandomDelayInRange(1000, 2000));
     botMenu = analysisAH;
+    isSellingInProgress = false;
     await safeAH(bot);
 }
 
