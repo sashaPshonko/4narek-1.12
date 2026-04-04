@@ -488,18 +488,16 @@ case "sell":
                     if (!slotData) continue;
                     
                     // Ищем по custom_name (поле, которое точно содержит текст)
-                    const customNameComp = slotData.components?.find(c => c.type === 'custom_name');
-                    const customNameText = customNameComp?.data?.value?.text;
-                    if (customNameText && customNameText.includes("Подтвердить")) {
-                        confirmSlot = i;
-                        confirmRow = Math.floor(i / 9);
-                        break;
-                    }
-                    // Запасной вариант через displayName
-                    if (slotData.displayName && slotData.displayName.includes("Подтвердить")) {
-                        confirmSlot = i;
-                        confirmRow = Math.floor(i / 9);
-                        break;
+                    let confirmSlot = -1;
+                    let confirmRow = -1;
+                    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                        const slotData = bot.currentWindow.slots[i];
+                        if (!slotData) continue;
+                        if (JSON.stringify(slotData).includes("Подтвердить")) {
+                            confirmSlot = i;
+                            confirmRow = Math.floor(i / 9);
+                            break;
+                        }
                     }
                     // Абсолютный запасной — JSON
                     if (JSON.stringify(slotData).includes("Подтвердить")) {
