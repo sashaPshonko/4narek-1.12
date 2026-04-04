@@ -482,8 +482,8 @@ case "sell":
                 // Находим кнопку "Подтвердить" (простой перебор)
                 let confirmSlot = -1;
                 let confirmRow = -1;
-                for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                    const slotData = bot.currentWindow.slots[i];
+                for (let i = 0; i < bot.currentWindow?.slots.length; i++) {
+                    const slotData = bot.currentWindow?.slots[i];
                     if (!slotData) continue;
                     if (JSON.stringify(slotData).includes("Подтвердить")) {
                         confirmSlot = i;
@@ -502,17 +502,17 @@ case "sell":
                 
                 // Зона продажи (все слоты ДО строки с кнопкой)
                 const sellSlots = [];
-                for (let i = 0; i < confirmRow * 9 && i < bot.currentWindow.slots.length; i++) {
+                for (let i = 0; i < confirmRow * 9 && i < bot.currentWindow?.slots.length; i++) {
                     sellSlots.push(i);
                 }
                 
                 // Инвентарь бота (все слоты ПОСЛЕ строки с кнопкой)
                 const inventorySlots = [];
-                const totalRows = Math.ceil(bot.currentWindow.slots.length / 9);
+                const totalRows = Math.ceil(bot.currentWindow?.slots.length / 9);
                 for (let row = confirmRow + 1; row < totalRows; row++) {
                     for (let col = 0; col < 9; col++) {
                         const slotIndex = row * 9 + col;
-                        if (slotIndex < bot.currentWindow.slots.length) {
+                        if (slotIndex < bot.currentWindow?.slots.length) {
                             inventorySlots.push(slotIndex);
                         }
                     }
@@ -531,7 +531,7 @@ case "sell":
                     // Свободные слоты в зоне продажи
                     const freeSellSlots = [];
                     for (const slot of sellSlots) {
-                        if (slot < bot.currentWindow.slots.length && !bot.currentWindow.slots[slot]) {
+                        if (slot < bot.currentWindow?.slots.length && !bot.currentWindow.slots[slot]) {
                             freeSellSlots.push(slot);
                         }
                     }
@@ -548,8 +548,8 @@ case "sell":
                     let sourceCount = 0;
                     
                     for (const slot of inventorySlots) {
-                        if (slot >= bot.currentWindow.slots.length) continue;
-                        const item = bot.currentWindow.slots[slot];
+                        if (slot >= bot.currentWindow?.slots.length) continue;
+                        const item = bot.currentWindow?.slots[slot];
                         if (!item) continue;
                         
                         const config = findMatchingConfigItem(item, itemPrices);
