@@ -465,7 +465,7 @@ case "sell":
             for (let pass = 1; pass <= 2 && isSellingActive; pass++) {
                 logger.info(`${name} - проход ${pass} из 2`);
                 
-                // Ждём, если окно ещё не открыто (но оно должно быть уже открыто)
+                // Ждём, если окно ещё не открыто
                 let waitAttempts = 0;
                 while (!bot.currentWindow && waitAttempts < 30 && isSellingActive) {
                     await delay(getRandomDelayInRange(500, 1000));
@@ -479,27 +479,12 @@ case "sell":
                 
                 await delay(getRandomDelayInRange(1000, 2000));
                 
-                // Находим кнопку "Подтвердить"
+                // Находим кнопку "Подтвердить" (простой перебор)
                 let confirmSlot = -1;
                 let confirmRow = -1;
-                
                 for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                     const slotData = bot.currentWindow.slots[i];
                     if (!slotData) continue;
-                    
-                    // Ищем по custom_name (поле, которое точно содержит текст)
-                    let confirmSlot = -1;
-                    let confirmRow = -1;
-                    for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                        const slotData = bot.currentWindow.slots[i];
-                        if (!slotData) continue;
-                        if (JSON.stringify(slotData).includes("Подтвердить")) {
-                            confirmSlot = i;
-                            confirmRow = Math.floor(i / 9);
-                            break;
-                        }
-                    }
-                    // Абсолютный запасной — JSON
                     if (JSON.stringify(slotData).includes("Подтвердить")) {
                         confirmSlot = i;
                         confirmRow = Math.floor(i / 9);
@@ -651,6 +636,8 @@ case "sell":
         }
     })();
     break;
+
+
 }
     });
 
