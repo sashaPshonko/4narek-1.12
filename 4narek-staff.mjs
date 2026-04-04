@@ -445,8 +445,6 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
 
 case "sell":
-    console.log(JSON.stringify(bot.currentWindow.slots))
-    await delay(2000)
     logger.info(`${name} - режим продажи, заполняем GUI (продаём только ${sellItemId})`);
 
     if (isSellingInProgress) {
@@ -463,16 +461,11 @@ case "sell":
             botAhFull = false;
             enoughItems = false;
             
-            // ОТПРАВЛЯЕМ КОМАНДУ
-            const command = `/ah sellgui ${currentSellPrice}`;
-            logger.info(`${name} - отправляем команду: ${command}`);
-            bot.chat(command);
-            await delay(getRandomDelayInRange(2000, 4000));
-            
-            // Два прохода
+            // Два прохода (окно уже открыто, команда отправлена из sellItems)
             for (let pass = 1; pass <= 2 && isSellingActive; pass++) {
                 logger.info(`${name} - проход ${pass} из 2`);
                 
+                // Ждём, если окно ещё не открыто (но оно должно быть уже открыто)
                 let waitAttempts = 0;
                 while (!bot.currentWindow && waitAttempts < 30 && isSellingActive) {
                     await delay(getRandomDelayInRange(500, 1000));
@@ -494,8 +487,22 @@ case "sell":
                     const slotData = bot.currentWindow.slots[i];
                     if (!slotData) continue;
                     
-                    const slotStr = JSON.stringify(slotData);
-                    if (slotStr.includes("Подтвердить")) {
+                    // Ищем по custom_name (поле, которое точно содержит текст)
+                    const customNameComp = slotData.components?.find(c => c.type === 'custom_name');
+                    const customNameText = customNameComp?.data?.value?.text;
+                    if (customNameText && customNameText.includes("Подтвердить")) {
+                        confirmSlot = i;
+                        confirmRow = Math.floor(i / 9);
+                        break;
+                    }
+                    // Запасной вариант через displayName
+                    if (slotData.displayName && slotData.displayName.includes("Подтвердить")) {
+                        confirmSlot = i;
+                        confirmRow = Math.floor(i / 9);
+                        break;
+                    }
+                    // Абсолютный запасной — JSON
+                    if (JSON.stringify(slotData).includes("Подтвердить")) {
                         confirmSlot = i;
                         confirmRow = Math.floor(i / 9);
                         break;
@@ -512,7 +519,7 @@ case "sell":
                 
                 // Зона продажи (все слоты ДО строки с кнопкой)
                 const sellSlots = [];
-                for (let i = 0; i < confirmRow * 9; i++) {
+                for (let i = 0; i < confirmRow * 9 && i < bot.currentWindow.slots.length; i++) {
                     sellSlots.push(i);
                 }
                 
@@ -579,23 +586,18 @@ case "sell":
                     const itemsToPlace = Math.min(sourceCount, freeSellSlots.length);
                     logger.info(`${name} - выставляем ${itemsToPlace} шт ${sellItemId} из слота ${sourceSlot}`);
                     
-                    // Берём стак в курсор (всегда большая задержка)
+                    // Берём стак в курсор
                     const clicked = await safeWindowClick(bot, sourceSlot, 0, 0, getRandomDelayInRange(1500, 4500));
                     if (!clicked) break;
                     
-                    // Запоминаем строку первого целевого слота
                     let lastTargetRow = -1;
-                    
-                    // Раскладываем по одному с умной задержкой
                     for (let i = 0; i < itemsToPlace && isSellingActive; i++) {
                         if (!bot.currentWindow) break;
                         const targetSlot = freeSellSlots[i];
                         const targetRow = Math.floor(targetSlot / 9);
                         
                         let delayMs = 0;
-                        
                         if (i === 0) {
-                            // Первый клик после взятия стака — большая задержка
                             delayMs = getRandomDelayInRange(800, 1500);
                         } else {
                             if (targetRow === lastTargetRow) {
@@ -629,6 +631,7 @@ case "sell":
                 
                 await safeCloseWindow(bot);
                 
+                // Если это первый проход, отправляем команду для второго прохода
                 if (pass === 1 && isSellingActive) {
                     logger.info(`${name} - отправляем /ah sellgui ${currentSellPrice} для второго прохода`);
                     await delay(getRandomDelayInRange(2000, 4000));
@@ -645,13 +648,11 @@ case "sell":
             logger.error(`${name} - ошибка в режиме продажи: ${error.stack || error}`);
             await safeCloseWindow(bot);
         } finally {
-            // ОЧИСТКА ИНВЕНТАРЯ ПОСЛЕ ПРОДАЖИ (когда окно закрыто)
             await finishSelling(bot);
             isSellingInProgress = false;
         }
     })();
     break;
-
 }
     });
 
