@@ -194,7 +194,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (botMenu) {
             case chooseBuying:
-                // saveToJsonFile('777.json', bot.inventory.slots)
+                // saveToJsonFile('666.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
@@ -1066,6 +1066,9 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         30: "minecraft:respiration",
         7: "minecraft:depth_strider",
         9: "minecraft:feather_falling",
+        3: "minecraft:fortune",
+        8: "minecraft:efficiency",
+        33: "minecraft:silk_touch",
     };
 
     const customNameMap = {
@@ -1074,6 +1077,10 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         'Детекция': 'detection',
         'Тяжелый': 'heavy',
         'Нестабильный': 'unstable',
+        'Бульдозер': 'buldozing',
+        'Магнит': 'magnet',
+        'Паутина': 'web',
+        'Авто-плавка': 'smelting',
     };
 
     const vanillaEnchants = [];
@@ -1132,7 +1139,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
         if (item.name === 'netherite_pickaxe' &&
             allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
-            !allEnchants.some(en => en && en.name === 'melting')) {
+            !allEnchants.some(en => en && en.name === 'smelting')) {
             continue;
         }
 

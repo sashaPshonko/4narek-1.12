@@ -317,7 +317,7 @@
         "effects": [
             {
                 "name": "minecraft:unbreaking",
-                "lvl": 5
+                "lvl": 4
             },
             {
                 "name": "minecraft:efficiency",
@@ -332,15 +332,7 @@
                 "lvl": 2
             },
             {
-                "name": "web",
-                "lvl": 1
-            },
-            {
                 "name": "magnet",
-                "lvl": 1
-            },
-            {
-                "name": "smelting",
                 "lvl": 1
             }
         ],
