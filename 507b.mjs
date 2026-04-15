@@ -11,7 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const itemsPath = join(__dirname, 'items.json');
+const itemsPath = join(__dirname, 'knockback.json');
 const botsPath = join(__dirname, './bots/507b.json');
 const token = '8769142111:AAH8T7q9lQGf4i7sLlpF1oM7TZodoWwuxjk';
 const alertChatID = -1003827870631;

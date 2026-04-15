@@ -85,8 +85,7 @@ const forbiddenEnchantsByType = {
     // Мечи — тяжелый, нестабильный, отдача
     "netherite_sword": [
         "heavy",
-        "unstable",
-        "minecraft:knockback"
+        "unstable"
     ],
     
     // Броня (шлем, нагрудник, штаны, ботинки) — только шипы
