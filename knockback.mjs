@@ -697,7 +697,25 @@ async function sellItems(bot, itemPrices) {
         return;
     }
     mu = true;
-    await walk(bot);
+    await delay(500);
+    bot.autoEat.enableAuto();
+
+    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    bot.chat(`/warp ${warp}`);
+    const endSellTime = Date.now() + 8000
+
+    const endTime = Date.now() + 4000;
+
+    while (Date.now() < endTime) {
+        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        bot.setControlState(randomMove, true);
+        await delay(600);
+        bot.setControlState(randomMove, false);
+        await delay(500);
+    }
+
+    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
+
     logger.info(`${bot.username} - прогулка завершена`);
 
     try {
@@ -796,6 +814,7 @@ async function sellItems(bot, itemPrices) {
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
         await delay(1500);
+        while (Date.now() < endSellTime) await delay(100)
         botMenu = analysisAH;
         await safeAH(bot);
     }
@@ -839,8 +858,8 @@ async function safeAH(bot) {
     botMenu = analysisAH;
     botUpdateWindow = true;
     while (key === botKey) {
-        bot.chat(ahCommand);
         await delay(1000);
+        bot.chat(ahCommand);
     }
 }
 

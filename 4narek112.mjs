@@ -86,7 +86,6 @@ const forbiddenEnchantsByType = {
     "netherite_sword": [
         "heavy",
         "unstable",
-        "minecraft:knockback"
     ],
     
     // Броня (шлем, нагрудник, штаны, ботинки) — только шипы
@@ -698,7 +697,25 @@ async function sellItems(bot, itemPrices) {
         return;
     }
     mu = true;
-    await walk(bot);
+    await delay(500);
+    bot.autoEat.enableAuto();
+
+    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    bot.chat(`/warp ${warp}`);
+    const endSellTime = Date.now() + 8000
+
+    const endTime = Date.now() + 4000;
+
+    while (Date.now() < endTime) {
+        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        bot.setControlState(randomMove, true);
+        await delay(600);
+        bot.setControlState(randomMove, false);
+        await delay(500);
+    }
+
+    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
+
     logger.info(`${bot.username} - прогулка завершена`);
 
     try {
@@ -797,6 +814,7 @@ async function sellItems(bot, itemPrices) {
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
         await delay(1500);
+        while (Date.now() < endSellTime) await delay(100)
         botMenu = analysisAH;
         await safeAH(bot);
     }
@@ -1229,43 +1247,6 @@ function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
-async function longWalk(bot) {
-    await delay(500);
-    let timeTP = Date.now();
-    bot.autoEat.enableAuto();
-    botTimeActive = Date.now();
-    logger.info(`${bot.username} - все забито. Гуляем.`);
-    
-    while (botAhFull) {
-        const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
-        if (resetime > 60 || needReset) {
-            await delay(500);
-            ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-            await delay(500);
-            await safeAH(bot);
-            bot.autoEat.disableAuto();
-            return;
-        }
-
-        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-        bot.setControlState(randomMove, true);
-        await delay(500);
-        bot.setControlState(randomMove, false);
-        
-        if (Date.now() - timeTP > 10000) {
-            await delay(500);
-            timeTP = Date.now();
-            const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
-            bot.chat(`/warp ${warp}`);
-            await delay(8000);
-        }
-        await delay(500);
-    }
-
-    logger.info(`${bot.username} - опять работать.`);
-    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-    bot.autoEat.disableAuto();
-}
 
 async function walk(bot) {
     await delay(500);

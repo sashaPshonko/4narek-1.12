@@ -16,7 +16,7 @@
                 "lvl": 7
             }
         ],
-        "num": 3,
+        "num": 1,
         "nacenka": 300000
     },
     {
@@ -45,7 +45,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 400000
+        "nacenka": 700000
     },
         {
         "name": "netherite_sword",
@@ -77,7 +77,7 @@
             }
         ],
         "num": 4,
-        "nacenka": 400000
+        "nacenka": 600000
     },
    {
         "name": "netherite_leggings",
@@ -326,5 +326,29 @@
         ],
         "num": 2,
         "nacenka": 300000
+    },
+        {
+        "name": "netherite_sword",
+        "id": "фарм-1.21",
+        "effects": [
+            {
+                "name": "minecraft:unbreaking",
+                "lvl": 4
+            },
+            {
+                "name": "minecraft:fire_aspect",
+                "lvl": 1
+            },
+            {
+                "name": "minecraft:sharpness",
+                "lvl": 6
+            },
+            {
+                "name": "minecraft:looting",
+                "lvl": 5
+            }
+        ],
+        "num": 2,
+        "nacenka": 400000
     }
 ]
