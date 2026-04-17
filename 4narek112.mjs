@@ -18,7 +18,8 @@ let mu = false
 let netakbistro = true
 let enoughItems = false
 let isKrush = false
-let needSendAH = true 
+let needSendAH = true
+let typeSell = ""
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -709,9 +710,9 @@ async function sellItems(bot, itemPrices) {
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
         bot.setControlState(randomMove, true);
-        await delay(600);
+        await delay(910);
         bot.setControlState(randomMove, false);
-        await delay(500);
+        await delay(120);
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
@@ -739,6 +740,7 @@ async function sellItems(bot, itemPrices) {
 
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
+                    typeSell = getIDByEnchantments(item, itemPrices)
                     if (bot.quickBarSlot !== quickSlot) {
                         await bot.setQuickBarSlot(quickSlot);
                         await delay(getRandomDelayInRange(400, 1500));
@@ -772,6 +774,7 @@ async function sellItems(bot, itemPrices) {
 
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
+                            typeSell = getIDByEnchantments(item, itemPrices)
                             await bot.setQuickBarSlot(freeSlot);
                             await delay(300);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
@@ -858,6 +861,17 @@ async function safeAH(bot) {
     botMenu = analysisAH;
     botUpdateWindow = true;
     while (key === botKey) {
+        const endTime = Date.now() + 2000;
+
+        while (Date.now() < endTime) {
+            const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+            bot.setControlState(randomMove, true);
+            await delay(900);
+            bot.setControlState(randomMove, false);
+            await delay(100);
+        }
+        ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
+        await delay(getRandomDelayInRange(100, 200))
         bot.chat(ahCommand);
         await delay(1000);
     }
