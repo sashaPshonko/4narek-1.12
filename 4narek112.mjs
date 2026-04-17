@@ -88,6 +88,11 @@ const forbiddenEnchantsByType = {
         "heavy",
         "unstable",
     ],
+
+     "diamond_sword": [
+        "heavy",
+        "unstable",
+    ],
     
     // Броня (шлем, нагрудник, штаны, ботинки) — только шипы
     "netherite_helmet": [
