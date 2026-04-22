@@ -241,7 +241,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (botMenu) {
             case chooseBuying:
-                // saveToJsonFile('666.json', bot.inventory.slots)
+                saveToJsonFile('666.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
@@ -1149,7 +1149,6 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         9: "minecraft:feather_falling",
         13: "minecraft:fortune",
         8: "minecraft:efficiency",
-        33: "minecraft:silk_touch",
     };
 
     const customNameMap = {

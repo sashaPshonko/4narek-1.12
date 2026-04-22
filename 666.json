@@ -8,110 +8,7 @@
   null,
   null,
   null,
-  {
-    "type": 910,
-    "count": 1,
-    "metadata": 0,
-    "nbt": {
-      "type": "compound",
-      "name": "",
-      "value": {
-        "Damage": {
-          "type": "int",
-          "value": 0
-        }
-      }
-    },
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    -17,
-                    26,
-                    -73,
-                    -96,
-                    21,
-                    -11,
-                    76,
-                    26,
-                    -122,
-                    9,
-                    66,
-                    13,
-                    -115,
-                    117,
-                    -30,
-                    -15
-                  ]
-                }
-              }
-            },
-            "VB|Protocol1_21_11To1_21_9|original_hashes": {
-              "type": "compound",
-              "value": {
-                "0": {
-                  "type": "int",
-                  "value": 252121572
-                },
-                "13": {
-                  "type": "int",
-                  "value": -1993461106
-                },
-                "id": {
-                  "type": "int",
-                  "value": 981
-                },
-                "removed": {
-                  "type": "intArray",
-                  "value": []
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 27,
-              "level": 5
-            },
-            {
-              "id": 9,
-              "level": 5
-            },
-            {
-              "id": 28,
-              "level": 5
-            },
-            {
-              "id": 40,
-              "level": 5
-            }
-          ],
-          "showTooltip": true
-        }
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "netherite_boots",
-    "displayName": "Netherite Boots",
-    "stackSize": 1,
-    "maxDurability": 481,
-    "slot": 9
-  },
+  null,
   null,
   null,
   null,
@@ -155,22 +52,22 @@
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    -20,
-                    -86,
+                    -109,
+                    104,
+                    -10,
+                    -1,
+                    126,
+                    108,
+                    64,
+                    126,
                     -110,
-                    -53,
-                    17,
-                    -118,
-                    75,
-                    -37,
-                    -93,
-                    39,
-                    49,
-                    -111,
-                    -71,
-                    95,
-                    -75,
-                    -88
+                    105,
+                    -22,
+                    -62,
+                    -9,
+                    84,
+                    -117,
+                    -108
                   ]
                 }
               }
@@ -180,11 +77,11 @@
               "value": {
                 "0": {
                   "type": "int",
-                  "value": 639039110
+                  "value": -1281956659
                 },
                 "41": {
                   "type": "int",
-                  "value": 836159265
+                  "value": 1722377199
                 },
                 "id": {
                   "type": "int",
@@ -204,8 +101,8 @@
         "data": {
           "enchantments": [
             {
-              "id": 7,
-              "level": 4
+              "id": 33,
+              "level": 5
             }
           ],
           "showInTooltip": true
@@ -234,43 +131,25 @@
             "PublicBukkitValues": {
               "type": "compound",
               "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "oxidation"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 2
-                        }
-                      }
-                    ]
-                  }
-                },
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    -117,
-                    -4,
-                    107,
-                    37,
-                    73,
-                    60,
-                    70,
-                    -32,
-                    -105,
-                    -1,
-                    126,
-                    -103,
-                    -52,
-                    90,
-                    -32,
-                    -54
+                    109,
+                    57,
+                    97,
+                    -109,
+                    -76,
+                    106,
+                    66,
+                    94,
+                    -128,
+                    44,
+                    58,
+                    24,
+                    -8,
+                    104,
+                    53,
+                    88
                   ]
                 }
               }
@@ -280,15 +159,11 @@
               "value": {
                 "0": {
                   "type": "int",
-                  "value": 1264762368
-                },
-                "11": {
-                  "type": "int",
-                  "value": 1146789726
+                  "value": 652500485
                 },
                 "41": {
                   "type": "int",
-                  "value": 822514446
+                  "value": 1172386523
                 },
                 "id": {
                   "type": "int",
@@ -308,64 +183,12 @@
         "data": {
           "enchantments": [
             {
-              "id": 10,
-              "level": 2
+              "id": 18,
+              "level": 4
             }
           ],
           "showInTooltip": true
         }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "gray"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Окисление II"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
       }
     ],
     "removedComponents": [],
@@ -390,43 +213,25 @@
             "PublicBukkitValues": {
               "type": "compound",
               "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "lava_walker"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 1
-                        }
-                      }
-                    ]
-                  }
-                },
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    103,
-                    9,
-                    -21,
-                    -12,
-                    -113,
-                    23,
-                    70,
-                    -30,
-                    -103,
-                    122,
-                    -99,
+                    -55,
+                    -8,
+                    -71,
+                    -72,
+                    -15,
+                    100,
+                    72,
+                    124,
+                    -122,
+                    117,
                     118,
-                    -27,
-                    -70,
-                    -11,
-                    127
+                    -24,
+                    87,
+                    68,
+                    101,
+                    -106
                   ]
                 }
               }
@@ -436,15 +241,11 @@
               "value": {
                 "0": {
                   "type": "int",
-                  "value": -1504682949
-                },
-                "11": {
-                  "type": "int",
-                  "value": 673493515
+                  "value": -747838248
                 },
                 "41": {
                   "type": "int",
-                  "value": -1622489287
+                  "value": 968591385
                 },
                 "id": {
                   "type": "int",
@@ -464,64 +265,12 @@
         "data": {
           "enchantments": [
             {
-              "id": 9,
-              "level": 1
+              "id": 40,
+              "level": 4
             }
           ],
           "showInTooltip": true
         }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "gray"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Лаваход"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
       }
     ],
     "removedComponents": [],
@@ -533,245 +282,7 @@
     "slot": 38
   },
   {
-    "type": 1165,
-    "count": 1,
-    "metadata": 0,
-    "nbt": null,
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:custom-enchantments": {
-                  "type": "list",
-                  "value": {
-                    "type": "compound",
-                    "value": [
-                      {
-                        "minecraft:type": {
-                          "type": "string",
-                          "value": "unstable"
-                        },
-                        "minecraft:level": {
-                          "type": "int",
-                          "value": 1
-                        }
-                      }
-                    ]
-                  }
-                },
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    -112,
-                    -36,
-                    32,
-                    103,
-                    85,
-                    -121,
-                    70,
-                    69,
-                    -120,
-                    34,
-                    -13,
-                    122,
-                    55,
-                    96,
-                    17,
-                    39
-                  ]
-                }
-              }
-            },
-            "VB|Protocol1_21_11To1_21_9|original_hashes": {
-              "type": "compound",
-              "value": {
-                "0": {
-                  "type": "int",
-                  "value": -565847439
-                },
-                "11": {
-                  "type": "int",
-                  "value": -464685365
-                },
-                "41": {
-                  "type": "int",
-                  "value": 1930311110
-                },
-                "id": {
-                  "type": "int",
-                  "value": 1244
-                },
-                "removed": {
-                  "type": "intArray",
-                  "value": []
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "stored_enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 27,
-              "level": 1
-            }
-          ],
-          "showInTooltip": true
-        }
-      },
-      {
-        "type": "lore",
-        "data": [
-          {
-            "type": "compound",
-            "value": {
-              "extra": {
-                "type": "list",
-                "value": {
-                  "type": "compound",
-                  "value": [
-                    {
-                      "italic": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "underlined": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "bold": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "color": {
-                        "type": "string",
-                        "value": "red"
-                      },
-                      "obfuscated": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "strikethrough": {
-                        "type": "byte",
-                        "value": 0
-                      },
-                      "text": {
-                        "type": "string",
-                        "value": "Нестабильный I"
-                      }
-                    }
-                  ]
-                }
-              },
-              "text": {
-                "type": "string",
-                "value": ""
-              }
-            }
-          }
-        ]
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "enchanted_book",
-    "displayName": "Enchanted Book",
-    "stackSize": 1,
-    "slot": 39
-  },
-  {
-    "type": 1165,
-    "count": 1,
-    "metadata": 0,
-    "nbt": null,
-    "components": [
-      {
-        "type": "custom_data",
-        "data": {
-          "type": "compound",
-          "value": {
-            "PublicBukkitValues": {
-              "type": "compound",
-              "value": {
-                "minecraft:s": {
-                  "type": "byteArray",
-                  "value": [
-                    61,
-                    61,
-                    17,
-                    -13,
-                    -101,
-                    127,
-                    68,
-                    -57,
-                    -121,
-                    116,
-                    0,
-                    -37,
-                    121,
-                    114,
-                    121,
-                    -77
-                  ]
-                }
-              }
-            },
-            "VB|Protocol1_21_11To1_21_9|original_hashes": {
-              "type": "compound",
-              "value": {
-                "0": {
-                  "type": "int",
-                  "value": 1566041907
-                },
-                "41": {
-                  "type": "int",
-                  "value": -1197917920
-                },
-                "id": {
-                  "type": "int",
-                  "value": 1244
-                },
-                "removed": {
-                  "type": "intArray",
-                  "value": []
-                }
-              }
-            }
-          }
-        }
-      },
-      {
-        "type": "stored_enchantments",
-        "data": {
-          "enchantments": [
-            {
-              "id": 28,
-              "level": 5
-            }
-          ],
-          "showInTooltip": true
-        }
-      }
-    ],
-    "removedComponents": [],
-    "componentMap": {},
-    "stackId": null,
-    "name": "enchanted_book",
-    "displayName": "Enchanted Book",
-    "stackSize": 1,
-    "slot": 40
-  },
-  {
-    "type": 907,
+    "type": 874,
     "count": 1,
     "metadata": 0,
     "nbt": {
@@ -796,22 +307,22 @@
                 "minecraft:s": {
                   "type": "byteArray",
                   "value": [
-                    96,
-                    -12,
-                    -85,
-                    -13,
-                    -112,
-                    110,
-                    66,
+                    15,
+                    -33,
+                    -33,
+                    24,
+                    59,
+                    49,
+                    70,
+                    29,
                     -75,
-                    -128,
-                    -8,
-                    -82,
-                    60,
-                    1,
-                    -116,
-                    -110,
-                    -67
+                    56,
+                    118,
+                    -2,
+                    -56,
+                    62,
+                    -42,
+                    77
                   ]
                 }
               }
@@ -821,19 +332,19 @@
               "value": {
                 "0": {
                   "type": "int",
-                  "value": 624835228
+                  "value": 1106485672
                 },
-                "6": {
+                "3": {
                   "type": "int",
-                  "value": 1234248248
+                  "value": -1898538988
                 },
                 "13": {
                   "type": "int",
-                  "value": -764166032
+                  "value": -1741090395
                 },
                 "id": {
                   "type": "int",
-                  "value": 978
+                  "value": 941
                 },
                 "removed": {
                   "type": "intArray",
@@ -845,464 +356,28 @@
         }
       },
       {
-        "type": "custom_name",
-        "data": {
-          "type": "compound",
-          "value": {
-            "extra": {
-              "type": "list",
-              "value": {
-                "type": "compound",
-                "value": [
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#6F0075"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "/"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#750E7B"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "/ "
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#812A87"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "8"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#88378D"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "1"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#8E4593"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "2"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#945399"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "L"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#9A619F"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "e"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#A06FA5"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "g"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#A67DAB"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "i"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#AC8BB1"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "o"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#B299B7"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "n"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#B9A6BD"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "s "
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#C5C2C9"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "\\"
-                    }
-                  },
-                  {
-                    "italic": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "underlined": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "bold": {
-                      "type": "byte",
-                      "value": 1
-                    },
-                    "color": {
-                      "type": "string",
-                      "value": "#CBD0CF"
-                    },
-                    "obfuscated": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "strikethrough": {
-                      "type": "byte",
-                      "value": 0
-                    },
-                    "text": {
-                      "type": "string",
-                      "value": "\\"
-                    }
-                  }
-                ]
-              }
-            },
-            "text": {
-              "type": "string",
-              "value": ""
-            }
-          }
-        }
+        "type": "damage",
+        "data": 179
       },
       {
         "type": "enchantments",
         "data": {
           "enchantments": [
             {
-              "id": 27,
-              "level": 5
+              "id": 33,
+              "level": 7
             },
             {
-              "id": 1,
-              "level": 4
+              "id": 37,
+              "level": 3
             },
             {
-              "id": 28,
-              "level": 5
+              "id": 10,
+              "level": 2
             },
             {
               "id": 40,
-              "level": 5
+              "level": 4
             }
           ],
           "showTooltip": true
@@ -1312,12 +387,14 @@
     "removedComponents": [],
     "componentMap": {},
     "stackId": null,
-    "name": "netherite_helmet",
-    "displayName": "Netherite Helmet",
+    "name": "netherite_sword",
+    "displayName": "Netherite Sword",
     "stackSize": 1,
-    "maxDurability": 407,
-    "slot": 41
+    "maxDurability": 2031,
+    "slot": 39
   },
+  null,
+  null,
   null,
   null,
   null,
