@@ -894,6 +894,8 @@ async function getAHSlotsIDs(bot, itemPrices) {
 }
 
 async function getBestAHSlot(bot, itemPrices) {
+    // await saveToJsonFile('pizdec.json', bot.currentWindow.slots)
+    // return
     if (!bot.currentWindow?.slots) return null;
 
     for (let slot = firstAHSlot; slot <= 17; slot++) {
@@ -1163,26 +1165,26 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     };
 
     const vanillaEnchants = [];
-    if (item.components && Array.isArray(item.components)) {
-        const enchComponent = item.components.find(c => c && c.type === 'enchantments');
-        if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
-            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
-                if (!e) return null;
-                
-                let name = e.id;
-                if (typeof name === 'number') {
-                    name = numericToName[name] || `unknown:${name}`;
-                }
-                
-                let lvl = e.level;
-                if (lvl === undefined || lvl === null) {
-                    lvl = 1;
-                }
-                
-                return { name, lvl };
-            }).filter(e => e !== null));
-        }
+if (item.components && Array.isArray(item.components)) {
+    const enchComponent = item.components.find(c => c && c.type === 'enchantments');
+    if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
+        vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
+            if (!e) return null;
+            
+            let name = e.id;
+            if (typeof name === 'number') {
+                name = numericToName[name] || `enchantment.${name}`; // fallback
+            }
+            
+            let lvl = e.level;
+            if (lvl === undefined || lvl === null) {
+                lvl = 1;
+            }
+            
+            return { name, lvl };
+        }).filter(e => e !== null));
     }
+}
 
     const rawCustomEnchants = extractCustomEnchantsFromItem(item);
 
