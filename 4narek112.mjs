@@ -241,7 +241,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (botMenu) {
             case chooseBuying:
-                // saveToJsonFile('666.json', bot.inventory.slots)
+                saveToJsonFile('666.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
@@ -1132,22 +1132,22 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
     
     const numericToName = {
-        32: 'minecraft:sharpness',
+        33: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
-        39: 'minecraft:unbreaking',
+        40: 'minecraft:unbreaking',
         36: 'minecraft:sweeping',
         17: 'minecraft:knockback',
         18: 'minecraft:looting',
-        27: "minecraft:protection",
-        26: "minecraft:projectile_protection",
-        22: "minecraft:mending",
-        38: "minecraft:thorns",
+        28: "minecraft:protection",
+        27: "minecraft:projectile_protection",
+        23: "minecraft:mending",
+        39: "minecraft:thorns",
         11: "minecraft:fire_protection",
-        0:  "minecraft:aqua_affinity",
-        30: "minecraft:respiration",
+        1:  "minecraft:aqua_affinity",
+        31: "minecraft:respiration",
         7: "minecraft:depth_strider",
         9: "minecraft:feather_falling",
-        3: "minecraft:fortune",
+        13: "minecraft:fortune",
         8: "minecraft:efficiency",
         33: "minecraft:silk_touch",
     };
