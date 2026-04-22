@@ -241,7 +241,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (botMenu) {
             case chooseBuying:
-                saveToJsonFile('666.json', bot.inventory.slots)
+                // saveToJsonFile('666.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
