@@ -488,33 +488,14 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('Добро пожаловать на FunTime')) {
-            botMenu = chooseBuying;
-            bot.loadPlugin(autoEat);
-            botStartTime = Date.now() - 55000;
-            botAhFull = false;
-            botTimeReset = Date.now();
-            botLogin = true;
-            botTimeActive = Date.now();
-            botTimeLogin = Date.now();
-            botPrices = [];
-            botCount = 0;
-            botAh = [];
-            botNeedSell = false;
-            botStartClickTime = null;
-            botUpdateWindow = false;
-
-            logger.info(`${name} успешно проник на сервер.`);
-            await delay(1000);
-            bot.chat(loginCommand);
-            await delay(300)
-            await delay(1000);
-            bot.chat(anarchyCommand);
-        
-            console.log('anarchy')
-            await delay(4000);
-            bot.chat(shopCommand);
-        }
+        // if (messageText.includes('Добро пожаловать на FunTime')) {
+        //     botNeedSell = true;
+        //     let balanceStr = messageText;
+        //     balanceStr = balanceStr.replace(/\D/g, '');
+        //     const balance = parseInt(balanceStr);
+        //     parentPort.postMessage({ name: 'buy', id: botType, price: balance });
+        //     return;
+        // }
 
         if (messageText.includes('BotFilter >> Введите номер с картинки в чат')) {
             parentPort.postMessage(`${workerData.username} - ввести капчу`);
