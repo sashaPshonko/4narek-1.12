@@ -225,7 +225,22 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-        if (Date.now() - botTimeActive > 30000) {
+        if (Date.now() - botTimeActive > 120000) {
+            botTimeActive = Date.now();
+            botMenu = analysisAH;
+            mu = false;
+            while (Date.now() < endTime) {
+                const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+                bot.setControlState(randomMove, true);
+                await delay(900);
+                bot.setControlState(randomMove, false);
+                await delay(100);
+            }
+            ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
+            bot.chat(anarchyCommand)
+            await delay(getRandomDelayInRange(1500, 3500))
+            await safeAH(bot);
+        } else if (Date.now() - botTimeActive > 30000) {
             botTimeActive = Date.now();
             botMenu = analysisAH;
             mu = false;
@@ -241,7 +256,7 @@ async function launchBookBuyer(name, password, anarchy) {
         let key = "";
         switch (botMenu) {
             case chooseBuying:
-                saveToJsonFile('666.json', bot.inventory.slots)
+                // saveToJsonFile('666.json', bot.inventory.slots)
                 parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
@@ -866,7 +881,7 @@ async function safeAH(bot) {
     botMenu = analysisAH;
     botUpdateWindow = true;
     while (key === botKey) {
-        const endTime = Date.now() + 2000;
+        const endTime = Date.now() + 3000;
 
         while (Date.now() < endTime) {
             const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
