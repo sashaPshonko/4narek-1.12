@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import mineflayer from 'mineflayer';
+import mineflayer, { BossBar } from 'mineflayer';
 import { createLogger, transports, format } from 'winston';
 import { workerData, parentPort } from 'worker_threads';
 import { loader as autoEat } from 'mineflayer-auto-eat'
@@ -171,32 +171,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     console.warn = () => {};
 
-    bot.once('login', async () => {
-        bot.loadPlugin(autoEat);
-        botStartTime = Date.now() - 55000;
-        botAhFull = false;
-        botTimeReset = Date.now();
-        botLogin = true;
-        botTimeActive = Date.now();
-        botTimeLogin = Date.now();
-        botPrices = [];
-        botCount = 0;
-        botAh = [];
-        botNeedSell = false;
-        botStartClickTime = null;
-        botUpdateWindow = false;
 
-        logger.info(`${name} успешно проник на сервер.`);
-        await delay(1000);
-        bot.chat(loginCommand);
-        await delay(300)
-        await delay(1000);
-        bot.chat(anarchyCommand);
-       
-        console.log('anarchy')
-        await delay(8000);
-        bot.chat(shopCommand);
-    });
 
     bot.on("resourcePack", (u, h) => {
         console.log(u, h)
@@ -249,7 +224,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
     });
 
-    botMenu = chooseBuying;
+
     let slotToBuy = undefined;
     botStartTime = Date.now() - 240000;
 
@@ -513,6 +488,34 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
+        if (messageText.includes('Добро пожаловать на FunTime')) {
+            botMenu = chooseBuying;
+            bot.loadPlugin(autoEat);
+            botStartTime = Date.now() - 55000;
+            botAhFull = false;
+            botTimeReset = Date.now();
+            botLogin = true;
+            botTimeActive = Date.now();
+            botTimeLogin = Date.now();
+            botPrices = [];
+            botCount = 0;
+            botAh = [];
+            botNeedSell = false;
+            botStartClickTime = null;
+            botUpdateWindow = false;
+
+            logger.info(`${name} успешно проник на сервер.`);
+            await delay(1000);
+            bot.chat(loginCommand);
+            await delay(300)
+            await delay(1000);
+            bot.chat(anarchyCommand);
+        
+            console.log('anarchy')
+            await delay(4000);
+            bot.chat(shopCommand);
+        }
+
         if (messageText.includes('BotFilter >> Введите номер с картинки в чат')) {
             parentPort.postMessage(`${workerData.username} - ввести капчу`);
             return;
@@ -605,6 +608,7 @@ async function launchBookBuyer(name, password, anarchy) {
             await delay(300)
             await safeAH(bot)
         }
+
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
             await delay(getRandomDelayInRange(500, 700));
@@ -1286,26 +1290,23 @@ function getRandomElement(array) {
 
 async function walk(bot) {
     await delay(500);
-    bot.autoEat.enableAuto();
 
     const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
     bot.chat(`/warp ${warp}`);
-    await delay(8000);
 
-    const endTime = Date.now() + 4000;
+    const endTime = Date.now() + 8000;
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
         bot.setControlState(randomMove, true);
-        await delay(600);
+        await delay(900);
         bot.setControlState(randomMove, false);
-        await delay(500);
+        await delay(200);
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
     
 
-    bot.autoEat.disableAuto();
 }
 
 async function safeClickBuy(bot, slot, time, key) {
