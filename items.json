@@ -410,29 +410,5 @@
         ],
         "num": 4,
         "nacenka": 500000
-    },
-            {
-        "name": "netherite_sword",
-        "id": "фарм5-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:looting",
-                "lvl": 5
-            }
-        ],
-        "num": 0,
-        "nacenka": 400000
     }
 ]
