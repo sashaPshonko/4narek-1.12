@@ -724,6 +724,9 @@ async function sellItems(bot, itemPrices) {
     mu = true;
     await delay(500);
     bot.autoEat.enableAuto();
+    await delay(getRandomDelayInRange(300, 1200))
+    bot.chat(anarchyCommand)
+    await delay(400)
 
     const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
     bot.chat(`/warp ${warp}`);
