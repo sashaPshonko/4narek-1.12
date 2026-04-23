@@ -237,6 +237,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 await delay(100);
             }
             ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
+            botTimeLogin = Date.now();
             bot.chat(anarchyCommand)
             await delay(getRandomDelayInRange(1500, 3500))
             await safeAH(bot);
