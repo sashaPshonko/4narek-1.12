@@ -550,6 +550,12 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
+        if (messageText.includes('⚡ Наша группа ВК vk.com/funtime')) {
+            bot.chat(anarchyCommand)
+            await delay(3000)
+            await sellItems(bot, itemPrices)
+        }
+
         if (messageText.includes('[☃] У Вас купили')) {
             
             botAhFull = false;
