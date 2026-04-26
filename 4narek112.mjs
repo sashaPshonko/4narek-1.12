@@ -686,7 +686,7 @@ async function launchBookBuyer(name, password, anarchy) {
             let finalPrice = basePrice + marker + nacenka;
             
             // ← ДОБАВИТЬ проверку krush
-            if (JSON.stringify(bot.inventory.slots[slot]).includes('krush')) {
+            if (messageText.includes('круш')) {
                 isKrush = true
                 bot.chat(`ah sell ${finalPrice}`)
                 await delay(100)
