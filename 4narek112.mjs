@@ -355,7 +355,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                if (bot.currentWindow.slots[0].name?.includes('stained_glass')) {
+                if (bot.currentWindow.slots[0] && bot.currentWindow.slots[0].name?.includes('stained_glass')) {
                     await safeClickBuy(bot, 31, getRandomDelayInRange(200, 800), key)
                     break
                 }
