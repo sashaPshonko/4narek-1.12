@@ -194,7 +194,7 @@ async function launchBookBuyer(name, password, anarchy) {
         bot.chat(anarchyCommand);
        
         console.log('anarchy')
-        await delay(8000);
+        await delay(15000);
         bot.chat(shopCommand);
     });
 
