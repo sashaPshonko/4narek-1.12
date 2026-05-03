@@ -500,8 +500,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 break;
        
             case "rtp":
-                await delay(300)
-                await bot.clickWindow(0, leftMouseButton, noShift)
+                await safeClick(bot, 0, 300)
                 break
             }
     });
