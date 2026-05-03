@@ -313,11 +313,19 @@
             },
             {
                 "name": "minecraft:efficiency",
-                "lvl": 9
+                "lvl": 7
             },
             {
                 "name": "minecraft:fortune",
                 "lvl": 5
+            },
+            {
+                "name": "buldozing",
+                "lvl": 2
+            },
+            {
+                "name": "magnet",
+                "lvl": 1
             }
         ],
         "num": 3,
