@@ -502,6 +502,7 @@ async function launchBookBuyer(name, password, anarchy) {
             case "rtp":
                 await delay(300)
                 await bot.clickWindow(0, leftMouseButton, noShift)
+                break
             }
     });
 
