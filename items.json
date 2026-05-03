@@ -45,7 +45,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 700000
+        "nacenka": 400000
     },
         {
         "name": "netherite_sword",
@@ -77,7 +77,7 @@
             }
         ],
         "num": 4,
-        "nacenka": 600000
+        "nacenka": 300000
     },
    {
         "name": "netherite_leggings",
@@ -117,7 +117,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "netherite_chestplate",
@@ -130,33 +130,9 @@
             {
                 "name": "minecraft:protection",
                 "lvl": 5
-            },
-            {
-                "name": "minecraft:projectile_protection",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:fire_protection",
-                "lvl": 5
             }
         ],
         "num": 2,
-        "nacenka": 300000
-    },
-    {
-        "name": "netherite_chestplate",
-        "id": "нагрудник_позорный-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 5
-            },
-            {
-                "name": "minecraft:protection",
-                "lvl": 5
-            }
-        ],
-        "num": 1,
         "nacenka": 300000
     },
     {
@@ -173,7 +149,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "netherite_helmet",
@@ -249,7 +225,7 @@
             }
         ],
         "num": 1,
-        "nacenka": 300000
+        "nacenka": 200000
     },
     {
         "name": "netherite_pickaxe",
@@ -365,7 +341,7 @@
             }
         ],
         "num": 2,
-        "nacenka": 400000
+        "nacenka": 300000
     },
        {
         "name": "diamond_sword",
@@ -393,7 +369,7 @@
             }
         ],
         "num": 5,
-        "nacenka": 600000
+        "nacenka": 300000
     },
         {
         "name": "diamond_sword",
@@ -425,6 +401,6 @@
             }
         ],
         "num": 4,
-        "nacenka": 500000
+        "nacenka": 300000
     }
 ]
