@@ -498,7 +498,11 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
                 
                 break;
-        }
+       
+            case "rtp":
+                await delay(300)
+                await bot.clickWindow(0, leftMouseButton, noShift)
+            }
     });
 
     bot.on('message', async (message) => {
@@ -511,6 +515,11 @@ async function launchBookBuyer(name, password, anarchy) {
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             parentPort.postMessage({ name: 'buy', id: botType, price: balance });
+            return;
+        } //
+        if (messageText.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
+            botMenu = 'rtp'
+            bot.chat('/rtp')
             return;
         }
 
