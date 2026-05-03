@@ -21,6 +21,8 @@ let isKrush = false
 let needSendAH = true
 let typeSell = ""
 
+let sellNeedRestart = false
+
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
@@ -499,9 +501,29 @@ async function launchBookBuyer(name, password, anarchy) {
                 
                 break;
        
-            case "rtp":
-                await safeClick(bot, 0, 300)
-                break
+         case "rtp":
+    await safeClick(bot, 0, 300);
+    await delay(8000); // ждём телепорт
+    
+    // Очищаем инвентарь от мусора
+    for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+        if (sellNeedRestart) {
+            sellNeedRestart = false;
+            logger.info(`${bot.username} - очистка прервана`);
+            break;
+        }
+        const slotData = bot.inventory.slots[i];
+        if (!slotData) continue;
+        if (!isItemMatchingConfig(slotData, itemPrices)) {
+            await bot.tossStack(slotData);
+            await delay(300);
+        }
+    }
+    
+    // Запускаем продажу заново
+    logger.info(`${bot.username} - перезапуск продажи после телепорта`);
+    await sellItems(bot, itemPrices);
+    break;
             }
     });
 
@@ -518,6 +540,7 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         } //
         if (messageText.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
+            sellNeedRestart = true;
             botMenu = 'rtp'
             bot.chat('/rtp')
             return;
@@ -770,6 +793,12 @@ async function sellItems(bot, itemPrices) {
         }
 
         while (!botAhFull) {
+            if (sellNeedRestart) {
+                sellNeedRestart = false;
+                logger.info(`${bot.username} - телепорт, прерываем продажу`);
+                mu = false;
+                return;  // просто выходим
+            }
             while (isKrush) await delay(100)
             let soldAnything = false;
 
@@ -839,30 +868,42 @@ async function sellItems(bot, itemPrices) {
     } catch (error) {
         parentPort.postMessage(`ошибка продажи ${error}`)
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
-    } finally {
-        logger.info(`${bot.username} - продажа завершена`);
-        await delay(500);
-        await delay(300);
+           } finally {
+    logger.info(`${bot.username} - продажа завершена`);
+    await delay(500);
+    await delay(300);
 
-        for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-            const slotData = bot.inventory.slots[i];
-            if (!slotData) continue;
-            if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await bot.tossStack(slotData);
-                await delay(300);
-            }
+    for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+        if (sellNeedRestart) {
+            sellNeedRestart = false;
+            logger.info(`${bot.username} - очистка в finally прервана`);
+            break;
         }
-
-        bot.chat('/balance');
-        await delay(500);
-        botStartTime = Date.now();
-        mu = false;
-        logger.info(`${bot.username} - мьютекс снят`);
-        await delay(1500);
-        while (Date.now() < endSellTime) await delay(100)
-        botMenu = analysisAH;
-        await safeAH(bot);
+        const slotData = bot.inventory.slots[i];
+        if (!slotData) continue;
+        if (!isItemMatchingConfig(slotData, itemPrices)) {
+            await bot.tossStack(slotData);
+            await delay(300);
+        }
     }
+
+    bot.chat('/balance');
+    await delay(500);
+    botStartTime = Date.now();
+    mu = false;
+    logger.info(`${bot.username} - мьютекс снят`);
+    await delay(1500);
+    while (Date.now() < endSellTime) await delay(100)
+    
+    if (sellNeedRestart) {
+        sellNeedRestart = false;
+        logger.info(`${bot.username} - выход, перезапуск будет в rtp`);
+        return;  // не вызываем safeAH, не меняем botMenu
+    }
+    
+    botMenu = analysisAH;
+    await safeAH(bot);
+}
 }
 
 function transform(num) {
