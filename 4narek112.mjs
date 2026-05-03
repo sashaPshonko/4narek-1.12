@@ -1240,11 +1240,11 @@ if (item.components && Array.isArray(item.components)) {
             continue
         }
 
-        if (item.name === 'netherite_pickaxe' &&
-            allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
-            !allEnchants.some(en => en && en.name === 'smelting')) {
-            continue;
-        }
+        // if (item.name === 'netherite_pickaxe' &&
+        //     allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
+        //     !allEnchants.some(en => en && en.name === 'smelting')) {
+        //     continue;
+        // }
 
         if (options.checkDurability && item.maxDurability) {
             let coefficient = 0.9;
