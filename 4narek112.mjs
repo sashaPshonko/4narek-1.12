@@ -155,6 +155,51 @@ const logger = createLogger({
     transports: [new transports.Console()]
 });
 
+function getDurabilityPercent(item) {
+    if (!item.maxDurability) return 1;
+    const damageComp = item.components?.find(c => c.type === 'damage');
+    const damage = damageComp?.data || 0;
+    return (item.maxDurability - damage) / item.maxDurability;
+}
+
+function getSellPriceWithDurability(item, itemPrices) {
+    const config = findMatchingConfigItem(item, itemPrices);
+    if (!config) return 0;
+    
+    const durabilityPercent = getDurabilityPercent(item);
+    
+    // Минимальный порог прочности 20%
+    if (durabilityPercent < 0.2) return 0;
+    
+    // Базовая цена с учётом прочности
+    let price = Math.floor(config.priceSell * durabilityPercent);
+    
+    // Сохраняем последние 2 цифры от оригинальной цены
+    const marker = config.priceSell % 100;
+    price = Math.floor(price / 100) * 100 + marker;
+    
+    return price;
+}
+
+function getMaxBuyPriceWithDurability(item, itemPrices) {
+    const config = findMatchingConfigItem(item, itemPrices);
+    if (!config) return 0;
+    
+    const durabilityPercent = getDurabilityPercent(item);
+    
+    // Минимальный порог прочности 20%
+    if (durabilityPercent < 0.2) return 0;
+    
+    // Цена покупки с учётом прочности (без наценки)
+    let price = Math.floor(config.priceSell * durabilityPercent);
+    
+    // Сохраняем последние 2 цифры
+    const marker = config.priceSell % 100;
+    price = Math.floor(price / 100) * 100 + marker;
+    
+    return price;
+}
+
 async function launchBookBuyer(name, password, anarchy) {
     
     await delay(getRandomDelayInRange(0, 10000));
@@ -912,7 +957,7 @@ function transform(num) {
 }
 
 function getBestSellPrice(bot, item, itemPrices) {
-    return getSellPrice(item, itemPrices);
+    return getSellPriceWithDurability(item, itemPrices);
 }
 
 function getID(item, itemPrices) {
@@ -998,7 +1043,12 @@ async function getBestAHSlot(bot, itemPrices) {
         try {
             const price = getPriceFromItem(slotData);
             console.log(`цена - ${price}`)
-            if (!price || price >= config.priceSell - config.nacenka) continue;
+            if (!price) continue;
+
+            const maxBuyPrice = getMaxBuyPriceWithDurability(slotData, itemPrices);
+            if (maxBuyPrice === 0) continue;
+
+            if (price >= maxBuyPrice - config.nacenka) continue;
             if (!config.priceSell) continue;
 
             botType = config.id;
@@ -1296,14 +1346,14 @@ if (item.components && Array.isArray(item.components)) {
         //     continue;
         // }
 
-        if (options.checkDurability && item.maxDurability) {
-            let coefficient = 0.9;
-            if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.75;
-            const damageComp = item.components?.find(c => c.type === 'damage');
-            const damage = damageComp?.data || 0;
-            const durabilityLeft = item.maxDurability - damage;
-            if (durabilityLeft < item.maxDurability * coefficient) continue;
-        }
+        // if (options.checkDurability && item.maxDurability) {
+        //     let coefficient = 0.9;
+        //     if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.75;
+        //     const damageComp = item.components?.find(c => c.type === 'damage');
+        //     const damage = damageComp?.data || 0;
+        //     const durabilityLeft = item.maxDurability - damage;
+        //     if (durabilityLeft < item.maxDurability * coefficient) continue;
+        // }
 
         return configItem;
     }
