@@ -170,7 +170,7 @@ function getSellPriceWithDurability(item, itemPrices) {
     const durabilityPercent = getDurabilityPercent(item);
 
     // Минимальный порог прочности 20%
-    if (durabilityPercent < 0.2) return 0;
+    if (durabilityPercent < 0.5) return 0;
 
     // Базовая цена с учётом прочности
     let price = Math.floor(config.priceSell * durabilityPercent);
@@ -773,16 +773,16 @@ async function launchBookBuyer(name, password, anarchy) {
             // Если предмет сильно сломан — не обновляем конфиг, а просто выставляем по цене сервера
             if (isDamaged) {
                 logger.info(`${bot.username} - сломанный предмет (${Math.floor(durabilityPercent * 100)}%), выставляем по цене ${balance}`);
-                bot.chat(`ah sell ${balance}`);
+                bot.chat(`/ah sell ${balance}`);
                 return;
             }
 
             // ← ДОБАВИТЬ проверку krush
             if (messageText.includes('круш')) {
                 isKrush = true
-                bot.chat(`ah sell ${finalPrice}`)
+                bot.chat(`/ah sell ${finalPrice}`)
                 await delay(100)
-                bot.chat(`ah sell ${finalPrice}`)
+                bot.chat(`/ah sell ${finalPrice}`)
                 isKrush = false
                 return
             }
