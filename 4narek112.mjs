@@ -22,6 +22,7 @@ let needSendAH = true
 let typeSell = ""
 
 let sellNeedRestart = false
+let currentSellItem = null; // временный предмет для продажи
 
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
@@ -91,11 +92,11 @@ const forbiddenEnchantsByType = {
         "unstable",
     ],
 
-     "diamond_sword": [
+    "diamond_sword": [
         "heavy",
         "unstable",
     ],
-    
+
     // Броня (шлем, нагрудник, штаны, ботинки) — только шипы
     "netherite_helmet": [
         "minecraft:thorns"
@@ -109,13 +110,13 @@ const forbiddenEnchantsByType = {
     "netherite_boots": [
         "minecraft:thorns"
     ],
-    
+
     // Кирки — свои запреты (если нужны)
     "netherite_pickaxe": [
         "heavy",
         "unstable",
     ],
-    
+
     // Элитры
     "elytra": [
     ]
@@ -124,7 +125,7 @@ const forbiddenEnchantsByType = {
 function hasForbiddenEnchant(itemType, allEnchants) {
     const forbiddenList = forbiddenEnchantsByType[itemType];
     if (!forbiddenList || forbiddenList.length === 0) return false;
-    
+
     return allEnchants.some(enchant => {
         if (!enchant || !enchant.name) return false;
         return forbiddenList.includes(enchant.name);
@@ -165,45 +166,45 @@ function getDurabilityPercent(item) {
 function getSellPriceWithDurability(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     if (!config) return 0;
-    
+
     const durabilityPercent = getDurabilityPercent(item);
-    
+
     // Минимальный порог прочности 20%
     if (durabilityPercent < 0.2) return 0;
-    
+
     // Базовая цена с учётом прочности
     let price = Math.floor(config.priceSell * durabilityPercent);
-    
+
     // Сохраняем последние 2 цифры от оригинальной цены
     const marker = config.priceSell % 100;
     price = Math.floor(price / 100) * 100 + marker;
-    
+
     return price;
 }
 
 function getMaxBuyPriceWithDurability(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     if (!config) return 0;
-    
+
     const durabilityPercent = getDurabilityPercent(item);
-    
+
     // Минимальный порог прочности 20%
     if (durabilityPercent < 0.2) return 0;
-    
+
     // Цена покупки с учётом прочности (без наценки)
     let price = Math.floor(config.priceSell * durabilityPercent);
-    
+
     // Сохраняем последние 2 цифры
     const marker = config.priceSell % 100;
     price = Math.floor(price / 100) * 100 + marker;
-    
+
     return price;
 }
 
 async function launchBookBuyer(name, password, anarchy) {
-    
+
     await delay(getRandomDelayInRange(0, 10000));
-    
+
     const bot = mineflayer.createBot({
         host: 'mc.funtime.su',
         port: 25565,
@@ -216,7 +217,7 @@ async function launchBookBuyer(name, password, anarchy) {
     const loginCommand = `/l ${name}`;
     const shopCommand = '/shop';
 
-    console.warn = () => {};
+    console.warn = () => { };
 
     bot.once('login', async () => {
         bot.loadPlugin(autoEat);
@@ -239,7 +240,7 @@ async function launchBookBuyer(name, password, anarchy) {
         await delay(300)
         await delay(1000);
         bot.chat(anarchyCommand);
-       
+
         console.log('anarchy')
         await delay(15000);
         bot.chat(shopCommand);
@@ -381,21 +382,21 @@ async function launchBookBuyer(name, password, anarchy) {
                     await sellItems(bot, itemPrices);
                     break;
                 }
-                
+
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                     break;
                 }
-                
-                
+
+
 
                 let count = 0;
                 for (let i = firstInventorySlot; i <= lastInventorySlot; i++) {
                     if (bot.inventory.slots[i]) count++;
                 }
-                
+
                 if (count >= 36 - botCount) {
                     logger.error('Инвентарь заполнен');
                     await sellItems(bot, itemPrices);
@@ -444,18 +445,18 @@ async function launchBookBuyer(name, password, anarchy) {
 
                     parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
                     needSendAH = false
-                    
+
                     const inv = []
                     for (let i = 0; i <= lastInventorySlot; i++) {
                         const slotData = bot.inventory.slots[i];
                         if (!slotData) continue;
-                        
+
                         const config = findMatchingConfigItem(slotData, itemPrices);
                         if (config) {
                             inv.push(config.id);
                         }
                     }
-                    const msg = {name: "inventory", data: inv, username: bot.username}
+                    const msg = { name: "inventory", data: inv, username: bot.username }
                     parentPort.postMessage(msg)
                 }
 
@@ -467,7 +468,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
                 needReset = false;
                 logger.info(`${name} - ${botMenu}`);
-                
+
                 botCount = 0;
                 botAh = [];
                 let slot = null;
@@ -492,7 +493,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 700)*(slot+1), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(400, 700) * (slot + 1), key);
                     break;
                 }
 
@@ -524,7 +525,7 @@ async function launchBookBuyer(name, password, anarchy) {
             case "clan":
                 logger.info(`${bot.username} ${botMenu}`);
                 generateRandomKey(bot);
-                
+
                 let countItems = countTotalItemsInWindow(bot, itemPrices);
                 if (botAhFull && countItems === 0) {
                     const slot = findFirstMatchingSlotInInventory(bot, itemPrices);
@@ -543,33 +544,33 @@ async function launchBookBuyer(name, password, anarchy) {
                 logger.info(`${bot.username} никуда не кликнул`);
                 await delay(300);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-                
+
                 break;
-       
-         case "rtp":
-    await safeClick(bot, 0, 300);
-    await delay(8000); // ждём телепорт
-    
-    // Очищаем инвентарь от мусора
-    for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-        if (sellNeedRestart) {
-            sellNeedRestart = false;
-            logger.info(`${bot.username} - очистка прервана`);
-            break;
+
+            case "rtp":
+                await safeClick(bot, 0, 300);
+                await delay(8000); // ждём телепорт
+
+                // Очищаем инвентарь от мусора
+                for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+                    if (sellNeedRestart) {
+                        sellNeedRestart = false;
+                        logger.info(`${bot.username} - очистка прервана`);
+                        break;
+                    }
+                    const slotData = bot.inventory.slots[i];
+                    if (!slotData) continue;
+                    if (!isItemMatchingConfig(slotData, itemPrices)) {
+                        await bot.tossStack(slotData);
+                        await delay(300);
+                    }
+                }
+
+                // Запускаем продажу заново
+                logger.info(`${bot.username} - перезапуск продажи после телепорта`);
+                await sellItems(bot, itemPrices);
+                break;
         }
-        const slotData = bot.inventory.slots[i];
-        if (!slotData) continue;
-        if (!isItemMatchingConfig(slotData, itemPrices)) {
-            await bot.tossStack(slotData);
-            await delay(300);
-        }
-    }
-    
-    // Запускаем продажу заново
-    logger.info(`${bot.username} - перезапуск продажи после телепорта`);
-    await sellItems(bot, itemPrices);
-    break;
-            }
     });
 
     bot.on('message', async (message) => {
@@ -634,7 +635,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
-            
+
             botAhFull = false;
             let balanceStr = messageText;
             balanceStr = balanceStr.replace(/\D/g, '');
@@ -656,18 +657,18 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('Не так быстро..') ||
             messageText.includes('Данная команда недоступна в режиме AFK') ||
             messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
-            
+
             await delay(getRandomDelayInRange(500, 700));
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(500, 700));
-            
+
             if (messageText.includes('После входа')) {
                 await walk(bot);
                 await delay(10000);
             } else {
                 await walk(bot);
             }
-            
+
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -690,7 +691,7 @@ async function launchBookBuyer(name, password, anarchy) {
             await safeAH(bot)
         }
 
-        
+
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
             await delay(getRandomDelayInRange(500, 700));
@@ -731,17 +732,17 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
             const balance = parseInt(balanceStr);
-            
+
             const slotHotBar = bot.quickBarSlot;
             const slot = transform(slotHotBar);
             const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
             const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
-            
+
             const basePrice = Math.floor(balance / 10000) * 10000;
             const marker = currentPrice % 100;
             let finalPrice = basePrice + marker;
             if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
-            
+
             parentPort.postMessage({ name: "set_max_price", type: id, price: finalPrice });
             return;
         }
@@ -751,17 +752,31 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
             balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
             const balance = parseInt(balanceStr);
-            
+
             const slotHotBar = bot.quickBarSlot;
             const slot = transform(slotHotBar);
-            const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
-            const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
-            const nacenka = getNacenkaByEnchantments(bot.inventory.slots[slot], itemPrices);
-            
+            const item = bot.inventory.slots[slot];
+            if (!item) return;
+
+            const currentPrice = getPriceByEnchantments(item, itemPrices);
+            const id = getIDByEnchantments(item, itemPrices);
+            const nacenka = getNacenkaByEnchantments(item, itemPrices);
+
+            // Проверяем прочность предмета
+            const durabilityPercent = getDurabilityPercent(item);
+            const isDamaged = durabilityPercent < 0.8; // сломан более чем на 20%
+
             const basePrice = Math.ceil(balance / 10000) * 10000;
             const marker = currentPrice % 100;
             let finalPrice = basePrice + marker + nacenka;
-            
+
+            // Если предмет сильно сломан — не обновляем конфиг, а просто выставляем по цене сервера
+            if (isDamaged) {
+                logger.info(`${bot.username} - сломанный предмет (${Math.floor(durabilityPercent * 100)}%), выставляем по цене ${balance}`);
+                bot.chat(`ah sell ${balance}`);
+                return;
+            }
+
             // ← ДОБАВИТЬ проверку krush
             if (messageText.includes('круш')) {
                 isKrush = true
@@ -771,12 +786,12 @@ async function launchBookBuyer(name, password, anarchy) {
                 isKrush = false
                 return
             }
-            
+
             parentPort.postMessage({ name: "set_min_price", type: id, price: finalPrice });
             return;
         }
-            });
-        }
+    });
+}
 
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
@@ -913,42 +928,42 @@ async function sellItems(bot, itemPrices) {
     } catch (error) {
         parentPort.postMessage(`ошибка продажи ${error}`)
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
-           } finally {
-    logger.info(`${bot.username} - продажа завершена`);
-    await delay(500);
-    await delay(300);
+    } finally {
+        logger.info(`${bot.username} - продажа завершена`);
+        await delay(500);
+        await delay(300);
 
-    for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+        for (let i = firstAHSlot; i < lastInventorySlot; i++) {
+            if (sellNeedRestart) {
+                sellNeedRestart = false;
+                logger.info(`${bot.username} - очистка в finally прервана`);
+                break;
+            }
+            const slotData = bot.inventory.slots[i];
+            if (!slotData) continue;
+            if (!isItemMatchingConfig(slotData, itemPrices)) {
+                await bot.tossStack(slotData);
+                await delay(300);
+            }
+        }
+
+        bot.chat('/balance');
+        await delay(500);
+        botStartTime = Date.now();
+        mu = false;
+        logger.info(`${bot.username} - мьютекс снят`);
+        await delay(1500);
+        while (Date.now() < endSellTime) await delay(100)
+
         if (sellNeedRestart) {
             sellNeedRestart = false;
-            logger.info(`${bot.username} - очистка в finally прервана`);
-            break;
+            logger.info(`${bot.username} - выход, перезапуск будет в rtp`);
+            return;  // не вызываем safeAH, не меняем botMenu
         }
-        const slotData = bot.inventory.slots[i];
-        if (!slotData) continue;
-        if (!isItemMatchingConfig(slotData, itemPrices)) {
-            await bot.tossStack(slotData);
-            await delay(300);
-        }
-    }
 
-    bot.chat('/balance');
-    await delay(500);
-    botStartTime = Date.now();
-    mu = false;
-    logger.info(`${bot.username} - мьютекс снят`);
-    await delay(1500);
-    while (Date.now() < endSellTime) await delay(100)
-    
-    if (sellNeedRestart) {
-        sellNeedRestart = false;
-        logger.info(`${bot.username} - выход, перезапуск будет в rtp`);
-        return;  // не вызываем safeAH, не меняем botMenu
+        botMenu = analysisAH;
+        await safeAH(bot);
     }
-    
-    botMenu = analysisAH;
-    await safeAH(bot);
-}
 }
 
 function transform(num) {
@@ -1024,22 +1039,22 @@ async function getBestAHSlot(bot, itemPrices) {
     for (let slot = firstAHSlot; slot <= 17; slot++) {
         const slotData = bot.currentWindow.slots[slot];
         if (!slotData) continue;
-        
+
         const currentUUID = getItemUUID(slotData);
         console.log(`uuid - ${currentUUID}`)
-        
+
         if (currentUUID && itemsBuying?.includes(currentUUID)) {
             console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
             continue;
         }
-        
-        const config = findMatchingConfigItem(slotData, itemPrices, { 
+
+        const config = findMatchingConfigItem(slotData, itemPrices, {
             checkDurability: true,
-            checkMissingEnchants: true 
+            checkMissingEnchants: true
         });
-        
+
         if (!config) continue;
-        
+
         try {
             const price = getPriceFromItem(slotData);
             console.log(`цена - ${price}`)
@@ -1053,7 +1068,7 @@ async function getBestAHSlot(bot, itemPrices) {
 
             botType = config.id;
             if (!botType) logger.error('id undefined');
-            
+
             parentPort.postMessage({ name: 'buying', data: currentUUID });
             return slotData.slot;
         } catch (error) {
@@ -1129,24 +1144,24 @@ function extractCustomEnchantsFromItem(item) {
     try {
         const customDataComp = item.components?.find(c => c.type === 'custom_data');
         const enchantsArray = customDataComp?.data?.value?.PublicBukkitValues?.value?.['minecraft:custom-enchantments']?.value?.value;
-        
+
         if (Array.isArray(enchantsArray) && enchantsArray.length > 0) {
-            
+
             for (const ench of enchantsArray) {
                 const name = ench['minecraft:type']?.value;
                 const lvl = ench['minecraft:level']?.value;
-                
+
                 if (name && typeof lvl === 'number') {
                     result.push({ name, lvl });
                 }
             }
-            
+
             return result;
         }
     } catch (e) {
     }
 
-    
+
     const jsonStr = JSON.stringify(item);
     const valueRegex = /"value":"([^"]*)"/g;
     const matches = [];
@@ -1256,9 +1271,9 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
     const filteredConfig = itemPrices.filter(config => config.id.endsWith('1.21'));
     if (filteredConfig.length === 0) return null;
-    
+
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
-    
+
     const numericToName = {
         33: 'minecraft:sharpness',
         10: 'minecraft:fire_aspect',
@@ -1271,7 +1286,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
         23: "minecraft:mending",
         39: "minecraft:thorns",
         11: "minecraft:fire_protection",
-        1:  "minecraft:aqua_affinity",
+        1: "minecraft:aqua_affinity",
         31: "minecraft:respiration",
         7: "minecraft:depth_strider",
         9: "minecraft:feather_falling",
@@ -1292,26 +1307,26 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
     };
 
     const vanillaEnchants = [];
-if (item.components && Array.isArray(item.components)) {
-    const enchComponent = item.components.find(c => c && c.type === 'enchantments');
-    if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
-        vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
-            if (!e) return null;
-            
-            let name = e.id;
-            if (typeof name === 'number') {
-                name = numericToName[name] || `enchantment.${name}`; // fallback
-            }
-            
-            let lvl = e.level;
-            if (lvl === undefined || lvl === null) {
-                lvl = 1;
-            }
-            
-            return { name, lvl };
-        }).filter(e => e !== null));
+    if (item.components && Array.isArray(item.components)) {
+        const enchComponent = item.components.find(c => c && c.type === 'enchantments');
+        if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
+            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
+                if (!e) return null;
+
+                let name = e.id;
+                if (typeof name === 'number') {
+                    name = numericToName[name] || `enchantment.${name}`; // fallback
+                }
+
+                let lvl = e.level;
+                if (lvl === undefined || lvl === null) {
+                    lvl = 1;
+                }
+
+                return { name, lvl };
+            }).filter(e => e !== null));
+        }
     }
-}
 
     const rawCustomEnchants = extractCustomEnchantsFromItem(item);
 
@@ -1415,7 +1430,7 @@ async function walk(bot) {
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-    
+
 
     bot.autoEat.disableAuto();
 }
@@ -1429,7 +1444,7 @@ async function safeClickBuy(bot, slot, time, key) {
         timeDelay = time - (Date.now() - botStartClickTime);
         if (timeDelay <= 0) timeDelay = 0;
     }
-            
+
     await delay(timeDelay);
     if (botKey != key) {
         console.log('твари ах обновили и теперь так');
@@ -1451,6 +1466,6 @@ async function saveToJsonFile(filePath, data) {
         console.log('✅ Данные успешно сохранены:', filePath);
     } catch (error) {
         console.error('❌ Ошибка при сохранении:', error);
-        try { await fs.unlink(tempPath); } catch {}
+        try { await fs.unlink(tempPath); } catch { }
     }
 }
