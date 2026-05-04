@@ -479,7 +479,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     if (!currentSlot) continue;
 
                     const priceOnAH = getPriceFromItem(currentSlot);
-                    const priceSell = await getPriceByEnchantments(currentSlot, itemPrices);
+                    const priceSell = getSellPriceWithDurability(currentSlot, itemPrices);
 
                     if (priceSell !== priceOnAH || enoughItems) {
                         logger.error(`chnge ${priceSell} ${priceOnAH}`);
