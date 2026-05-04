@@ -189,7 +189,7 @@ function getMaxBuyPriceWithDurability(item, itemPrices) {
     const durabilityPercent = getDurabilityPercent(item);
 
     // Минимальный порог прочности 20%
-    if (durabilityPercent < 0.2) return 0;
+    if (durabilityPercent < 0.5) return 0;
 
     // Цена покупки с учётом прочности (без наценки)
     let price = Math.floor(config.priceSell * durabilityPercent);
