@@ -309,7 +309,7 @@
         "effects": [
             {
                 "name": "minecraft:unbreaking",
-                "lvl": 5
+                "lvl": 3
             },
             {
                 "name": "minecraft:efficiency",
@@ -322,10 +322,6 @@
             {
                 "name": "buldozing",
                 "lvl": 2
-            },
-            {
-                "name": "magnet",
-                "lvl": 1
             }
         ],
         "num": 3,
