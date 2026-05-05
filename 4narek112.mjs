@@ -826,7 +826,7 @@ async function sellItems(bot, itemPrices) {
     bot.chat(anarchyCommand)
     await delay(400)
 
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    const warp = getRandomElement(['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher']);
     bot.chat(`/warp ${warp}`);
     const endSellTime = Date.now() + 8000
 
@@ -1415,7 +1415,7 @@ async function walk(bot) {
     await delay(500);
     bot.autoEat.enableAuto();
 
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    const warp = getRandomElement(['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher']);
     bot.chat(`/warp ${warp}`);
     await delay(8000);
 
