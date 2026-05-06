@@ -473,6 +473,14 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
+                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                    botTimeReset = Date.now();
+                    if (bot.currentWindow?.slots[0]) {
+                        await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
+                        break
+                    }
+                }
+
                 // Проверка цен (оставляем)
                 for (let i = 7; i >= 0; i--) {
                     const currentSlot = bot.currentWindow?.slots[i];
@@ -499,20 +507,9 @@ async function launchBookBuyer(name, password, anarchy) {
 
                 // ← ВОТ ЭТУ ЧАСТЬ ВЕРНУТЬ
 
+                botMenu = analysisAH;
+                await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
-                    botTimeReset = Date.now();
-                    if (!bot.currentWindow?.slots[0]) {
-                        botMenu = analysisAH;
-                        await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
-                        break
-                    }
-                    botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
-                } else {
-                    botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
-                }
                 break;
             case setAH:
                 generateRandomKey(bot);
