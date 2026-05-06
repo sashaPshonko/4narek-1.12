@@ -386,7 +386,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1500), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                     break;
                 }
 
