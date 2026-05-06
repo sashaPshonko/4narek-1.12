@@ -824,7 +824,7 @@ async function sellItems(bot, itemPrices) {
     bot.chat(`/warp ${warp}`);
     const endSellTime = Date.now() + 8000
 
-    const endTime = Date.now() + 3000;
+    const endTime = Date.now() + 4000;
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
