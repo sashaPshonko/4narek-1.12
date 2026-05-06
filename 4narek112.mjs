@@ -504,14 +504,14 @@ async function launchBookBuyer(name, password, anarchy) {
                     botTimeReset = Date.now();
                     if (!bot.currentWindow?.slots[0]) {
                         botMenu = analysisAH;
-                        await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key);
+                        await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                         break
                     }
                     botMenu = setAH;
-                    await safeClickBuy(bot, 52, getRandomDelayInRange(500, 1000), key);
+                    await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
                 } else {
                     botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key);
+                    await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                 }
                 break;
             case setAH:
@@ -519,7 +519,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = analysisAH;
-                await safeClickBuy(bot, 46, getRandomDelayInRange(500, 1000), key);
+                await safeClickBuy(bot, 46, getRandomDelayInRange(1500, 4500), key);
                 break;
 
             case "clan":
