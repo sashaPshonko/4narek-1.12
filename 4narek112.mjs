@@ -501,7 +501,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(500, 900), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(500, 1000) * (slot + 1), key);
                     break;
                 }
 
@@ -812,7 +812,7 @@ async function sellItems(bot, itemPrices) {
     botNeedSell = false;
     needSendAH = true
     if (mu) {
-        await delay(500);
+        await delay(getRandomDelayInRange(700, 1500));
         await safeAH(bot);
         return;
     }
@@ -827,11 +827,11 @@ async function sellItems(bot, itemPrices) {
     const endTime = Date.now() + 4000;
 
     while (Date.now() < endTime) {
+        await delay(getRandomDelayInRange(700, 1500));
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
         bot.setControlState(randomMove, true);
-        await delay(910);
+        await delay(getRandomDelayInRange(700, 1500));
         bot.setControlState(randomMove, false);
-        await delay(120);
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
@@ -842,8 +842,8 @@ async function sellItems(bot, itemPrices) {
         while (Date.now() - botTimeLogin < 13000) await delay(1000);
         botTimeActive = Date.now();
         if (bot.currentWindow) {
+            await delay(getRandomDelayInRange(1000, 1500));
             bot.closeWindow(bot.currentWindow);
-            await delay(getRandomDelayInRange(300, 500));
         }
 
         while (!botAhFull) {
@@ -867,16 +867,16 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     typeSell = getIDByEnchantments(item, itemPrices)
                     if (bot.quickBarSlot !== quickSlot) {
-                        await delay(100, 200)
+                        await delay(500, 1500)
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await delay(100, 200)
+                    await delay(1000, 1500)
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(100, 300));
+                    await delay(getRandomDelayInRange(300, 700));
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else {
-                    await delay(getRandomDelayInRange(200, 500));
+                    await delay(getRandomDelayInRange(500, 1000));
                     await bot.tossStack(item);
                 }
             }
@@ -904,13 +904,13 @@ async function sellItems(bot, itemPrices) {
                             await bot.setQuickBarSlot(freeSlot);
                             await delay(100);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(300, 500));
+                            await delay(getRandomDelayInRange(1000, 1500));
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(100, 400));
+                            await delay(getRandomDelayInRange(300, 700));
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else {
-                            await delay(getRandomDelayInRange(300, 500));
+                            await delay(getRandomDelayInRange(300, 700));
                             await bot.tossStack(item);
                         }
                     }
@@ -935,7 +935,7 @@ async function sellItems(bot, itemPrices) {
             const slotData = bot.inventory.slots[i];
             if (!slotData) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await delay(getRandomDelayInRange(300, 500));
+                await delay(getRandomDelayInRange(500, 1000));
                 await bot.tossStack(slotData);
             }
         }
@@ -945,7 +945,7 @@ async function sellItems(bot, itemPrices) {
         botStartTime = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
-        await delay(getRandomDelayInRange(200, 500));
+        await delay(getRandomDelayInRange(500, 1000));
         while (Date.now() < endSellTime) await delay(100)
 
         if (sellNeedRestart) {
@@ -1406,7 +1406,6 @@ function getRandomElement(array) {
 
 async function walk(bot) {
     await delay(500);
-    bot.autoEat.enableAuto();
 
     const warp = getRandomElement(['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash']);
     bot.chat(`/warp ${warp}`);
@@ -1416,10 +1415,10 @@ async function walk(bot) {
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        await delay(getRandomDelayInRange(500, 1000));
         bot.setControlState(randomMove, true);
-        await delay(600);
+        await delay(getRandomDelayInRange(700, 1500));
         bot.setControlState(randomMove, false);
-        await delay(500);
     }
 
     ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
