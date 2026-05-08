@@ -16,7 +16,7 @@
                 "lvl": 7
             }
         ],
-        "num": 3,
+        "num": 1,
         "nacenka": 300000
     },
     {
@@ -350,30 +350,6 @@
         {
         "name": "netherite_sword",
         "id": "фарм-1.21",
-        "effects": [
-            {
-                "name": "minecraft:unbreaking",
-                "lvl": 4
-            },
-            {
-                "name": "minecraft:fire_aspect",
-                "lvl": 1
-            },
-            {
-                "name": "minecraft:sharpness",
-                "lvl": 7
-            },
-            {
-                "name": "minecraft:looting",
-                "lvl": 5
-            }
-        ],
-        "num": 1,
-        "nacenka": 300000
-    },
-            {
-        "name": "netherite_sword",
-        "id": "фарм7-1.21",
         "effects": [
             {
                 "name": "minecraft:unbreaking",
