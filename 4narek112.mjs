@@ -473,7 +473,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
                     if (bot.currentWindow?.slots[0]) {
                         await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
@@ -637,15 +637,12 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃] У Вас купили')) {
+
             botAhFull = false;
             let balanceStr = messageText;
             balanceStr = balanceStr.replace(/\D/g, '');
             const balance = parseInt(balanceStr);
             const id = getIdBySellPrice(itemPrices, balance);
-            if (!id) {
-                parentPort.postMessage(`Ошибка продажи: не удалось получить id для balance=${balance}`);
-                return;
-            }
             parentPort.postMessage({ name: 'sell', id: id, price: balance });
             botNeedSell = true;
             return;
@@ -659,45 +656,25 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        // ===== Обработка "Не так быстро.." (оставляем как было) =====
-        if (messageText.includes('Не так быстро..')) {
+        if (messageText.includes('Не так быстро..') ||
+            messageText.includes('Данная команда недоступна в режиме AFK') ||
+            messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
+
             await delay(getRandomDelayInRange(500, 700));
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(500, 700));
-            await walk(bot);
+
+            if (messageText.includes('После входа')) {
+                await walk(bot);
+                await delay(10000);
+            } else {
+                await walk(bot);
+            }
+
             botMenu = analysisAH;
             await safeAH(bot);
             return;
         }
-
-        // ===== Обработка режима AFK (команда недоступна в AFK) =====
-        // ===== Обработка режима AFK (команда недоступна в AFK) =====
-if (messageText.includes('Данная команда недоступна в режиме AFK') ||
-    messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
-
-    // Прерываем текущую продажу, если активна
-    if (mu) {
-        mu = false;
-        sellNeedRestart = true;   // заставит sellItems выйти из циклов
-        await delay(500);         // даём время на выход
-    }
-
-    // Закрываем окна
-    if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-    await delay(getRandomDelayInRange(500, 1000));
-
-    // Ходим без варпа (просто двигаемся, чтобы снять AFK)
-    await walkWithoutWarp(bot);
-    await delay(getRandomDelayInRange(500, 1000));
-
-    // Сбрасываем флаги и возвращаемся в нормальный цикл
-    sellNeedRestart = false;
-    mu = false;
-    botNeedSell = true;   // чтобы бот знал, что нужно продавать
-    botMenu = analysisAH; // возвращаемся в анализ аукциона
-    await safeAH(bot);
-    return;
-}
 
         if (messageText.includes('[☃] Не удалось выставить') ||
             messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
@@ -821,16 +798,8 @@ if (messageText.includes('Данная команда недоступна в р
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
 function getIdBySellPrice(itemPrices, val) {
-    if (!Array.isArray(itemPrices)) {
-        parentPort.postMessage(`Ошибка продажи: itemPrices не массив, val=${val}`);
-        return "";
-    }
-    const foundItem = itemPrices.find(item => item?.priceSell % 100 === val % 100);
-    if (!foundItem) {
-        parentPort.postMessage(`Ошибка продажи: не найден item для val=${val}`);
-        return "";
-    }
-    return foundItem.id || "";
+    const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
+    return foundItem ? foundItem.id : "";
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
@@ -845,12 +814,6 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function sellItems(bot, itemPrices) {
-    if (sellNeedRestart) {
-        sellNeedRestart = false;
-        mu = false;
-        logger.info(`${bot.username} - продажа прервана до старта`);
-        return;
-    }
     botNeedSell = false;
     needSendAH = true
     if (mu) {
@@ -858,7 +821,6 @@ async function sellItems(bot, itemPrices) {
         await safeAH(bot);
         return;
     }
-
     mu = true;
     bot.chat(anarchyCommand)
     await delay(400)
@@ -1040,7 +1002,7 @@ async function safeAH(bot) {
     botUpdateWindow = true;
     while (key === botKey) {
         const endTime = Date.now() + 4000;
-        await delay(getRandomDelayInRange(1000, 1500));
+                await delay(getRandomDelayInRange(1000, 1500));
 
         while (Date.now() < endTime) {
             const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
@@ -1489,20 +1451,6 @@ async function safeClickBuy(bot, slot, time, key) {
         botTimeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, 1);
     }
-}
-
-async function walkWithoutWarp(bot) {
-    await delay(500);
-    const duration = getRandomDelayInRange(8000, 12000); // 8-12 секунд
-    const endTime = Date.now() + duration;
-    while (Date.now() < endTime) {
-        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-        await delay(getRandomDelayInRange(500, 1000));
-        bot.setControlState(randomMove, true);
-        await delay(getRandomDelayInRange(700, 1500));
-        bot.setControlState(randomMove, false);
-    }
-    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
 }
 
 async function saveToJsonFile(filePath, data) {
