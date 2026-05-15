@@ -24,3 +24,5 @@ git clone https://github.com/sashaPshonko/4narek-1.12
 # nohup bash scripts/502.sh > bot.log 2>&1 &
 
 # buldak_gribnoi
+
+Отключите VPN и Proxy и повторите попытку входа
