@@ -307,7 +307,7 @@ async function launchBookBuyer(name, password, anarchy) {
         switch (botMenu) {
             case chooseBuying:
                 // saveToJsonFile('666.json', bot.inventory.slots)
-                parentPort.postMessage({ name: 'success', username: workerData.username });
+                // parentPort.postMessage({ name: 'success', username: workerData.username });
                 await delay(3000);
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = setSectionFarmer;
@@ -573,6 +573,11 @@ async function launchBookBuyer(name, password, anarchy) {
     bot.on('message', async (message) => {
         const messageText = message.toString();
         console.log(messageText);
+
+        if (messageText.includes('** Чтобы ваш Аккаунт был в БЕЗОПАСНОСТИ!')) {
+            parentPort.postMessage({ name: 'success', username: workerData.username });
+            return;
+        } //
 
         if (messageText.includes('[☃] Вы успешно купили')) {
             botNeedSell = true;
