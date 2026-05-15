@@ -473,7 +473,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
                     if (bot.currentWindow?.slots[0]) {
                         await safeClickBuy(bot, 52, getRandomDelayInRange(1500, 4500), key);
@@ -656,23 +656,50 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('Не так быстро..') ||
-            messageText.includes('Данная команда недоступна в режиме AFK') ||
-            messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
-
+        // ===== Обработка "Не так быстро.." (оставляем как было) =====
+        if (messageText.includes('Не так быстро..')) {
             await delay(getRandomDelayInRange(500, 700));
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
             await delay(getRandomDelayInRange(500, 700));
-
-            if (messageText.includes('После входа')) {
-                await walk(bot);
-                await delay(10000);
-            } else {
-                await walk(bot);
-            }
-
+            await walk(bot);
             botMenu = analysisAH;
             await safeAH(bot);
+            return;
+        }
+
+        // ===== Обработка режима AFK (команда недоступна в AFK) =====
+        if (messageText.includes('Данная команда недоступна в режиме AFK') ||
+            messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
+
+            // Прерываем текущую продажу, если активна
+            if (mu) {
+                mu = false;
+                sellNeedRestart = true;   // заставит sellItems выйти из циклов
+                await delay(500);         // даём время на выход
+            }
+
+            // Закрываем окна
+            if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+            await delay(getRandomDelayInRange(500, 1000));
+
+            // Ходим без варпа
+            await walkWithoutWarp(bot);
+            sellNeedRestart = false;   // <-- добавить эту строку
+            botNeedSell = true;
+            mu = false;
+            await sellItems(bot, itemPrices);
+            await delay(getRandomDelayInRange(500, 1000));
+
+            // Перезапускаем продажу (не анализ аукциона)
+            botNeedSell = true;
+            mu = false;           // снимаем блокировку
+            if (!sellNeedRestart) {
+                await sellItems(bot, itemPrices);
+            } else {
+                // Если флаг ещё не сбросился, идём через анализ
+                botMenu = analysisAH;
+                await safeAH(bot);
+            }
             return;
         }
 
@@ -1002,7 +1029,7 @@ async function safeAH(bot) {
     botUpdateWindow = true;
     while (key === botKey) {
         const endTime = Date.now() + 4000;
-                await delay(getRandomDelayInRange(1000, 1500));
+        await delay(getRandomDelayInRange(1000, 1500));
 
         while (Date.now() < endTime) {
             const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
@@ -1451,6 +1478,20 @@ async function safeClickBuy(bot, slot, time, key) {
         botTimeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, 1);
     }
+}
+
+async function walkWithoutWarp(bot) {
+    await delay(500);
+    const duration = getRandomDelayInRange(8000, 12000); // 8-12 секунд
+    const endTime = Date.now() + duration;
+    while (Date.now() < endTime) {
+        const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        await delay(getRandomDelayInRange(500, 1000));
+        bot.setControlState(randomMove, true);
+        await delay(getRandomDelayInRange(700, 1500));
+        bot.setControlState(randomMove, false);
+    }
+    ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
 }
 
 async function saveToJsonFile(filePath, data) {
