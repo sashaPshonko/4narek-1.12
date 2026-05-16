@@ -872,11 +872,11 @@ async function sellItems(bot, itemPrices) {
                     }
                     await delay(getRandomDelayInRange(1000, 1500))
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(700, 1000));
+                    await delay(getRandomDelayInRange(1000, 1500));
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else {
-                    await delay(getRandomDelayInRange(700, 1500));
+                    await delay(getRandomDelayInRange(1000, 2000));
                     await bot.tossStack(item);
                 }
             }
@@ -906,11 +906,11 @@ async function sellItems(bot, itemPrices) {
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
                             await delay(getRandomDelayInRange(1000, 1500));
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(700, 1000));
+                            await delay(getRandomDelayInRange(1000, 1500));
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else {
-                            await delay(getRandomDelayInRange(700, 1500));
+                            await delay(getRandomDelayInRange(1000, 2000));
                             await bot.tossStack(item);
                         }
                     }
@@ -935,7 +935,7 @@ async function sellItems(bot, itemPrices) {
             const slotData = bot.inventory.slots[i];
             if (!slotData) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await delay(getRandomDelayInRange(700, 1500));
+                await delay(getRandomDelayInRange(1000, 1500));
                 await bot.tossStack(slotData);
             }
         }
