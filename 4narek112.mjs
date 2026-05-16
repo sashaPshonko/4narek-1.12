@@ -501,7 +501,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, getRandomDelayInRange(500, 1000) * (slot + 1), key);
+                    await safeClickBuy(bot, slot, getRandomDelayInRange(1000, 1500) * (slot + 1), key);
                     break;
                 }
 
