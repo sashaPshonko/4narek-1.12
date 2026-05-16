@@ -20,6 +20,7 @@ npm --version
 echo "Node.js установлен!"
 apt install git -y
 git clone https://github.com/sashaPshonko/4narek-1.12
+cd 4narek-1.12
 
 # nohup bash scripts/509.sh > bot.log 2>&1 &
 
