@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -282,7 +283,13 @@ async function restartBots() {
 
 // ========== TELEGRAM КОМАНДЫ ==========
 async function initTelegram() {
-    tgBot = new TelegramBot(token, { polling: true });
+    const proxyAgent = new SocksProxyAgent('socks5://127.0.0.1:1080');
+        tgBot = new TelegramBot(token, {
+            polling: true,
+            request: {
+                agent: proxyAgent
+            }
+            });
     
     tgBot.onText(/\/update/, async (msg) => {
         if ((Date.now() / 1000) - msg.date > 10) return;

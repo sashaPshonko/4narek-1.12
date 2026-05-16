@@ -1,0 +1,39 @@
+{
+  "inbounds": [
+    {
+      "port": 1080,
+      "protocol": "socks",
+      "settings": { "auth": "no", "udp": true }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "213.139.229.143",
+            "port": 25987,
+            "users": [
+              {
+                "id": "3eeb89a5-ce22-468a-bc31-048e2494cabf",
+                "encryption": "none",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "fingerprint": "chrome",
+          "serverName": "images-na.ssl-images-amazon.com",
+          "publicKey": "8n3UBOAtlSfS7gil_ym5yPiBRZNQTMxMOSkbptogChc",
+          "shortId": "6ba85179e30d4fc2"
+        }
+      }
+    }
+  ]
+}

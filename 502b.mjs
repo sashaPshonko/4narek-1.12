@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
