@@ -83,6 +83,7 @@ let sellAfkAbort = false;
 let afkRecoveryBusy = false;
 let lastAfkRecoveryAt = 0;
 let afkMessageMutedUntil = 0;
+let serverInAfkMode = false;
 let idleWatchBusy = false;
 let botReadySent = false;
 let sellConfirmPrice = 0;
@@ -533,7 +534,13 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.on('message', async (message) => {
         const messageText = message.toString();
-        console.log(messageText);
+        if (!messageText.includes('режиме AFK')) {
+            console.log(messageText);
+        }
+
+        if (messageText.includes('Вы отошли')) {
+            serverInAfkMode = false;
+        }
 
         if (messageText.includes('[☃] Вы успешно купили')) {
             botNeedSell = true;
@@ -643,6 +650,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Данная команда недоступна в режиме AFK')) {
+            serverInAfkMode = true;
             if (afkRecoveryBusy) return;
             if (Date.now() < afkMessageMutedUntil) return;
             if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
@@ -805,7 +813,37 @@ function countTotalItemsInWindow(bot, itemPrices) {
     return totalCount;
 }
 
-async function sellItemOnAh(bot, price) {
+async function waitOutOfAfk(bot, name) {
+    if (!serverInAfkMode) return true;
+
+    if (afkRecoveryBusy) {
+        const deadline = Date.now() + 15000;
+        while (serverInAfkMode && afkRecoveryBusy && Date.now() < deadline) {
+            await delay(200);
+        }
+        return !serverInAfkMode;
+    }
+
+    await walk(bot, false);
+    await rnd(AFK_RECOVERY_WAIT);
+
+    const deadline = Date.now() + 12000;
+    while (serverInAfkMode && Date.now() < deadline) {
+        await delay(200);
+    }
+
+    if (serverInAfkMode) {
+        logger.warn(`${name} - всё ещё AFK после прогулки`);
+        return false;
+    }
+    return true;
+}
+
+async function sellItemOnAh(bot, price, name) {
+    if (serverInAfkMode) {
+        if (!await waitOutOfAfk(bot, name)) return false;
+    }
+
     sellConfirmPrice = price;
     sellAwaitingConfirm = true;
     bot.chat(`/ah sell ${price}`);
@@ -820,7 +858,8 @@ async function sellItemOnAh(bot, price) {
     return true;
 }
 
-async function sellItems(bot, itemPrices) {
+async function sellItems(bot, itemPrices, botName = '') {
+    const name = botName || bot.username;
     botNeedSell = false;
     needSendAH = true
     if (mu) {
@@ -847,6 +886,12 @@ async function sellItems(bot, itemPrices) {
 
     logger.info(`${bot.username} - прогулка завершена`);
 
+    if (!await waitOutOfAfk(bot, name)) {
+        mu = false;
+        botNeedSell = true;
+        return;
+    }
+
     try {
         await waitAnarchyReady();
         touchActivity();
@@ -866,6 +911,11 @@ async function sellItems(bot, itemPrices) {
                 logger.info(`${bot.username} - продажа прервана`);
                 return;
             }
+
+            if (serverInAfkMode) {
+                if (!await waitOutOfAfk(bot, name)) return;
+            }
+
             while (isKrush) await delay(100)
             let soldAnything = false;
 
@@ -884,7 +934,7 @@ async function sellItems(bot, itemPrices) {
                         await bot.setQuickBarSlot(quickSlot);
                     }
                     await rnd(DELAY.CHAT);
-                    if (!await sellItemOnAh(bot, price)) return;
+                    if (!await sellItemOnAh(bot, price, name)) return;
                     soldAnything = true;
                 } else if (isItemMatchingConfig(item, itemPrices)) {
                     await rnd(DELAY.TOSS);
@@ -918,7 +968,7 @@ async function sellItems(bot, itemPrices) {
                             await rnd(DELAY.CHAT);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
                             await rnd(DELAY.CHAT);
-                            if (!await sellItemOnAh(bot, price)) return;
+                            if (!await sellItemOnAh(bot, price, name)) return;
                             soldAnything = true;
                         } else if (isItemMatchingConfig(item, itemPrices)) {
                             await rnd(DELAY.TOSS);
@@ -1061,13 +1111,17 @@ async function antiAfkMovement(bot, durationMs = null) {
 }
 
 async function safeAH(bot) {
-    if (mu || walkInProgress) return;
+    if (mu || walkInProgress || afkRecoveryBusy) return;
     netakbistro = true;
     let key = botKey;
     touchActivity();
     botMenu = analysisAH;
     botUpdateWindow = true;
     while (key === botKey) {
+        if (serverInAfkMode) {
+            await delay(500);
+            continue;
+        }
         await antiAfkMovement(bot, getRandomDelayInRange(2500, 3500));
         await rnd(AH_AFTER_MOVE);
         bot.chat(ahCommand);
@@ -1470,12 +1524,12 @@ function getRandomElement(array) {
 
 async function recoverFromAfk(bot, name) {
     if (afkRecoveryBusy) return;
-    if (Date.now() < afkMessageMutedUntil) return;
     if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
 
     afkRecoveryBusy = true;
     lastAfkRecoveryAt = Date.now();
     afkMessageMutedUntil = Date.now() + AFK_MESSAGE_MUTE_MS;
+    serverInAfkMode = true;
 
     try {
         logger.info(`${name} - AFK, прерываем продажу`);
@@ -1487,15 +1541,19 @@ async function recoverFromAfk(bot, name) {
 
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
         await rnd(DELAY.CHAT);
-        await walk(bot, false);
-        await rnd(AFK_RECOVERY_WAIT);
+
+        if (!await waitOutOfAfk(bot, name)) {
+            logger.error(`${name} - не вышли из AFK, отложим продажу`);
+            botNeedSell = true;
+            return;
+        }
 
         botNeedSell = true;
         botMenu = analysisAH;
         touchActivity();
 
         logger.info(`${name} - AFK recovery: продолжаем продажу`);
-        await sellItems(bot, itemPrices);
+        await sellItems(bot, itemPrices, name);
     } catch (err) {
         logger.error(`${name} - ошибка AFK recovery: ${err.message}`);
     } finally {
