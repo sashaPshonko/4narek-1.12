@@ -1000,17 +1000,18 @@ async function safeAH(bot) {
     botTimeActive = Date.now();
     botMenu = analysisAH;
     botUpdateWindow = true;
+        await delay(getRandomDelayInRange(1000, 2000));
     while (key === botKey) {
-        await delay(1000);
 
         const endTime = Date.now() + 5000;
 
         while (Date.now() < endTime) {
             const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+            await delay(getRandomDelayInRange(1000, 1500));
             bot.setControlState(randomMove, true);
-            await delay(getRandomDelayInRange(500, 1500));
-            bot.setControlState(randomMove, false);
             await delay(getRandomDelayInRange(500, 1000));
+
+            bot.setControlState(randomMove, false);
         }
         ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
         await delay(getRandomDelayInRange(1000, 2000))
@@ -1420,7 +1421,7 @@ async function walk(bot) {
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-        await delay(getRandomDelayInRange(700, 1500));
+        await delay(getRandomDelayInRange(1000, 1500));
         bot.setControlState(randomMove, true);
         await delay(getRandomDelayInRange(700, 1500));
         bot.setControlState(randomMove, false);
