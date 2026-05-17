@@ -309,6 +309,8 @@ async function launchBookBuyer(name, password, anarchy) {
         idleWatchBusy = true;
         (async () => {
             try {
+                if (mu) return;
+
                 logger.info(`${name} - watchdog: нет активности ${Math.floor(idle / 1000)}с`);
                 touchActivity();
                 botMenu = analysisAH;
@@ -341,14 +343,11 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                const needSell = uptime > 55 || botNeedSell;
-                if (needSell && hasSellableItemsInInventory(bot, itemPrices)) {
+                if (uptime > 55 || botNeedSell) {
                     logger.info(`${name} - продажа`);
-                    botNeedSell = false;
                     await sellItems(bot, itemPrices);
                     break;
                 }
-                if (botNeedSell) botNeedSell = false;
 
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
@@ -989,6 +988,8 @@ async function sellItems(bot, itemPrices, botName = '') {
     } finally {
         if (sellAfkAbort) {
             sellAfkAbort = false;
+            botStartTime = Date.now();
+            mu = false;
             logger.info(`${bot.username} - продажа прервана (AFK), safeAH вызовет обработчик`);
             return;
         }
@@ -1012,10 +1013,6 @@ async function sellItems(bot, itemPrices, botName = '') {
 
         bot.chat('/balance');
         await rnd(DELAY.CHAT);
-
-        const pendingSell = botNeedSell;
-        botNeedSell = pendingSell && hasSellableItemsInInventory(bot, itemPrices);
-
         botStartTime = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
@@ -1583,7 +1580,6 @@ async function recoverFromAfk(bot, name) {
 
         botMenu = analysisAH;
         touchActivity();
-        botNeedSell = wasSelling && hasSellableItemsInInventory(bot, itemPrices);
 
         logger.info(`${name} - AFK recovery: возврат к аукциону`);
         afkRecoveryBusy = false;
