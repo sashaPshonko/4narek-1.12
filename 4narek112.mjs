@@ -1410,17 +1410,17 @@ function getRandomElement(array) {
 
 
 async function walk(bot) {
-    await delay(getRandomDelayInRange(1000, 2000));
+    await delay(getRandomDelayInRange(1000, 3000));
 
     const warp = getRandomElement(['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash']);
     bot.chat(`/warp ${warp}`);
     await delay(8000);
 
-    const endTime = Date.now() + 4000;
+    const endTime = Date.now() + getRandomDelayInRange(4000, 7000);
 
     while (Date.now() < endTime) {
         const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-        await delay(getRandomDelayInRange(700, 1500));
+        await delay(getRandomDelayInRange(1000, 1500));
         bot.setControlState(randomMove, true);
         await delay(getRandomDelayInRange(700, 1500));
         bot.setControlState(randomMove, false);
