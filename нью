@@ -539,7 +539,8 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Вы отошли')) {
-            serverInAfkMode = false;
+            onServerAfk(bot, name);
+            return;
         }
 
         if (messageText.includes('[☃] Вы успешно купили')) {
@@ -650,11 +651,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Данная команда недоступна в режиме AFK')) {
-            serverInAfkMode = true;
-            if (afkRecoveryBusy) return;
-            if (Date.now() < afkMessageMutedUntil) return;
-            if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
-            recoverFromAfk(bot, name);
+            onServerAfk(bot, name);
             return;
         }
 
@@ -813,29 +810,28 @@ function countTotalItemsInWindow(bot, itemPrices) {
     return totalCount;
 }
 
+function onServerAfk(bot, name) {
+    serverInAfkMode = true;
+    if (afkRecoveryBusy) return;
+    if (Date.now() < afkMessageMutedUntil) return;
+    if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
+    recoverFromAfk(bot, name);
+}
+
 async function waitOutOfAfk(bot, name) {
     if (!serverInAfkMode) return true;
 
-    if (afkRecoveryBusy) {
+    if (walkInProgress) {
         const deadline = Date.now() + 15000;
-        while (serverInAfkMode && afkRecoveryBusy && Date.now() < deadline) {
+        while (walkInProgress && Date.now() < deadline) {
             await delay(200);
         }
-        return !serverInAfkMode;
+    } else {
+        await walk(bot, false);
+        await rnd(AFK_RECOVERY_WAIT);
     }
 
-    await walk(bot, false);
-    await rnd(AFK_RECOVERY_WAIT);
-
-    const deadline = Date.now() + 12000;
-    while (serverInAfkMode && Date.now() < deadline) {
-        await delay(200);
-    }
-
-    if (serverInAfkMode) {
-        logger.warn(`${name} - всё ещё AFK после прогулки`);
-        return false;
-    }
+    serverInAfkMode = false;
     return true;
 }
 
