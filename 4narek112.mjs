@@ -624,9 +624,10 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('⚡ Наша группа ВК vk.com/funtime')) {
+        if (isAnarchyBroadcastMessage(messageText)) {
             await joinAnarchy(bot);
             await sellItems(bot, itemPrices);
+            return;
         }
 
         if (messageText.includes('Чтобы ваш Аккаунт')) {
@@ -1109,6 +1110,12 @@ function markAnarchyJoin() {
 async function waitAnarchyReady() {
     const remaining = botTimeLogin + ANARCHY_JOIN_WAIT_MS - Date.now();
     if (remaining > 0) await delay(remaining);
+}
+
+function isAnarchyBroadcastMessage(text) {
+    return text.includes('⚡ Наша группа ВК vk.com/funtime')
+        || text.includes('⚡ Наш Телеграм t.me/funtime')
+        || text.includes('⚡ Наш Дискорд dd.FunTime.su');
 }
 
 async function joinAnarchy(bot, force = false) {
