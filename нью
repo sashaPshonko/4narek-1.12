@@ -84,6 +84,7 @@ let afkRecoveryBusy = false;
 let lastAfkRecoveryAt = 0;
 let afkMessageMutedUntil = 0;
 let serverInAfkMode = false;
+let onAnarchy = false;
 let idleWatchBusy = false;
 let botReadySent = false;
 let sellConfirmPrice = 0;
@@ -243,6 +244,7 @@ async function launchBookBuyer(name, password, anarchy) {
         botCount = 0;
         botAh = [];
         botNeedSell = false;
+        onAnarchy = false;
         botStartClickTime = null;
         botUpdateWindow = false;
         botMenu = analysisAH;
@@ -339,11 +341,14 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                if (uptime > 55 || botNeedSell) {
+                const needSell = uptime > 55 || botNeedSell;
+                if (needSell && hasSellableItemsInInventory(bot, itemPrices)) {
                     logger.info(`${name} - продажа`);
+                    botNeedSell = false;
                     await sellItems(bot, itemPrices);
                     break;
                 }
+                if (botNeedSell) botNeedSell = false;
 
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
@@ -593,8 +598,9 @@ async function launchBookBuyer(name, password, anarchy) {
             botPrices = [];
             botCount = 0;
             netakbistro = true;
+            onAnarchy = false;
             await rnd(DELAY.CHAT);
-            await joinAnarchy(bot);
+            await joinAnarchy(bot, true);
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -1006,6 +1012,10 @@ async function sellItems(bot, itemPrices, botName = '') {
 
         bot.chat('/balance');
         await rnd(DELAY.CHAT);
+
+        const pendingSell = botNeedSell;
+        botNeedSell = pendingSell && hasSellableItemsInInventory(bot, itemPrices);
+
         botStartTime = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
@@ -1066,9 +1076,14 @@ async function waitAnarchyReady() {
     if (remaining > 0) await delay(remaining);
 }
 
-async function joinAnarchy(bot) {
+async function joinAnarchy(bot, force = false) {
+    if (!force && onAnarchy) {
+        await waitAnarchyReady();
+        return;
+    }
     bot.chat(anarchyCommand);
     markAnarchyJoin();
+    onAnarchy = true;
     await waitAnarchyReady();
 }
 
@@ -1500,6 +1515,22 @@ function isItemMatchingConfig(item, itemPrices) {
     return findMatchingConfigItem(item, itemPrices) !== null;
 }
 
+function hasSellableItemsInInventory(bot, itemPrices) {
+    for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
+        const item = bot.inventory.slots[firstSellSlot + quickSlot];
+        if (!isSellableItem(item)) continue;
+        if (getBestSellPrice(bot, item, itemPrices) > 0) return true;
+        if (isItemMatchingConfig(item, itemPrices)) return true;
+    }
+    for (let invSlot = 0; invSlot < 27; invSlot++) {
+        const item = bot.inventory.slots[invSlot];
+        if (!isSellableItem(item)) continue;
+        if (getBestSellPrice(bot, item, itemPrices) > 0) return true;
+        if (isItemMatchingConfig(item, itemPrices)) return true;
+    }
+    return false;
+}
+
 function isSellableItem(item) {
     if (!item) return false;
     if (item.name === 'air' || item.type === 0) return false;
@@ -1527,29 +1558,36 @@ async function recoverFromAfk(bot, name) {
     afkMessageMutedUntil = Date.now() + AFK_MESSAGE_MUTE_MS;
     serverInAfkMode = true;
 
+    const wasSelling = mu;
+
     try {
-        logger.info(`${name} - AFK, прерываем продажу`);
+        logger.info(`${name} - AFK, прерываем${wasSelling ? ' продажу' : ''}`);
         generateRandomKey(bot);
-        sellAfkAbort = true;
-        mu = false;
-        sellAwaitingConfirm = false;
-        sellConfirmPrice = 0;
+        if (wasSelling) {
+            sellAfkAbort = true;
+            mu = false;
+            sellAwaitingConfirm = false;
+            sellConfirmPrice = 0;
+        }
 
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
         await rnd(DELAY.CHAT);
 
         if (!await waitOutOfAfk(bot, name)) {
-            logger.error(`${name} - не вышли из AFK, отложим продажу`);
-            botNeedSell = true;
+            logger.error(`${name} - не вышли из AFK`);
+            if (wasSelling && hasSellableItemsInInventory(bot, itemPrices)) {
+                botNeedSell = true;
+            }
             return;
         }
 
-        botNeedSell = true;
         botMenu = analysisAH;
         touchActivity();
+        botNeedSell = wasSelling && hasSellableItemsInInventory(bot, itemPrices);
 
-        logger.info(`${name} - AFK recovery: продолжаем продажу`);
-        await sellItems(bot, itemPrices, name);
+        logger.info(`${name} - AFK recovery: возврат к аукциону`);
+        afkRecoveryBusy = false;
+        await safeAH(bot);
     } catch (err) {
         logger.error(`${name} - ошибка AFK recovery: ${err.message}`);
     } finally {
