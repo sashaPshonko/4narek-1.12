@@ -63,6 +63,7 @@ const MOVE_PAUSE = { min: 300, max: 700 };
 const AH_AFTER_MOVE = { min: 2000, max: 3500 };
 const AH_CMD_WAIT = { min: 1200, max: 1800 };
 const AFK_RECOVERY_WAIT = { min: 3000, max: 5000 };
+const AFK_RECOVERY_COOLDOWN_MS = 12000;
 const IDLE_SOFT_MS = 30000;
 const IDLE_HARD_MS = 120000;
 const MOVE_KEYS = ['forward', 'back', 'left', 'right'];
@@ -78,6 +79,8 @@ const DELAY = {
 let lastWarpTime = 0;
 let walkInProgress = false;
 let sellAfkAbort = false;
+let afkRecoveryBusy = false;
+let lastAfkRecoveryAt = 0;
 let idleWatchBusy = false;
 let botReadySent = false;
 
@@ -276,7 +279,7 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', () => {
-        if (idleWatchBusy || walkInProgress) return;
+        if (idleWatchBusy || walkInProgress || afkRecoveryBusy) return;
 
         const idle = Date.now() - botTimeActive;
 
@@ -627,15 +630,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('Данная команда недоступна в режиме AFK')) {
-            logger.info(`${name} - AFK, прерываем продажу`);
-            sellAfkAbort = true;
-            mu = false;
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(DELAY.CHAT);
-            await walk(bot, false);
-            botNeedSell = true;
-            botMenu = analysisAH;
-            await safeAH(bot);
+            recoverFromAfk(bot, name);
             return;
         }
 
@@ -1442,6 +1437,36 @@ function getRandomElement(array) {
     return array[Math.floor(Math.random() * array.length)];
 }
 
+
+async function recoverFromAfk(bot, name) {
+    if (afkRecoveryBusy) return;
+    if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
+
+    afkRecoveryBusy = true;
+    lastAfkRecoveryAt = Date.now();
+
+    try {
+        logger.info(`${name} - AFK, прерываем продажу`);
+        generateRandomKey(bot);
+        sellAfkAbort = true;
+        mu = false;
+
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+        await rnd(DELAY.CHAT);
+        await walk(bot, false);
+        await rnd(AFK_RECOVERY_WAIT);
+
+        botNeedSell = true;
+        botMenu = analysisAH;
+        touchActivity();
+    } catch (err) {
+        logger.error(`${name} - ошибка AFK recovery: ${err.message}`);
+    } finally {
+        afkRecoveryBusy = false;
+    }
+
+    await safeAH(bot);
+}
 
 async function walk(bot, withWarp = true) {
     if (walkInProgress) return;
