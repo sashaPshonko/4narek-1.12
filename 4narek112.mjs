@@ -632,20 +632,7 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (messageText.includes('слишком дорого') && messageText.includes('ещё раз')) {
-            if (sellConfirmPrice > 0) {
-                await rnd(DELAY.CHAT);
-                bot.chat(`/ah sell ${sellConfirmPrice}`);
-                sellConfirmPrice = 0;
-                sellAwaitingConfirm = false;
-                touchActivity();
-            }
-            return;
-        }
-
         if (messageText.includes('не можете продать') && messageText.includes('Воздух')) {
-            sellAwaitingConfirm = false;
-            sellConfirmPrice = 0;
             return;
         }
 
