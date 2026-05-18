@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import { SocksProxyAgent } from 'socks-proxy-agent';
+import { buildTelegramBotOptions, attachTelegramDiagnostics } from './telegram-proxy.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -283,14 +283,15 @@ async function restartBots() {
 
 // ========== TELEGRAM КОМАНДЫ ==========
 async function initTelegram() {
-    const proxyAgent = new SocksProxyAgent('socks5://127.0.0.1:1080');
-        tgBot = new TelegramBot(token, {
-            polling: true,
-            request: {
-                agent: proxyAgent
-            }
-            });
-    
+    tgBot = new TelegramBot(token, buildTelegramBotOptions());
+    attachTelegramDiagnostics(tgBot);
+
+    try {
+        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 506 запущен');
+    } catch (error) {
+        console.error('[Telegram] не удалось отправить стартовое сообщение:', error.message);
+    }
+
     tgBot.onText(/\/update/, async (msg) => {
         if ((Date.now() / 1000) - msg.date > 10) return;
         await tgBot.sendMessage(alertChatID, '🔄 Обновление, перезапуск...');
