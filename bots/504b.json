@@ -1,23 +1,26 @@
 [
-    {
+  {
     "username": "nahuitakzhit",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek112",
-    "item": "netherite helmet"
+    "item": "netherite helmet",
+    "goType": "netherite_helmet-1.21"
   },
   {
     "username": "depress10n10",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek112",
-    "item": "netherite helmet"
+    "item": "netherite helmet",
+    "goType": "netherite_helmet-1.21"
   },
   {
     "username": "pravdalubludashu",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek112",
-    "item": "netherite helmet"
+    "item": "netherite helmet",
+    "goType": "netherite_helmet-1.21"
   }
 ]

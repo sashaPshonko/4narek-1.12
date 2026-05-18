@@ -1,23 +1,26 @@
 [
-{
+  {
     "username": "zadostal1menya44",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4narek112",
-    "item": "netherite boots"
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21"
   },
   {
     "username": "sk0lkomozhn000",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4narek112",
-    "item": "netherite boots"
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21"
   },
   {
     "username": "opy4tsn00va4",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4narek112",
-    "item": "netherite boots"
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21"
   }
 ]

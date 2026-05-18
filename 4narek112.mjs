@@ -10,6 +10,8 @@ import protodef from 'protodef';
 import zlib from 'zlib';
 
 // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+/** Go-тип бота: покупаем/продаём только предметы с catalog.type === botGoType */
+const botGoType = workerData.goType || null;
 let itemPrices = workerData.itemPrices;
 let itemsBuying = [];
 let needReset = false;
@@ -137,12 +139,17 @@ const forbiddenEnchantsByType = {
     ]
 };
 
-function hasForbiddenEnchant(itemType, allEnchants) {
+function hasForbiddenEnchant(itemType, allEnchants, configEffects = []) {
     const forbiddenList = forbiddenEnchantsByType[itemType];
     if (!forbiddenList || forbiddenList.length === 0) return false;
 
-    return allEnchants.some(enchant => {
-        if (!enchant || !enchant.name) return false;
+    const allowedByConfig = new Set(
+        (configEffects || []).map((e) => e?.name).filter(Boolean)
+    );
+
+    return allEnchants.some((enchant) => {
+        if (!enchant?.name) return false;
+        if (allowedByConfig.has(enchant.name)) return false;
         return forbiddenList.includes(enchant.name);
     });
 }
@@ -1171,7 +1178,7 @@ async function getBestAHSlot(bot, itemPrices) {
             checkMissingEnchants: true
         });
 
-        if (!config) continue;
+        if (!config || !isConfigForBot(config)) continue;
 
         try {
             const price = getPriceFromItem(slotData);
@@ -1383,10 +1390,19 @@ function extractStrings(node, out) {
     }
 }
 
+function isConfigForBot(config) {
+    if (!config) return false;
+    if (!botGoType) return true;
+    return config.type === botGoType;
+}
+
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
 
-    const filteredConfig = itemPrices.filter(config => config.id.endsWith('1.21'));
+    let filteredConfig = itemPrices.filter(config => config.id.endsWith('1.21'));
+    if (botGoType) {
+        filteredConfig = filteredConfig.filter((config) => config.type === botGoType);
+    }
     if (filteredConfig.length === 0) return null;
 
     const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
@@ -1468,7 +1484,7 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
         if (!areEnchantsValid) continue;
 
-        if (hasForbiddenEnchant(item.name, allEnchants)) {
+        if (hasForbiddenEnchant(item.name, allEnchants, configItem.effects)) {
             continue
         }
 

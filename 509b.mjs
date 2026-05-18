@@ -7,19 +7,26 @@ import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
 import { buildTelegramBotOptions, attachTelegramDiagnostics, ensureTelegramProxy } from './telegram-proxy.mjs';
+import {
+    resolveGoType,
+    applyPricesToBots,
+    clearBotPresence,
+    collectFleetTypes,
+    buildPresencePayload,
+} from './orchestrator-shared.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const itemsPath = join(__dirname, 'items.json');
 const botsPath = join(__dirname, './bots/509b.json');
 const token = '8772352337:AAEattTfrJkFrkqes_xLQM-jXDEuCGju4Kc';
 const alertChatID = -1003827870631;
 const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 
 // ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
-let items = [];
+let catalog = [];
+let lastPrices = {};
 let bots = new Map(); // Map<username, botConfig>
 let workers = new Map(); // Map<username, { worker, timeoutId }>
 let botItems = new Map();
@@ -67,9 +74,14 @@ async function loadBotsConfig() {
         
         bots.clear();
         for (const bot of loadedBots) {
+            const goType = resolveGoType(bot);
+            if (!goType) {
+                console.warn(`⚠️ ${bot.username}: нет goType (добавь goType или item в bots.json)`);
+            }
             bots.set(bot.username, {
                 ...bot,
-                itemPrices: items,
+                goType,
+                itemPrices: [],
                 msgID: 0,
                 msgTime: null,
                 isManualStop: false,
@@ -80,33 +92,6 @@ async function loadBotsConfig() {
         console.log(`✅ bots.json загружен (${bots.size} ботов)`);
     } catch (error) {
         await sendAlert(`❌ Ошибка загрузки ${botsPath}: ${error.message}`);
-        process.exit(1);
-    }
-}
-
-async function loadItemsConfig() {
-    try {
-        if (!existsSync(itemsPath)) {
-            await sendAlert(`❌ Файл ${itemsPath} не найден`);
-            process.exit(1);
-        }
-        
-        const itemsJson = await readFile(itemsPath, 'utf-8');
-        try {
-            items = JSON.parse(itemsJson);
-        } catch (e) {
-            await sendAlert(`❌ Ошибка парсинга ${itemsPath}: ${e.message}`);
-            process.exit(1);
-        }
-        
-        if (!Array.isArray(items)) {
-            await sendAlert(`❌ ${itemsPath} должен содержать массив`);
-            process.exit(1);
-        }
-        
-        console.log(`✅ items.json загружен (${items.length} предметов)`);
-    } catch (error) {
-        await sendAlert(`❌ Ошибка загрузки ${itemsPath}: ${error.message}`);
         process.exit(1);
     }
 }
@@ -173,6 +158,7 @@ async function runWorker(bot) {
                         if (botToUpdate) {
                             botToUpdate.success = true;
                             console.log(`✅ ${username} запущен`);
+                            pushPresenceToGo();
                         }
                     } else if (message.name === "buy" || message.name === "sell" || message.name === "try-sell") {
                         if (socket && isSocketOpen) {
@@ -213,12 +199,15 @@ async function runWorker(bot) {
 
             worker.on('error', async (error) => {
                 bot.success = false;
-                // Не отправляем в Telegram, просто логируем в консоль
+                clearBotPresence(username, botItems, botInventory);
+                pushPresenceToGo();
                 await sendAlert(error.message)
             });
 
             worker.on('exit', (code) => {
                 bot.success = false;
+                clearBotPresence(username, botItems, botInventory);
+                pushPresenceToGo();
                 console.warn(`⚠️ ${username} завершился с кодом ${code}`);
                 
                 const workerData = workers.get(username);
@@ -248,26 +237,68 @@ async function stopWorkers() {
         bot.isManualStop = true;
     }
     
+    for (const username of [...workers.keys()]) {
+        clearBotPresence(username, botItems, botInventory);
+    }
     for (const { worker } of workers.values()) {
         try { worker.terminate(); } catch (e) {}
     }
     workers.clear();
+    pushPresenceToGo();
     console.log('✅ Все боты остановлены');
+}
+
+function handleServerPriceMessage(dataObj) {
+    if (Array.isArray(dataObj.catalog) && dataObj.catalog.length > 0) {
+        catalog = dataObj.catalog;
+        console.log(`✅ каталог с Go (${catalog.length} предметов)`);
+    }
+    if (!dataObj.prices) return;
+
+    lastPrices = dataObj.prices;
+    const { anyItems } = applyPricesToBots({
+        catalog,
+        prices: lastPrices,
+        bots,
+        workers,
+        safePostMessage,
+    });
+
+    if (!botsStarted && catalog.length > 0 && anyItems) {
+        botsStarted = true;
+        startBots();
+    }
 }
 
 async function startBots() {
     try {
         await loadBotsConfig();
-        await loadItemsConfig();
-        
+
+        if (catalog.length === 0) {
+            console.log('⏳ ждём каталог от Go-server…');
+            if (socket && isSocketOpen) {
+                socket.send(JSON.stringify({ action: 'info' }));
+            }
+            return;
+        }
+
+        applyPricesToBots({
+            catalog,
+            prices: lastPrices,
+            bots,
+            workers,
+            safePostMessage,
+        });
+
+        sendFleetToGo();
+
         for (const bot of bots.values()) {
-            bot.itemPrices = items;
             await runWorker(bot);
         }
-        
+
         setTimeout(() => {
             if (socket && isSocketOpen) {
-                socket.send(JSON.stringify({ action: "info" }));
+                socket.send(JSON.stringify({ action: 'info' }));
             }
         }, 1000);
     } catch (error) {
@@ -336,6 +367,18 @@ async function initTelegram() {
     console.log('✅ Telegram бот готов');
 }
 
+function sendFleetToGo() {
+    if (!socket || !isSocketOpen) return;
+    const types = collectFleetTypes(bots);
+    socket.send(JSON.stringify({ action: 'fleet', types }));
+    console.log(`[FLEET] → Go: ${types.length ? types.join(', ') : 'пусто'}`);
+}
+
+function pushPresenceToGo() {
+    if (!socket || !isSocketOpen) return;
+    socket.send(JSON.stringify(buildPresencePayload(bots, workers, botItems, botInventory)));
+}
+
 // ========== WEBSOCKET ==========
 function connectWebSocket() {
     if (socket) {
@@ -348,7 +391,8 @@ function connectWebSocket() {
         socket.on('open', () => {
             console.log('✅ WebSocket подключен');
             isSocketOpen = true;
-            socket.send(JSON.stringify({ action: "info" }));
+            sendFleetToGo();
+            socket.send(JSON.stringify({ action: 'info' }));
         });
 
         socket.on('message', async (data) => {
@@ -361,41 +405,7 @@ function connectWebSocket() {
                     }
                     itemsBuying = dataObj.data;
                 } else if (dataObj.prices) {
-                    let freshItems = [];
-                    try {
-                        if (existsSync(itemsPath)) {
-                            const itemsJson = await readFile(itemsPath, 'utf-8');
-                            freshItems = JSON.parse(itemsJson);
-                        } else {
-                            await sendAlert(`❌ ${itemsPath} пропал при обновлении цен`);
-                            process.exit(1);
-                        }
-                    } catch (e) {
-                        await sendAlert(`❌ Ошибка чтения ${itemsPath}: ${e.message}`);
-                        process.exit(1);
-                    }
-                    
-                    const itemsWithPrice = freshItems
-                        .map(item => ({
-                            ...item,
-                            priceSell: dataObj.prices[item.id],
-                        }))
-                        .filter(item => item.priceSell !== undefined);
-                    
-                    items = itemsWithPrice;
-                    
-                    for (const bot of bots.values()) {
-                        bot.itemPrices = items;
-                    }
-                    
-                    for (const [username, _] of workers) {
-                        safePostMessage(username, { type: 'price', data: items });
-                    }
-
-                    if (!botsStarted && items.length > 0) {
-                        botsStarted = true;
-                        startBots();
-                    }
+                    handleServerPriceMessage(dataObj);
                 }
             } catch (e) {
                 await sendAlert(`❌ Ошибка обработки WebSocket сообщения: ${e.message}`);
@@ -421,26 +431,7 @@ function connectWebSocket() {
 setInterval(() => {
     try {
         if (socket && isSocketOpen) {
-            const itemsCount = new Map();
-            const itemsCountInventory = new Map();
-            
-            for (let itemsList of botItems.values()) {
-                for (let item of itemsList) {
-                    itemsCount.set(item, (itemsCount.get(item) || 0) + 1);
-                }
-            }
-            
-            for (let itemsList of botInventory.values()) {
-                for (let item of itemsList) {
-                    itemsCountInventory.set(item, (itemsCountInventory.get(item) || 0) + 1);
-                }
-            }
-            
-            socket.send(JSON.stringify({ 
-                action: "presence", 
-                items: Object.fromEntries(itemsCount),
-                inventory: Object.fromEntries(itemsCountInventory)
-            }));
+            pushPresenceToGo();
         }
     } catch (error) {
         console.error('Presence error:', error.message);
@@ -473,7 +464,6 @@ process.on('uncaughtException', async (error) => {
 // ========== ЗАПУСК ==========
 async function main() {
     await initTelegram();
-    await loadItemsConfig();
     await loadBotsConfig();
     connectWebSocket();
 }

@@ -1,23 +1,26 @@
 [
-{
+  {
     "username": "yaosh1bkably4t",
     "password": "ggggg",
     "anarchy": 508,
     "type": "4narek112",
-    "item": "netherite chestplate"
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21"
   },
-{
+  {
     "username": "skorosk1nusto4no",
     "password": "ggggg",
     "anarchy": 508,
     "type": "4narek112",
-    "item": "netherite chestplate"
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21"
   },
   {
     "username": "ube1temeny4sh4s",
     "password": "ggggg",
     "anarchy": 508,
     "type": "4narek112",
-    "item": "netherite chestplate"
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21"
   }
 ]
