@@ -72,11 +72,14 @@ const TIMING = {
     WARP_WAIT: { min: 7500, max: 9500 },
     AFTER_ANARCHY_CMD: { min: 1500, max: 3500 },
 
-    /** Обычная пауза: чат, продажа, слоты */
-    PAUSE: { min: 1000, max: 2500 },
+    /** Пауза: чат, /ah sell, GUI — как в рабочем */
+    PAUSE: { min: 1000, max: 1500 },
 
-    /** Между 1-й и 2-й командой /ah sell */
-    AH_SELL_REPEAT: { min: 500, max: 1200 },
+    /** Перекладка в хотбар (moveSlotItem) */
+    INVENTORY_MOVE: { min: 1000, max: 1500 },
+
+    /** Смена слота хотбара (setQuickBarSlot) */
+    HOTBAR_SLOT: { min: 500, max: 1000 },
 
     /** Клики по GUI (аукцион, хранилище, ресет) */
     WINDOW: { min: 1500, max: 4500 },
@@ -792,7 +795,7 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.toLowerCase().includes('круш')) {
                 isKrush = true
                 bot.chat(`/ah sell ${finalPrice}`)
-                await rnd(TIMING.AH_SELL_REPEAT);
+                await rnd(TIMING.PAUSE);
                 bot.chat(`/ah sell ${finalPrice}`)
                 isKrush = false
                 return
@@ -884,12 +887,12 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     typeSell = getIDByEnchantments(item, itemPrices);
                     if (bot.quickBarSlot !== quickSlot) {
-                        await rnd(TIMING.PAUSE);
+                        await rnd(TIMING.HOTBAR_SLOT);
                         await bot.setQuickBarSlot(quickSlot);
                     }
                     await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
-                    await rnd(TIMING.AH_SELL_REPEAT);
+                    await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else if (isItemMatchingConfig(item, itemPrices)) {
@@ -917,13 +920,15 @@ async function sellItems(bot, itemPrices) {
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
                             typeSell = getIDByEnchantments(item, itemPrices);
-                            await rnd(TIMING.PAUSE);
-                            await bot.setQuickBarSlot(freeSlot);
-                            await rnd(TIMING.PAUSE);
+                            if (bot.quickBarSlot !== freeSlot) {
+                                await rnd(TIMING.HOTBAR_SLOT);
+                                await bot.setQuickBarSlot(freeSlot);
+                            }
+                            await rnd(TIMING.INVENTORY_MOVE);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
                             await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
-                            await rnd(TIMING.AH_SELL_REPEAT);
+                            await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else if (isItemMatchingConfig(item, itemPrices)) {
