@@ -47,8 +47,10 @@ let botTypeSell = null
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
-        needReset = true;
         itemPrices = data.data;
+        if (hasItemOnAH) {
+            needReset = true;
+        }
     }
     if (data.type === 'items_buying') {
         itemsBuying = data.data;
@@ -365,7 +367,12 @@ async function launchBookBuyer(name, password, anarchy) {
                     botNeedSell = false;
                 }
 
-                if (needReset || enoughItems || resetime * 1000 >= TIMING.STORAGE_RELIST_INTERVAL_MS) {
+                const minuteDue = resetime * 1000 >= TIMING.STORAGE_RELIST_INTERVAL_MS;
+                if (needReset && !hasItemOnAH) {
+                    needReset = false;
+                }
+                const shouldOpenMyItems = enoughItems || (hasItemOnAH && (needReset || minuteDue));
+                if (shouldOpenMyItems) {
                     logger.info(`${name} - ресет (хранилище)`);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
