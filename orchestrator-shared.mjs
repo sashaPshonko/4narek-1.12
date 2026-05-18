@@ -134,3 +134,44 @@ export function applyPricesToBots({ catalog, prices, bots, workers, safePostMess
 
     return { started: anyItems, anyItems };
 }
+
+/** Запуск воркеров после рестарта оркестратора /update, если Go уже прислал цены */
+export async function tryAutoStartBots({
+    reason,
+    workers,
+    isShuttingDown,
+    catalog,
+    prices,
+    bots,
+    safePostMessage,
+    startBots,
+    requestInfo,
+    isPending,
+    setPending,
+}) {
+    if (isShuttingDown) return;
+    if (workers.size > 0) return;
+    if (isPending()) return;
+
+    const { anyItems } = applyPricesToBots({
+        catalog,
+        prices,
+        bots,
+        workers,
+        safePostMessage,
+    });
+
+    if (!catalog?.length || !anyItems) {
+        console.log(`⏳ автозапуск (${reason}): catalog=${catalog?.length ?? 0} anyItems=${anyItems}`);
+        requestInfo?.();
+        return;
+    }
+
+    setPending(true);
+    try {
+        console.log(`🚀 запуск ботов (${reason})`);
+        await startBots();
+    } finally {
+        setPending(false);
+    }
+}

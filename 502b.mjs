@@ -13,6 +13,7 @@ import {
     clearBotPresence,
     collectFleetTypes,
     buildPresencePayload,
+    tryAutoStartBots,
 } from './orchestrator-shared.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,9 +35,9 @@ let botInventory = new Map();
 let itemsBuying = [];
 let socket;
 let isSocketOpen = false;
-let botsStarted = false;
 let tgBot;
 let isShuttingDown = false;
+let autoStartPending = false;
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
 async function sendAlert(message) {
@@ -248,6 +249,28 @@ async function stopWorkers() {
     console.log('✅ Все боты остановлены');
 }
 
+function requestInfoFromGo() {
+    if (socket && isSocketOpen) {
+        socket.send(JSON.stringify({ action: 'info' }));
+    }
+}
+
+function scheduleAutoStart(reason) {
+    void tryAutoStartBots({
+        reason,
+        workers,
+        isShuttingDown,
+        catalog,
+        prices: lastPrices,
+        bots,
+        safePostMessage,
+        startBots,
+        requestInfo: requestInfoFromGo,
+        isPending: () => autoStartPending,
+        setPending: (v) => { autoStartPending = v; },
+    });
+}
+
 function handleServerPriceMessage(dataObj) {
     if (Array.isArray(dataObj.catalog) && dataObj.catalog.length > 0) {
         catalog = dataObj.catalog;
@@ -256,7 +279,7 @@ function handleServerPriceMessage(dataObj) {
     if (!dataObj.prices) return;
 
     lastPrices = dataObj.prices;
-    const { anyItems } = applyPricesToBots({
+    applyPricesToBots({
         catalog,
         prices: lastPrices,
         bots,
@@ -264,10 +287,7 @@ function handleServerPriceMessage(dataObj) {
         safePostMessage,
     });
 
-    if (!botsStarted && catalog.length > 0 && anyItems) {
-        botsStarted = true;
-        startBots();
-    }
+    scheduleAutoStart('ws-prices');
 }
 
 async function startBots() {
@@ -390,7 +410,9 @@ function connectWebSocket() {
             console.log('✅ WebSocket подключен');
             isSocketOpen = true;
             sendFleetToGo();
-            socket.send(JSON.stringify({ action: 'info' }));
+            requestInfoFromGo();
+            setTimeout(() => scheduleAutoStart('open+2s'), 2000);
+            setTimeout(() => scheduleAutoStart('open+5s'), 5000);
         });
 
         socket.on('message', async (data) => {
