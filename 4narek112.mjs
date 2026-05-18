@@ -81,6 +81,9 @@ const TIMING = {
     /** Обычная пауза: чат, продажа, слоты */
     PAUSE: { min: 1000, max: 2500 },
 
+    /** Между 1-й и 2-й командой /ah sell */
+    AH_SELL_REPEAT: { min: 300, max: 600 },
+
     /** Клики по GUI (аукцион, хранилище, ресет) */
     WINDOW: { min: 1500, max: 4500 },
 
@@ -495,9 +498,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    // новые (слот 7) — быстрее, старые (0) — медленнее; старые реже успеют купить
-                    const slotDelayMul = TIMING.STORAGE_AH_SLOTS - slot;
-                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE) * slotDelayMul, key);
+                    await safeClickBuy(bot, slot, storageSlotClickDelayMs(slot), key);
                     break;
                 }
 
@@ -806,7 +807,7 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.includes('круш')) {
                 isKrush = true
                 bot.chat(`/ah sell ${finalPrice}`)
-                await rnd(TIMING.PAUSE);
+                await rnd(TIMING.AH_SELL_REPEAT);
                 bot.chat(`/ah sell ${finalPrice}`)
                 isKrush = false
                 return
@@ -922,7 +923,7 @@ async function sellItems(bot, itemPrices) {
                     }
                     await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
-                    await rnd(TIMING.PAUSE);
+                    await rnd(TIMING.AH_SELL_REPEAT);
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else if (isItemMatchingConfig(item, itemPrices)) {
@@ -956,7 +957,7 @@ async function sellItems(bot, itemPrices) {
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
                             await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
-                            await rnd(TIMING.PAUSE);
+                            await rnd(TIMING.AH_SELL_REPEAT);
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else if (isItemMatchingConfig(item, itemPrices)) {
@@ -1038,6 +1039,15 @@ function getRandomDelayInRange(min, max) {
 
 function delayMs(range) {
     return getRandomDelayInRange(range.min, range.max);
+}
+
+/** Слот 7 — один PAUSE; каждый шаг к 0 — +¼ нового PAUSE. */
+function storageSlotClickDelayMs(slot) {
+    let delay = delayMs(TIMING.PAUSE);
+    for (let s = slot + 1; s < TIMING.STORAGE_AH_SLOTS; s++) {
+        delay += Math.round(delayMs(TIMING.PAUSE) / 4);
+    }
+    return delay;
 }
 
 async function rnd(range) {
