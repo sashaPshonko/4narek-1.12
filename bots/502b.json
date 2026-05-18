@@ -5,7 +5,8 @@
     "anarchy": 502,
     "type": "4narek112",
     "item": "netherite sword",
-    "goType": "netherite_sword-1.21"
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "nenav1zhuzhizn48",
@@ -13,7 +14,8 @@
     "anarchy": 502,
     "type": "4narek112",
     "item": "netherite sword",
-    "goType": "netherite_sword-1.21"
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "h0wtofuckhead5",
@@ -21,6 +23,7 @@
     "anarchy": 502,
     "type": "4narek112",
     "item": "netherite sword",
-    "goType": "netherite_sword-1.21"
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
   }
 ]

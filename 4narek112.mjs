@@ -164,7 +164,9 @@ function hasForbiddenEnchant(itemType, allEnchants, configEffects = []) {
     });
 }
 
-const minBalance = 10000000;
+/** Сколько миллионов оставлять на боте; остальное — в клан (из bots.json, по умолчанию 10) */
+const clanBalanceLimitM = workerData.clanBalanceLimit ?? 10;
+const minBalance = clanBalanceLimitM * 1_000_000;
 
 const leftMouseButton = 0;
 const noShift = 0;
@@ -717,7 +719,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 logger.error('баланс NAN');
                 return;
             }
-            if (balance - minBalance >= 10000000) {
+            if (balance > minBalance) {
                 await rnd(TIMING.PAUSE);
                 bot.chat(`/clan invest ${balance - minBalance}`);
             }

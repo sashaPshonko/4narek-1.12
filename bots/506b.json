@@ -5,7 +5,8 @@
     "anarchy": 506,
     "type": "4narek112",
     "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21"
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "kaknikogda554",
@@ -13,7 +14,8 @@
     "anarchy": 506,
     "type": "4narek112",
     "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21"
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "yauiduz4vtra51",
@@ -21,6 +23,7 @@
     "anarchy": 506,
     "type": "4narek112",
     "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21"
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10
   }
 ]

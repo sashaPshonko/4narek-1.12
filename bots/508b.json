@@ -5,7 +5,8 @@
     "anarchy": 508,
     "type": "4narek112",
     "item": "netherite chestplate",
-    "goType": "netherite_chestplate-1.21"
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "skorosk1nusto4no",
@@ -13,7 +14,8 @@
     "anarchy": 508,
     "type": "4narek112",
     "item": "netherite chestplate",
-    "goType": "netherite_chestplate-1.21"
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "ube1temeny4sh4s",
@@ -21,6 +23,7 @@
     "anarchy": 508,
     "type": "4narek112",
     "item": "netherite chestplate",
-    "goType": "netherite_chestplate-1.21"
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10
   }
 ]

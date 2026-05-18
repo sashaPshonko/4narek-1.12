@@ -5,7 +5,8 @@
     "anarchy": 503,
     "type": "4narek112",
     "item": "netherite boots",
-    "goType": "netherite_boots-1.21"
+    "goType": "netherite_boots-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "sk0lkomozhn000",
@@ -13,7 +14,8 @@
     "anarchy": 503,
     "type": "4narek112",
     "item": "netherite boots",
-    "goType": "netherite_boots-1.21"
+    "goType": "netherite_boots-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "opy4tsn00va4",
@@ -21,6 +23,7 @@
     "anarchy": 503,
     "type": "4narek112",
     "item": "netherite boots",
-    "goType": "netherite_boots-1.21"
+    "goType": "netherite_boots-1.21",
+    "clanBalanceLimit": 10
   }
 ]

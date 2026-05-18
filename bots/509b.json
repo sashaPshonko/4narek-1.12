@@ -5,7 +5,8 @@
     "anarchy": 509,
     "type": "4narek112",
     "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21"
+    "goType": "netherite_leggings-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "spisl4dkod0cha",
@@ -13,7 +14,8 @@
     "anarchy": 509,
     "type": "4narek112",
     "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21"
+    "goType": "netherite_leggings-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "h0wotenid1e",
@@ -21,6 +23,7 @@
     "anarchy": 509,
     "type": "4narek112",
     "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21"
+    "goType": "netherite_leggings-1.21",
+    "clanBalanceLimit": 10
   }
 ]

@@ -5,7 +5,8 @@
     "anarchy": 504,
     "type": "4narek112",
     "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21"
+    "goType": "netherite_helmet-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "depress10n10",
@@ -13,7 +14,8 @@
     "anarchy": 504,
     "type": "4narek112",
     "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21"
+    "goType": "netherite_helmet-1.21",
+    "clanBalanceLimit": 10
   },
   {
     "username": "pravdalubludashu",
@@ -21,6 +23,7 @@
     "anarchy": 504,
     "type": "4narek112",
     "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21"
+    "goType": "netherite_helmet-1.21",
+    "clanBalanceLimit": 10
   }
 ]
