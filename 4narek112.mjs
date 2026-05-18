@@ -458,15 +458,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
-                    botTimeReset = Date.now();
-                    if (bot.currentWindow?.slots[0]) {
-                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
-                        break;
-                    }
-                }
-
-                // Проверка цен (оставляем)
+                // 1) Снятие по слоту — цена не та или переполнено
                 for (let i = TIMING.STORAGE_AH_SLOTS - 1; i >= 0; i--) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) continue;
@@ -490,7 +482,14 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                // ← ВОТ ЭТУ ЧАСТЬ ВЕРНУТЬ
+                // 2) Массовое перевыставление — только если цены ок и не enoughItems
+                if (!enoughItems && Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                    botTimeReset = Date.now();
+                    if (bot.currentWindow?.slots[0]) {
+                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                        break;
+                    }
+                }
 
                 botMenu = analysisAH;
                 await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
