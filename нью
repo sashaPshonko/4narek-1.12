@@ -345,21 +345,21 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
-                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
                 const hasItemsToSell = hasSellableItemsInInventory(bot, itemPrices);
                 const walkDue = Date.now() - lastSellWalkAt >= ANTI_AFK_WALK_INTERVAL_MS;
 
-                if (uptime > 55 || botNeedSell || walkDue) {
-                    if (hasItemsToSell || walkDue) {
-                        if (hasItemsToSell) {
-                            logger.info(`${name} - продажа`);
-                        } else {
-                            logger.info(`${name} - прогулка anti-AFK (${Math.floor((Date.now() - lastSellWalkAt) / 1000)}с без прогулки)`);
-                        }
-                        await sellItems(bot, itemPrices);
-                        break;
+                if (walkDue || (botNeedSell && hasItemsToSell)) {
+                    if (hasItemsToSell) {
+                        logger.info(`${name} - продажа`);
+                    } else {
+                        logger.info(`${name} - прогулка anti-AFK (${Math.floor((Date.now() - lastSellWalkAt) / 1000)}с без прогулки)`);
                     }
-                    if (!walkDue) botNeedSell = false;
+                    await sellItems(bot, itemPrices);
+                    break;
+                }
+
+                if (botNeedSell && !hasItemsToSell) {
+                    botNeedSell = false;
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
@@ -619,8 +619,9 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
-        if (isAnarchyBroadcastMessage(messageText)) {
-            await joinAnarchy(bot);
+        if (isLobbyBroadcastMessage(messageText)) {
+            logger.info(`${name} - лобби, /an`);
+            await joinAnarchy(bot, true);
             await sellItems(bot, itemPrices);
             return;
         }
@@ -863,6 +864,8 @@ async function sellItemOnAh(bot, price, name) {
     sellConfirmPrice = price;
     sellAwaitingConfirm = true;
     bot.chat(`/ah sell ${price}`);
+    await rnd(DELAY.CHAT);
+    bot.chat(`/ah sell ${price}`);
     touchActivity();
 
     const deadline = Date.now() + 6000;
@@ -885,7 +888,7 @@ async function sellItems(bot, itemPrices, botName = '') {
     }
     mu = true;
     sellAfkAbort = false;
-    await joinAnarchy(bot);
+    await joinAnarchy(bot, true);
     await rnd(DELAY.CHAT);
 
     const now = Date.now();
@@ -1100,10 +1103,13 @@ async function waitAnarchyReady() {
     if (remaining > 0) await delay(remaining);
 }
 
-function isAnarchyBroadcastMessage(text) {
+function isLobbyBroadcastMessage(text) {
     return text.includes('⚡ Наша группа ВК vk.com/funtime')
         || text.includes('⚡ Наш Телеграм t.me/funtime')
-        || text.includes('⚡ Наш Дискорд dd.FunTime.su');
+        || text.includes('⚡ Наш Дискорд dd.FunTime.su')
+        || text.includes('⚡ Наш Сайт FunTime.su')
+        || text.includes('⚡ Наши сообщества и соц. сети /links')
+        || text.includes('⚡ Вы играете на FunTime! play.funtime.su');
 }
 
 async function joinAnarchy(bot, force = false) {
