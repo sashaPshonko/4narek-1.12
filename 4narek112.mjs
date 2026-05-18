@@ -54,7 +54,7 @@ parentPort.on('message', (data) => {
 // Тайминги (антиспам / антибан)
 const ANARCHY_JOIN_WAIT_MS = 11000;
 
-const WARPS = ['mine', 'casino', 'case', 'shop'];
+const WARPS = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
 const WARP_COOLDOWN_MS = 55000;
 const WARP_WAIT = { min: 7500, max: 9500 };
 const MOVE_SESSION = { min: 3500, max: 5500 };
@@ -67,14 +67,14 @@ const AFK_RECOVERY_COOLDOWN_MS = 12000;
 const AFK_MESSAGE_MUTE_MS = 30000;
 const IDLE_SOFT_MS = 30000;
 const IDLE_HARD_MS = 120000;
-const ANTI_AFK_WALK_INTERVAL_MS = 120000;
+const ANTI_AFK_WALK_INTERVAL_MS = 55000;
 const MOVE_KEYS = ['forward', 'back', 'left', 'right'];
 
 const DELAY = {
-    TOSS: { min: 1500, max: 3500 },
+    TOSS: { min: 1500, max: 4500 },
     WINDOW: { min: 1500, max: 4500 },
     BUY: { min: 800, max: 1400 },
-    CHAT: { min: 1000, max: 2000 },
+    CHAT: { min: 1000, max: 4500 },
     RTP_TELEPORT: { min: 8000, max: 9500 },
 };
 
@@ -253,7 +253,9 @@ async function launchBookBuyer(name, password, anarchy) {
         await rnd(DELAY.CHAT);
         bot.chat(loginCommand);
         await rnd(DELAY.CHAT);
-        await joinAnarchy(bot);
+        bot.chat(anarchyCommand);
+        markAnarchyJoin();
+        await waitAnarchyReady();
 
         await safeAH(bot);
     });
@@ -318,8 +320,8 @@ async function launchBookBuyer(name, password, anarchy) {
                     if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
                     await rnd(DELAY.CHAT);
                     await antiAfkMovement(bot);
-                    await joinAnarchy(bot);
-                    await rnd(DELAY.CHAT);
+                    bot.chat(anarchyCommand);
+                    await delay(400);
                 }
 
                 await safeAH(bot);
@@ -551,11 +553,6 @@ async function launchBookBuyer(name, password, anarchy) {
             console.log(messageText);
         }
 
-        if (messageText.includes('Вы отошли')) {
-            onServerAfk(bot, name);
-            return;
-        }
-
         if (messageText.includes('[☃] Вы успешно купили')) {
             botNeedSell = true;
             logger.info(`${name} - [LOG] МЫ купили на аукционе, botNeedSell=true`);
@@ -608,7 +605,9 @@ async function launchBookBuyer(name, password, anarchy) {
             botCount = 0;
             netakbistro = true;
             await rnd(DELAY.CHAT);
-            await joinAnarchy(bot);
+            bot.chat(anarchyCommand);
+            markAnarchyJoin();
+            await waitAnarchyReady();
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -688,7 +687,9 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('[⚠] Здесь нет команд!')) {
             await walk(bot);
             touchActivity();
-            await joinAnarchy(bot);
+            bot.chat(anarchyCommand);
+            markAnarchyJoin();
+            await waitAnarchyReady();
             await safeAH(bot);
         }
 
@@ -706,7 +707,9 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[⚠] Данной команды не существует!')) {
-            await joinAnarchy(bot);
+            bot.chat(anarchyCommand);
+            markAnarchyJoin();
+            await waitAnarchyReady();
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -861,8 +864,8 @@ async function sellItems(bot, itemPrices, botName = '') {
     }
     mu = true;
     sellAfkAbort = false;
-    await joinAnarchy(bot);
-    await rnd(DELAY.CHAT);
+    bot.chat(anarchyCommand);
+    await delay(400);
 
     const now = Date.now();
     if (now - lastWarpTime >= WARP_COOLDOWN_MS) {
@@ -946,7 +949,7 @@ async function sellItems(bot, itemPrices, botName = '') {
                 }
 
                 if (freeSlot !== null) {
-                    for (let invSlot = 0; invSlot < 27; invSlot++) {
+                    for (let invSlot = firstInventorySlot; invSlot < firstSellSlot; invSlot++) {
                         if (!mu || sellAfkAbort) break;
                         while (isKrush) await delay(100)
                         if (botAhFull) break;
@@ -1083,12 +1086,6 @@ function isLobbyBroadcastMessage(text) {
         || text.includes('⚡ Наш Сайт FunTime.su')
         || text.includes('⚡ Наши сообщества и соц. сети /links')
         || text.includes('⚡ Вы играете на FunTime! play.funtime.su');
-}
-
-async function joinAnarchy(bot) {
-    bot.chat(anarchyCommand);
-    markAnarchyJoin();
-    await waitAnarchyReady();
 }
 
 async function delay(time) {
@@ -1518,14 +1515,8 @@ function isItemMatchingConfig(item, itemPrices) {
 }
 
 function hasSellableItemsInInventory(bot, itemPrices) {
-    for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
-        const item = bot.inventory.slots[firstSellSlot + quickSlot];
-        if (!isSellableItem(item)) continue;
-        if (getBestSellPrice(bot, item, itemPrices) > 0) return true;
-        if (isItemMatchingConfig(item, itemPrices)) return true;
-    }
-    for (let invSlot = 0; invSlot < 27; invSlot++) {
-        const item = bot.inventory.slots[invSlot];
+    for (let slot = firstInventorySlot; slot <= lastInventorySlot; slot++) {
+        const item = bot.inventory.slots[slot];
         if (!isSellableItem(item)) continue;
         if (getBestSellPrice(bot, item, itemPrices) > 0) return true;
         if (isItemMatchingConfig(item, itemPrices)) return true;
