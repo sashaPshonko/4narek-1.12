@@ -18,8 +18,6 @@ let needReset = false;
 let mu = false
 let netakbistro = true
 let enoughItems = false
-/** Есть ли хотя бы один наш предмет на АХ (слоты 0–4 в «Хранилище») */
-let hasItemOnAH = false
 let isKrush = false
 let needSendAH = true
 let typeSell = ""
@@ -47,10 +45,8 @@ let botTypeSell = null
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
+        needReset = true;
         itemPrices = data.data;
-        if (hasItemOnAH) {
-            needReset = true;
-        }
     }
     if (data.type === 'items_buying') {
         itemsBuying = data.data;
@@ -69,8 +65,6 @@ const TIMING = {
     LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
     MOVE_BURST_MS: 4_000,
     AH_MOVE_BURST_MS: 3_000,
-    /** Интервал перевыставления из хранилища (кнопка слот 52) */
-    STORAGE_RELIST_INTERVAL_MS: 60_000,
     /** Слотов лотов в «Хранилище» (0 — старее, 4 — новее) */
     STORAGE_AH_SLOTS: 5,
 
@@ -372,13 +366,8 @@ async function launchBookBuyer(name, password, anarchy) {
                     botNeedSell = false;
                 }
 
-                const minuteDue = resetime * 1000 >= TIMING.STORAGE_RELIST_INTERVAL_MS;
-                if (needReset && !hasItemOnAH) {
-                    needReset = false;
-                }
-                const shouldOpenMyItems = enoughItems || (hasItemOnAH && (needReset || minuteDue));
-                if (shouldOpenMyItems) {
-                    logger.info(`${name} - ресет (хранилище)`);
+                if (resetime > 60 || needReset || enoughItems) {
+                    logger.info(`${name} - ресет`);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
                     break;
@@ -454,8 +443,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     parentPort.postMessage(msg)
                 }
 
-                hasItemOnAH = scanHasItemOnAH(bot, itemPrices);
-                // как в рабочем: сброс только если в хранилище пусто (слот 0), не по isItemMatchingConfig
                 if (!bot.currentWindow?.slots[0]) {
                     enoughItems = false;
                 }
@@ -465,17 +452,18 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
                 needReset = false;
-                logger.info(`${name} - ${botMenu} (на АХ: ${hasItemOnAH ? 'есть' : 'нет'})`);
+                logger.info(`${name} - ${botMenu}`);
 
                 botCount = 0;
                 botAh = [];
                 let slot = null;
 
-                if (shouldOpenStorageRelist(bot)) {
-                    logger.info(`${name} - перевыставление из хранилища (слот 52)`);
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
-                    await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
-                    break;
+                    if (bot.currentWindow?.slots[0]) {
+                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                        break;
+                    }
                 }
 
                 // Проверка цен (оставляем)
@@ -664,7 +652,6 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
-            hasItemOnAH = true;
             if (botTypeSell) {
                 parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
             }
@@ -675,7 +662,6 @@ async function launchBookBuyer(name, password, anarchy) {
         if (messageText.includes('успешно перевыставлены')) {
             botTimeReset = Date.now();
             enoughItems = false;
-            hasItemOnAH = true;
             return;
         }
 
@@ -824,25 +810,6 @@ async function launchBookBuyer(name, password, anarchy) {
 function getIdBySellPrice(itemPrices, val) {
     const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
     return foundItem ? foundItem.id : "";
-}
-
-function scanHasItemOnAH(bot, itemPrices) {
-    if (!bot.currentWindow?.slots) return false;
-    for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
-        const slotData = bot.currentWindow.slots[i];
-        if (slotData && isItemMatchingConfig(slotData, itemPrices)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-/** Слот 52 — по таймеру, если в хранилище есть лот (слот 0). При enoughItems — только клик по слоту в цикле цен. */
-function shouldOpenStorageRelist(bot) {
-    const elapsed = Date.now() - botTimeReset;
-    return elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS
-        && !enoughItems
-        && Boolean(bot.currentWindow?.slots[0]);
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
