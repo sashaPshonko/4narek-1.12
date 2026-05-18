@@ -22,11 +22,10 @@ apt install git -y
 git clone https://github.com/sashaPshonko/4narek-1.12
 cd 4narek-1.12
 git pull
-bash xray.sh
+chmod +x xray.sh xray-check.sh
+sudo bash xray.sh
 
-# nohup bash scripts/509.sh > bot.log 2>&1 &
-
-# buldak_gribnoi
+nohup bash scripts/509.sh > bot.log 2>&1 &
 
 Отключите VPN и Proxy и повторите попытку входа
 

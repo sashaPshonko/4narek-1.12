@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import TelegramBot from 'node-telegram-bot-api';
 import WebSocket from 'ws';
 import { exec } from 'child_process';
-import { buildTelegramBotOptions, attachTelegramDiagnostics } from './telegram-proxy.mjs';
+import { buildTelegramBotOptions, attachTelegramDiagnostics, ensureTelegramProxy } from './telegram-proxy.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -283,6 +283,7 @@ async function restartBots() {
 
 // ========== TELEGRAM КОМАНДЫ ==========
 async function initTelegram() {
+    await ensureTelegramProxy();
     tgBot = new TelegramBot(token, buildTelegramBotOptions());
     attachTelegramDiagnostics(tgBot);
 
