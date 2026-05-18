@@ -86,7 +86,6 @@ let afkRecoveryBusy = false;
 let lastAfkRecoveryAt = 0;
 let afkMessageMutedUntil = 0;
 let serverInAfkMode = false;
-let onAnarchy = false;
 let idleWatchBusy = false;
 let botReadySent = false;
 
@@ -245,7 +244,6 @@ async function launchBookBuyer(name, password, anarchy) {
         botAh = [];
         botNeedSell = false;
         lastSellWalkAt = Date.now();
-        onAnarchy = false;
         botStartClickTime = null;
         botUpdateWindow = false;
         botMenu = analysisAH;
@@ -609,17 +607,15 @@ async function launchBookBuyer(name, password, anarchy) {
             botPrices = [];
             botCount = 0;
             netakbistro = true;
-            onAnarchy = false;
             await rnd(DELAY.CHAT);
-            await joinAnarchy(bot, true);
+            await joinAnarchy(bot);
             botMenu = analysisAH;
             await safeAH(bot);
             return;
         }
 
         if (isLobbyBroadcastMessage(messageText)) {
-            logger.info(`${name} - лобби, /an`);
-            await joinAnarchy(bot, true);
+            logger.info(`${name} - лобби, продажа`);
             await sellItems(bot, itemPrices);
             return;
         }
@@ -845,20 +841,12 @@ async function sellItemOnAh(bot, price, name) {
     if (serverInAfkMode) {
         if (!await waitOutOfAfk(bot, name)) return false;
     }
+    if (sellAfkAbort || !mu) return false;
 
-    sellConfirmPrice = price;
-    sellAwaitingConfirm = true;
     bot.chat(`/ah sell ${price}`);
     await rnd(DELAY.CHAT);
     bot.chat(`/ah sell ${price}`);
     touchActivity();
-
-    const deadline = Date.now() + 6000;
-    while (sellAwaitingConfirm && Date.now() < deadline) {
-        if (sellAfkAbort || !mu) return false;
-        await delay(100);
-    }
-    sellAwaitingConfirm = false;
     return true;
 }
 
@@ -873,7 +861,7 @@ async function sellItems(bot, itemPrices, botName = '') {
     }
     mu = true;
     sellAfkAbort = false;
-    await joinAnarchy(bot, true);
+    await joinAnarchy(bot);
     await rnd(DELAY.CHAT);
 
     const now = Date.now();
@@ -1097,14 +1085,9 @@ function isLobbyBroadcastMessage(text) {
         || text.includes('⚡ Вы играете на FunTime! play.funtime.su');
 }
 
-async function joinAnarchy(bot, force = false) {
-    if (!force && onAnarchy) {
-        await waitAnarchyReady();
-        return;
-    }
+async function joinAnarchy(bot) {
     bot.chat(anarchyCommand);
     markAnarchyJoin();
-    onAnarchy = true;
     await waitAnarchyReady();
 }
 
@@ -1585,8 +1568,6 @@ async function recoverFromAfk(bot, name) {
         if (wasSelling) {
             sellAfkAbort = true;
             mu = false;
-            sellAwaitingConfirm = false;
-            sellConfirmPrice = 0;
         }
 
         if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
