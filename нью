@@ -276,6 +276,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
     bot.on('kicked', (reason) => {
         console.log(JSON.stringify(`kicked - ${JSON.stringify(reason)}`));
+        parentPort.postMessage({ name: 'kicked', reason: JSON.stringify(reason) });
         process.exit(1);
     });
 
