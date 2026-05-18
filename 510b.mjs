@@ -22,17 +22,9 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** Временно: локально на Mac без VPN — без xray и без Telegram */
-const LOCAL_MODE = false;
-const SKIP_TELEGRAM = LOCAL_MODE;
-if (LOCAL_MODE) {
-    process.env.TELEGRAM_PROXY = 'off';
-    process.env.TELEGRAM_AUTO_XRAY = 'off';
-}
-
 // ========== КОНСТАНТЫ ==========
-const botsPath = join(__dirname, './bots/502b.json');
-const token = '8629785801:AAHppq4_VgcmbDuXdl7nNG2k-kxcf_8fG50';
+const botsPath = join(__dirname, './bots/509b.json');
+const token = '8722518852:AAGhgHQMBZqjNm__onmM_Ac-veB93BYMvNY';
 const alertChatID = -1003827870631;
 const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 
@@ -40,8 +32,8 @@ const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 let catalog = [];
 let lastPrices = {};
 let bots = new Map(); // Map<username, botConfig>
-let workers = new Map(); // Map<username, { worker, timeoutId, restartTimerId? }>
-const pendingRestarts = new Map(); // username -> timeoutId
+let workers = new Map();
+const pendingRestarts = new Map();
 let botItems = new Map();
 let botInventory = new Map();
 let itemsBuying = [];
@@ -236,7 +228,6 @@ async function runWorker(bot) {
 
                 const workerData = workers.get(username);
                 if (workerData?.timeoutId) clearTimeout(workerData.timeoutId);
-                if (workerData?.restartTimerId) clearTimeout(workerData.restartTimerId);
                 workers.delete(username);
 
                 if (!bot.isManualStop && !isShuttingDown) {
@@ -373,16 +364,12 @@ async function restartBots() {
 
 // ========== TELEGRAM КОМАНДЫ ==========
 async function initTelegram() {
-    if (SKIP_TELEGRAM) {
-        console.log('[Telegram] отключён (LOCAL_MODE) — управление только через Go WS');
-        return;
-    }
     await ensureTelegramProxy();
     tgBot = new TelegramBot(token, buildTelegramBotOptions());
     attachTelegramDiagnostics(tgBot);
 
     try {
-        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 502 запущен');
+        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 509 запущен');
     } catch (error) {
         console.error('[Telegram] не удалось отправить стартовое сообщение:', error.message);
     }
@@ -528,9 +515,6 @@ async function main() {
     await initTelegram();
     await loadBotsConfig();
     connectWebSocket();
-    if (SKIP_TELEGRAM) {
-        console.log('📌 Локальный режим: ждём каталог/цены от Go → боты стартуют сами');
-    }
 }
 
 main().catch(async (error) => {

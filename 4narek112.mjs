@@ -53,27 +53,48 @@ parentPort.on('message', (data) => {
     }
 });
 
-// Тайминги (антиспам / антибан)
-const ANARCHY_JOIN_WAIT_MS = 11000;
+// ─── Задержки (менять здесь) ───────────────────────────────────────────────
+const TIMING = {
+    // Долгие (секунды+)
+    IDLE_SOFT_MS: 30_000,
+    IDLE_HARD_MS: 120_000,
+    ANTI_AFK_SELL_WALK_MS: 55_000,
+    ANARCHY_JOIN_WAIT_MS: 11_000,
+    WARP_COOLDOWN_MS: 55_000,
+    WARP_AFTER_SELL_MS: 8_000,
+    LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
+    MOVE_BURST_MS: 4_000,
+    AH_MOVE_BURST_MS: 3_000,
+
+    SPAWN_LOGIN: { min: 0, max: 10_000 },
+    WARP_WAIT: { min: 7500, max: 9500 },
+    AFTER_ANARCHY_CMD: { min: 1500, max: 3500 },
+
+    /** Обычная пауза: чат, продажа, слоты */
+    PAUSE: { min: 1000, max: 2500 },
+
+    /** Клики по GUI (аукцион, хранилище, ресет) */
+    WINDOW: { min: 1500, max: 4500 },
+
+    /** RTP-телепорт */
+    RTP: { min: 8000, max: 9500 },
+
+    /** Быстрый опрос (krush, ожидание варпа) */
+    POLL_MS: 100,
+
+    /** Удержание клавиш при движении */
+    MOVE_KEY_HOLD_MS: 900,
+    MOVE_KEY_PAUSE_MS: 100,
+
+    ANTI_AFK_MOVE: {
+        SESSION: { min: 3500, max: 5500 },
+        HOLD: { min: 400, max: 900 },
+        PAUSE: { min: 300, max: 700 },
+    },
+};
 
 const WARPS = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
-const WARP_COOLDOWN_MS = 55000;
-const WARP_WAIT = { min: 7500, max: 9500 };
-const MOVE_SESSION = { min: 3500, max: 5500 };
-const MOVE_HOLD = { min: 400, max: 900 };
-const MOVE_PAUSE = { min: 300, max: 700 };
-const AH_AFTER_MOVE = { min: 2000, max: 3500 };
-const AH_CMD_WAIT = { min: 1200, max: 1800 };
-const ANTI_AFK_WALK_INTERVAL_MS = 55000;
 const MOVE_KEYS = ['forward', 'back', 'left', 'right'];
-
-const DELAY = {
-    TOSS: { min: 1500, max: 4500 },
-    WINDOW: { min: 1500, max: 4500 },
-    BUY: { min: 800, max: 1400 },
-    CHAT: { min: 1000, max: 4500 },
-    RTP_TELEPORT: { min: 8000, max: 9500 },
-};
 
 let lastWarpTime = 0;
 let lastSellWalkAt = 0;
@@ -214,7 +235,7 @@ function getMaxBuyPriceWithDurability(item, itemPrices) {
 
 async function launchBookBuyer(name, password, anarchy) {
 
-    await delay(getRandomDelayInRange(0, 10000));
+    await rnd(TIMING.SPAWN_LOGIN);
 
     const bot = mineflayer.createBot({
         host: 'mc.funtime.su',
@@ -246,9 +267,9 @@ async function launchBookBuyer(name, password, anarchy) {
         botReadySent = false;
 
         logger.info(`${name} успешно проник на сервер.`);
-        await rnd(DELAY.CHAT);
+        await rnd(TIMING.PAUSE);
         bot.chat(loginCommand);
-        await rnd(DELAY.CHAT);
+        await rnd(TIMING.PAUSE);
         bot.chat(anarchyCommand);
         markAnarchyJoin();
         await waitAnarchyReady();
@@ -284,24 +305,24 @@ async function launchBookBuyer(name, password, anarchy) {
     });
 
     bot.on('physicsTick', async () => {
-        if (Date.now() - botTimeActive > 120000) {
+        if (Date.now() - botTimeActive > TIMING.IDLE_HARD_MS) {
             botTimeActive = Date.now();
             botMenu = analysisAH;
             mu = false;
-            const endTime = Date.now() + 4000;
+            const endTime = Date.now() + TIMING.MOVE_BURST_MS;
             while (Date.now() < endTime) {
                 const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
                 bot.setControlState(randomMove, true);
-                await delay(900);
+                await delay(TIMING.MOVE_KEY_HOLD_MS);
                 bot.setControlState(randomMove, false);
-                await delay(100);
+                await delay(TIMING.MOVE_KEY_PAUSE_MS);
             }
             releaseMovementKeys(bot);
             botTimeLogin = Date.now();
             bot.chat(anarchyCommand);
-            await delay(getRandomDelayInRange(1500, 3500));
+            await rnd(TIMING.AFTER_ANARCHY_CMD);
             await safeAH(bot);
-        } else if (Date.now() - botTimeActive > 30000) {
+        } else if (Date.now() - botTimeActive > TIMING.IDLE_SOFT_MS) {
             botTimeActive = Date.now();
             botMenu = analysisAH;
             mu = false;
@@ -322,7 +343,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const hasItemsToSell = hasSellableItemsInInventory(bot, itemPrices);
-                const walkDue = Date.now() - lastSellWalkAt >= ANTI_AFK_WALK_INTERVAL_MS;
+                const walkDue = Date.now() - lastSellWalkAt >= TIMING.ANTI_AFK_SELL_WALK_MS;
 
                 if (walkDue || (botNeedSell && hasItemsToSell)) {
                     if (hasItemsToSell) {
@@ -341,7 +362,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 if (resetime > 60 || needReset || enoughItems) {
                     logger.info(`${name} - ресет`);
                     botMenu = myItems;
-                    await safeClickBuy(bot, 46, delayMs(DELAY.WINDOW), key);
+                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
                     break;
                 }
 
@@ -359,7 +380,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (bot.currentWindow.slots[0] && bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 31, delayMs(DELAY.WINDOW), key)
+                    await safeClickBuy(bot, 31, delayMs(TIMING.WINDOW), key)
                     break
                 }
 
@@ -369,16 +390,16 @@ async function launchBookBuyer(name, password, anarchy) {
                 switch (slotToBuy) {
                     case null:
                         botMenu = analysisAH;
-                        await safeClickBuy(bot, slotToReloadAH, delayMs(DELAY.WINDOW), key);
+                        await safeClickBuy(bot, slotToReloadAH, delayMs(TIMING.WINDOW), key);
                         break;
                     default:
                         if (netakbistro) {
                             netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 2355, key);
                         } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, delayMs(DELAY.BUY) * (slotToBuy + 2), key);
+                            await safeClickBuy(bot, slotToBuy, delayMs(TIMING.PAUSE) * (slotToBuy + 2), key);
                         } else {
-                            await safeClickBuy(bot, slotToReloadAH, delayMs(DELAY.WINDOW), key);
+                            await safeClickBuy(bot, slotToReloadAH, delayMs(TIMING.WINDOW), key);
                         }
                         break;
                 }
@@ -431,7 +452,7 @@ async function launchBookBuyer(name, password, anarchy) {
                  if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
                     if (bot.currentWindow?.slots[0]) {
-                        await safeClickBuy(bot, 52, delayMs(DELAY.WINDOW), key);
+                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
                         break
                     }
                 }
@@ -456,14 +477,14 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, delayMs(DELAY.BUY) * (slot + 1), key);
+                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE) * (slot + 1), key);
                     break;
                 }
 
                 // ← ВОТ ЭТУ ЧАСТЬ ВЕРНУТЬ
 
                 botMenu = analysisAH;
-                await safeClickBuy(bot, 46, delayMs(DELAY.WINDOW), key);
+                await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
 
                 break;
             case setAH:
@@ -471,7 +492,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 key = botKey;
                 logger.info(`${name} - ${botMenu}`);
                 botMenu = analysisAH;
-                await safeClickBuy(bot, 46, delayMs(DELAY.WINDOW), key);
+                await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
                 break;
 
             case "clan":
@@ -483,25 +504,25 @@ async function launchBookBuyer(name, password, anarchy) {
                     const slot = findFirstMatchingSlotInInventory(bot, itemPrices);
                     if (slot) {
                         logger.info(`${bot.username} добавил`);
-                        await safeClickBuy(bot, slot, delayMs(DELAY.WINDOW), botKey);
+                        await safeClickBuy(bot, slot, delayMs(TIMING.WINDOW), botKey);
                     }
                 } else if (!botAhFull && countItems > 0) {
                     const slot = findFirstMatchingSlotInWindow(bot, itemPrices);
                     if (slot) {
                         logger.info(`${bot.username} забрал`);
                         botNeedSell = true;
-                        await safeClickBuy(bot, slot, delayMs(DELAY.WINDOW), botKey);
+                        await safeClickBuy(bot, slot, delayMs(TIMING.WINDOW), botKey);
                     }
                 }
                 logger.info(`${bot.username} никуда не кликнул`);
-                await rnd(DELAY.CHAT);
+                await rnd(TIMING.PAUSE);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
 
                 break;
 
             case "rtp":
-                await safeClick(bot, 0, delayMs(DELAY.WINDOW));
-                await rnd(DELAY.RTP_TELEPORT);
+                await safeClick(bot, 0, delayMs(TIMING.WINDOW));
+                await rnd(TIMING.RTP);
 
                 // Очищаем инвентарь от мусора
                 for (let i = firstAHSlot; i < lastInventorySlot; i++) {
@@ -514,7 +535,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     if (!slotData) continue;
                     if (!isItemMatchingConfig(slotData, itemPrices)) {
                         await bot.tossStack(slotData);
-                        await rnd(DELAY.TOSS);
+                        await rnd(TIMING.PAUSE);
                     }
                 }
 
@@ -567,7 +588,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            await safeClick(bot, slotToReloadAH, delayMs(DELAY.WINDOW));
+            await safeClick(bot, slotToReloadAH, delayMs(TIMING.WINDOW));
             return;
         }
 
@@ -582,7 +603,7 @@ async function launchBookBuyer(name, password, anarchy) {
             botPrices = [];
             botCount = 0;
             netakbistro = true;
-            await rnd(DELAY.CHAT);
+            await rnd(TIMING.PAUSE);
             bot.chat(anarchyCommand);
             markAnarchyJoin();
             await waitAnarchyReady();
@@ -633,13 +654,13 @@ async function launchBookBuyer(name, password, anarchy) {
             messageText.includes('Данная команда недоступна в режиме AFK') ||
             messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
 
-            await delay(getRandomDelayInRange(500, 700));
+            await rnd(TIMING.PAUSE);
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await delay(getRandomDelayInRange(500, 700));
+            await rnd(TIMING.PAUSE);
 
             if (messageText.includes('После входа')) {
                 await walk(bot);
-                await delay(10000);
+                await delay(TIMING.LOGIN_COOLDOWN_AFTER_WALK_MS);
             } else {
                 await walk(bot);
             }
@@ -668,11 +689,11 @@ async function launchBookBuyer(name, password, anarchy) {
 
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
-            await rnd(DELAY.CHAT);
+            await rnd(TIMING.PAUSE);
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(DELAY.CHAT);
+            await rnd(TIMING.PAUSE);
             bot.chat('/clan withdraw 3000000');
-            await rnd(DELAY.CHAT);
+            await rnd(TIMING.PAUSE);
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -697,7 +718,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 return;
             }
             if (balance - minBalance >= 10000000) {
-                await rnd(DELAY.CHAT);
+                await rnd(TIMING.PAUSE);
                 bot.chat(`/clan invest ${balance - minBalance}`);
             }
             return;
@@ -757,7 +778,7 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.includes('круш')) {
                 isKrush = true
                 bot.chat(`/ah sell ${finalPrice}`)
-                await rnd(DELAY.CHAT);
+                await rnd(TIMING.PAUSE);
                 bot.chat(`/ah sell ${finalPrice}`)
                 isKrush = false
                 return
@@ -791,29 +812,29 @@ async function sellItems(bot, itemPrices) {
     botNeedSell = false;
     needSendAH = true;
     if (mu) {
-        await delay(getRandomDelayInRange(700, 1500));
+        await rnd(TIMING.PAUSE);
         await safeAH(bot);
         return;
     }
     mu = true;
     bot.chat(anarchyCommand);
-    await delay(400);
+    await rnd(TIMING.PAUSE);
 
     let endSellTime = Date.now();
     const now = Date.now();
-    if (now - lastWarpTime >= WARP_COOLDOWN_MS) {
+    if (now - lastWarpTime >= TIMING.WARP_COOLDOWN_MS) {
         lastWarpTime = now;
         bot.chat(`/warp ${getRandomElement(WARPS)}`);
-        endSellTime = Date.now() + 8000;
+        endSellTime = Date.now() + TIMING.WARP_AFTER_SELL_MS;
     }
     lastSellWalkAt = Date.now();
 
-    const endTime = Date.now() + 4000;
+    const endTime = Date.now() + TIMING.MOVE_BURST_MS;
     while (Date.now() < endTime) {
-        await delay(getRandomDelayInRange(700, 1500));
+        await rnd(TIMING.PAUSE);
         const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
         bot.setControlState(randomMove, true);
-        await delay(getRandomDelayInRange(700, 1500));
+        await rnd(TIMING.PAUSE);
         bot.setControlState(randomMove, false);
     }
     releaseMovementKeys(bot);
@@ -824,7 +845,7 @@ async function sellItems(bot, itemPrices) {
         await waitAnarchyReady();
         touchActivity();
         if (bot.currentWindow) {
-            await delay(getRandomDelayInRange(1000, 1500));
+            await rnd(TIMING.PAUSE);
             bot.closeWindow(bot.currentWindow);
         }
 
@@ -835,12 +856,12 @@ async function sellItems(bot, itemPrices) {
                 mu = false;
                 return;
             }
-            while (isKrush) await delay(100);
+            while (isKrush) await delay(TIMING.POLL_MS);
             let soldAnything = false;
 
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
                 if (botAhFull) break;
-                while (isKrush) await delay(100);
+                while (isKrush) await delay(TIMING.POLL_MS);
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
                 if (!isSellableItem(item)) continue;
@@ -849,16 +870,16 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     typeSell = getIDByEnchantments(item, itemPrices);
                     if (bot.quickBarSlot !== quickSlot) {
-                        await delay(getRandomDelayInRange(500, 1500));
+                        await rnd(TIMING.PAUSE);
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await delay(getRandomDelayInRange(1000, 1500));
+                    await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
-                    await delay(getRandomDelayInRange(1000, 1500));
+                    await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else if (isItemMatchingConfig(item, itemPrices)) {
-                    await delay(getRandomDelayInRange(1000, 2000));
+                    await rnd(TIMING.PAUSE);
                     await bot.tossStack(item);
                 }
             }
@@ -874,7 +895,7 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = firstInventorySlot; invSlot < firstSellSlot; invSlot++) {
-                        while (isKrush) await delay(100);
+                        while (isKrush) await delay(TIMING.POLL_MS);
                         if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
                         if (!isSellableItem(item)) continue;
@@ -882,17 +903,17 @@ async function sellItems(bot, itemPrices) {
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
                             typeSell = getIDByEnchantments(item, itemPrices);
-                            await delay(100);
+                            await rnd(TIMING.PAUSE);
                             await bot.setQuickBarSlot(freeSlot);
-                            await delay(100);
+                            await rnd(TIMING.PAUSE);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await delay(getRandomDelayInRange(1000, 1500));
+                            await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
-                            await delay(getRandomDelayInRange(1000, 1500));
+                            await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else if (isItemMatchingConfig(item, itemPrices)) {
-                            await delay(getRandomDelayInRange(1000, 2000));
+                            await rnd(TIMING.PAUSE);
                             await bot.tossStack(item);
                         }
                     }
@@ -906,7 +927,7 @@ async function sellItems(bot, itemPrices) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
-        await delay(300);
+        await rnd(TIMING.PAUSE);
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
             if (sellNeedRestart) {
@@ -917,13 +938,13 @@ async function sellItems(bot, itemPrices) {
             const slotData = bot.inventory.slots[i];
             if (!isSellableItem(slotData)) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await delay(getRandomDelayInRange(1000, 1500));
+                await rnd(TIMING.PAUSE);
                 await bot.tossStack(slotData);
             }
         }
 
         bot.chat('/balance');
-        await delay(500);
+        await rnd(TIMING.PAUSE);
 
         if (!hasSellableItemsInInventory(bot, itemPrices)) {
             botNeedSell = false;
@@ -932,8 +953,8 @@ async function sellItems(bot, itemPrices) {
         botStartTime = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
-        await delay(getRandomDelayInRange(1000, 1500));
-        while (Date.now() < endSellTime) await delay(100);
+        await rnd(TIMING.PAUSE);
+        while (Date.now() < endSellTime) await delay(TIMING.POLL_MS);
 
         if (sellNeedRestart) {
             sellNeedRestart = false;
@@ -985,7 +1006,7 @@ function markAnarchyJoin() {
 }
 
 async function waitAnarchyReady() {
-    const remaining = botTimeLogin + ANARCHY_JOIN_WAIT_MS - Date.now();
+    const remaining = botTimeLogin + TIMING.ANARCHY_JOIN_WAIT_MS - Date.now();
     if (remaining > 0) await delay(remaining);
 }
 
@@ -1015,7 +1036,7 @@ function releaseMovementKeys(bot) {
 }
 
 async function antiAfkMovement(bot, durationMs = null) {
-    const duration = durationMs ?? getRandomDelayInRange(MOVE_SESSION.min, MOVE_SESSION.max);
+    const duration = durationMs ?? delayMs(TIMING.ANTI_AFK_MOVE.SESSION);
     const endTime = Date.now() + duration;
 
     releaseMovementKeys(bot);
@@ -1023,9 +1044,9 @@ async function antiAfkMovement(bot, durationMs = null) {
     while (Date.now() < endTime) {
         const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
         bot.setControlState(randomMove, true);
-        await delay(getRandomDelayInRange(MOVE_HOLD.min, MOVE_HOLD.max));
+        await delay(delayMs(TIMING.ANTI_AFK_MOVE.HOLD));
         bot.setControlState(randomMove, false);
-        await delay(getRandomDelayInRange(MOVE_PAUSE.min, MOVE_PAUSE.max));
+        await delay(delayMs(TIMING.ANTI_AFK_MOVE.PAUSE));
     }
 
     releaseMovementKeys(bot);
@@ -1040,18 +1061,18 @@ async function safeAH(bot) {
     botMenu = analysisAH;
     botUpdateWindow = true;
     while (key === botKey) {
-        const endTime = Date.now() + 3000;
+        const endTime = Date.now() + TIMING.AH_MOVE_BURST_MS;
         while (Date.now() < endTime) {
             const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
             bot.setControlState(randomMove, true);
-            await delay(900);
+            await delay(TIMING.MOVE_KEY_HOLD_MS);
             bot.setControlState(randomMove, false);
-            await delay(100);
+            await delay(TIMING.MOVE_KEY_PAUSE_MS);
         }
         releaseMovementKeys(bot);
-        await delay(getRandomDelayInRange(100, 200));
+        await rnd(TIMING.PAUSE);
         bot.chat(ahCommand);
-        await delay(1000);
+        await rnd(TIMING.PAUSE);
     }
 }
 
@@ -1067,7 +1088,7 @@ async function getAHSlotsIDs(bot, itemPrices) {
 }
 
 async function getBestAHSlot(bot, itemPrices) {
-    // await saveToJsonFile('pizdec.json', bot.currentWindow.slots)
+    // await saveToJsonFile('tal.json', bot.currentWindow.slots)
     // return
     if (!bot.currentWindow?.slots) return null;
 
@@ -1305,6 +1326,22 @@ function isConfigForBot(config) {
     return config.type === botGoType;
 }
 
+function getConfigLoreMatch(config) {
+    return config?.lore_match || config?.loreMatch || '';
+}
+
+function getItemLoreJson(item) {
+    const loreComp = item?.components?.find((c) => c?.type === 'lore');
+    if (!loreComp?.data) return '';
+    return JSON.stringify(loreComp.data);
+}
+
+function loreMatchesConfig(item, config) {
+    const needle = getConfigLoreMatch(config);
+    if (!needle) return true;
+    return getItemLoreJson(item).includes(needle);
+}
+
 function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
     if (!item || !itemPrices?.length) return null;
 
@@ -1385,15 +1422,17 @@ function findMatchingConfigItem(item, itemPrices, options = { checkDurability: t
 
     for (const configItem of sortedConfig) {
         if (item.name !== configItem.name) continue;
+        if (!loreMatchesConfig(item, configItem)) continue;
 
-        const areEnchantsValid = configItem.effects?.every(required => {
+        const requiredEffects = configItem.effects || [];
+        const areEnchantsValid = requiredEffects.every(required => {
             const foundEnchant = allEnchants.find(e => e && e.name === required.name);
             return foundEnchant && foundEnchant.lvl >= required.lvl;
         });
 
         if (!areEnchantsValid) continue;
 
-        if (hasForbiddenEnchant(item.name, allEnchants, configItem.effects)) {
+        if (hasForbiddenEnchant(item.name, allEnchants, requiredEffects)) {
             continue
         }
 
@@ -1470,20 +1509,20 @@ async function walk(bot) {
     walkInProgress = true;
 
     try {
-        await delay(500);
+        await rnd(TIMING.PAUSE);
         const now = Date.now();
-        if (now - lastWarpTime >= WARP_COOLDOWN_MS) {
+        if (now - lastWarpTime >= TIMING.WARP_COOLDOWN_MS) {
             lastWarpTime = now;
             bot.chat(`/warp ${getRandomElement(WARPS)}`);
-            await delay(getRandomDelayInRange(WARP_WAIT.min, WARP_WAIT.max));
+            await rnd(TIMING.WARP_WAIT);
         }
 
-        const endTime = Date.now() + 4000;
+        const endTime = Date.now() + TIMING.MOVE_BURST_MS;
         while (Date.now() < endTime) {
             const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
-            await delay(getRandomDelayInRange(500, 1000));
+            await rnd(TIMING.PAUSE);
             bot.setControlState(randomMove, true);
-            await delay(getRandomDelayInRange(700, 1500));
+            await rnd(TIMING.PAUSE);
             bot.setControlState(randomMove, false);
         }
         releaseMovementKeys(bot);
