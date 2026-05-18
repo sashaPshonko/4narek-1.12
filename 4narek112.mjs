@@ -459,9 +459,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 let slot = null;
 
                 if (shouldOpenStorageRelist()) {
-                    logger.info(`${name} - перевыставление из хранилища (enoughItems=${enoughItems})`);
+                    logger.info(`${name} - перевыставление из хранилища (слот 52)`);
                     botTimeReset = Date.now();
-                    enoughItems = false;
                     await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
                     break;
                 }
@@ -825,9 +824,10 @@ function scanHasItemOnAH(bot, itemPrices) {
     return false;
 }
 
+/** Слот 52 — только по таймеру, если на АХ есть лоты. enoughItems → клик по слоту в цикле цен (снять и продать). */
 function shouldOpenStorageRelist() {
     const elapsed = Date.now() - botTimeReset;
-    return enoughItems || (elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS && hasItemOnAH);
+    return elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS && hasItemOnAH;
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
