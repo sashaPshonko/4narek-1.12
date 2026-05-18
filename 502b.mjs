@@ -14,6 +14,9 @@ import {
     collectFleetTypes,
     buildPresencePayload,
     tryAutoStartBots,
+    shouldRestartWorkerOnExit,
+    getWorkerRestartDelayMs,
+    terminateWorkerEntry,
 } from './orchestrator-shared.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +32,8 @@ const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 let catalog = [];
 let lastPrices = {};
 let bots = new Map(); // Map<username, botConfig>
-let workers = new Map(); // Map<username, { worker, timeoutId }>
+let workers = new Map(); // Map<username, { worker, timeoutId, restartTimerId? }>
+const pendingRestarts = new Map(); // username -> timeoutId
 let botItems = new Map();
 let botInventory = new Map();
 let itemsBuying = [];
@@ -38,6 +42,7 @@ let isSocketOpen = false;
 let tgBot;
 let isShuttingDown = false;
 let autoStartPending = false;
+let startBotsRunning = false;
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
 async function sendAlert(message) {
@@ -115,12 +120,16 @@ function safePostMessage(username, message) {
 
 async function runWorker(bot) {
     const username = bot.username;
-    
-    // Убиваем старый воркер если есть
+
+    const pending = pendingRestarts.get(username);
+    if (pending) {
+        clearTimeout(pending);
+        pendingRestarts.delete(username);
+    }
+
     const existing = workers.get(username);
     if (existing) {
-        if (existing.timeoutId) clearTimeout(existing.timeoutId);
-        try { existing.worker.terminate(); } catch (e) {}
+        await terminateWorkerEntry(existing);
         workers.delete(username);
     }
 
@@ -181,6 +190,8 @@ async function runWorker(bot) {
                         if (socket && isSocketOpen) {
                             socket.send(JSON.stringify({ action: "add", json_data: message.data }));
                         }
+                    } else if (message.name === 'kicked') {
+                        bot.lastKickReason = message.reason || '';
                     } else if (message.name === "set_min_price" || message.name === "set_max_price") {
                         if (socket && isSocketOpen) {
                             socket.send(JSON.stringify({ 
@@ -206,22 +217,29 @@ async function runWorker(bot) {
             });
 
             worker.on('exit', (code) => {
+                if (!shouldRestartWorkerOnExit(username, worker, workers)) {
+                    return;
+                }
+
                 bot.success = false;
                 clearBotPresence(username, botItems, botInventory);
                 pushPresenceToGo();
                 console.warn(`⚠️ ${username} завершился с кодом ${code}`);
-                
+
                 const workerData = workers.get(username);
-                if (workerData && workerData.timeoutId) {
-                    clearTimeout(workerData.timeoutId);
-                }
+                if (workerData?.timeoutId) clearTimeout(workerData.timeoutId);
+                if (workerData?.restartTimerId) clearTimeout(workerData.restartTimerId);
                 workers.delete(username);
-                
+
                 if (!bot.isManualStop && !isShuttingDown) {
-                    setTimeout(() => {
-                        console.log(`🔁 Перезапуск ${username}`);
+                    const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason);
+                    bot.lastKickReason = '';
+                    const restartTimerId = setTimeout(() => {
+                        pendingRestarts.delete(username);
+                        console.log(`🔁 Перезапуск ${username} (через ${delayMs / 1000}с)`);
                         runWorker(bot);
-                    }, 10000);
+                    }, delayMs);
+                    pendingRestarts.set(username, restartTimerId);
                 }
             });
 
@@ -237,6 +255,11 @@ async function stopWorkers() {
     for (const bot of bots.values()) {
         bot.isManualStop = true;
     }
+
+    for (const timerId of pendingRestarts.values()) {
+        clearTimeout(timerId);
+    }
+    pendingRestarts.clear();
     
     for (const username of [...workers.keys()]) {
         clearBotPresence(username, botItems, botInventory);
@@ -268,6 +291,7 @@ function scheduleAutoStart(reason) {
         requestInfo: requestInfoFromGo,
         isPending: () => autoStartPending,
         setPending: (v) => { autoStartPending = v; },
+        isStartBotsRunning: () => startBotsRunning,
     });
 }
 
@@ -291,6 +315,8 @@ function handleServerPriceMessage(dataObj) {
 }
 
 async function startBots() {
+    if (startBotsRunning) return;
+    startBotsRunning = true;
     try {
         await loadBotsConfig();
 
@@ -313,6 +339,9 @@ async function startBots() {
         sendFleetToGo();
 
         for (const bot of bots.values()) {
+            const live = workers.get(bot.username);
+            if (live?.worker) continue;
+            if (pendingRestarts.has(bot.username)) continue;
             await runWorker(bot);
         }
 
@@ -323,6 +352,8 @@ async function startBots() {
         }, 1000);
     } catch (error) {
         await sendAlert(`❌ Ошибка запуска ботов: ${error.message}`);
+    } finally {
+        startBotsRunning = false;
     }
 }
 
@@ -411,8 +442,7 @@ function connectWebSocket() {
             isSocketOpen = true;
             sendFleetToGo();
             requestInfoFromGo();
-            setTimeout(() => scheduleAutoStart('open+2s'), 2000);
-            setTimeout(() => scheduleAutoStart('open+5s'), 5000);
+            setTimeout(() => scheduleAutoStart('open+3s'), 3000);
         });
 
         socket.on('message', async (data) => {

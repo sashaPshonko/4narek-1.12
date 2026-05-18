@@ -136,6 +136,44 @@ export function applyPricesToBots({ catalog, prices, bots, workers, safePostMess
 }
 
 /** Запуск воркеров после рестарта оркестратора /update, если Go уже прислал цены */
+/** true — exit от устаревшего воркера (уже заменили terminate), не перезапускать */
+export function shouldRestartWorkerOnExit(username, worker, workers) {
+    const cur = workers.get(username);
+    return cur?.worker === worker;
+}
+
+export function getWorkerRestartDelayMs(code, kickReason = '') {
+    const s = String(kickReason);
+    if (s.includes('ником уже онлайн') || s.includes('таким-же ником')) {
+        return 45000;
+    }
+    if (code !== 0) {
+        return 15000;
+    }
+    return 10000;
+}
+
+export function terminateWorkerEntry(entry) {
+    if (!entry?.worker) return Promise.resolve();
+    if (entry.timeoutId) clearTimeout(entry.timeoutId);
+    if (entry.restartTimerId) clearTimeout(entry.restartTimerId);
+
+    const w = entry.worker;
+    return new Promise((resolve) => {
+        const timer = setTimeout(resolve, 8000);
+        const done = () => {
+            clearTimeout(timer);
+            resolve();
+        };
+        w.once('exit', done);
+        try {
+            w.terminate();
+        } catch {
+            done();
+        }
+    });
+}
+
 export async function tryAutoStartBots({
     reason,
     workers,
@@ -148,10 +186,12 @@ export async function tryAutoStartBots({
     requestInfo,
     isPending,
     setPending,
+    isStartBotsRunning,
 }) {
     if (isShuttingDown) return;
     if (workers.size > 0) return;
     if (isPending()) return;
+    if (isStartBotsRunning?.()) return;
 
     const { anyItems } = applyPricesToBots({
         catalog,

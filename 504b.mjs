@@ -14,6 +14,9 @@ import {
     collectFleetTypes,
     buildPresencePayload,
     tryAutoStartBots,
+    shouldRestartWorkerOnExit,
+    getWorkerRestartDelayMs,
+    terminateWorkerEntry,
 } from './orchestrator-shared.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,7 +32,8 @@ const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 let catalog = [];
 let lastPrices = {};
 let bots = new Map(); // Map<username, botConfig>
-let workers = new Map(); // Map<username, { worker, timeoutId }>
+let workers = new Map();
+const pendingRestarts = new Map();
 let botItems = new Map();
 let botInventory = new Map();
 let itemsBuying = [];
@@ -38,6 +42,7 @@ let isSocketOpen = false;
 let tgBot;
 let isShuttingDown = false;
 let autoStartPending = false;
+let startBotsRunning = false;
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
 async function sendAlert(message) {
@@ -115,12 +120,16 @@ function safePostMessage(username, message) {
 
 async function runWorker(bot) {
     const username = bot.username;
-    
-    // Убиваем старый воркер если есть
+
+    const pending = pendingRestarts.get(username);
+    if (pending) {
+        clearTimeout(pending);
+        pendingRestarts.delete(username);
+    }
+
     const existing = workers.get(username);
     if (existing) {
-        if (existing.timeoutId) clearTimeout(existing.timeoutId);
-        try { existing.worker.terminate(); } catch (e) {}
+        await terminateWorkerEntry(existing);
         workers.delete(username);
     }
 
