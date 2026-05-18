@@ -71,6 +71,8 @@ const TIMING = {
     AH_MOVE_BURST_MS: 3_000,
     /** Интервал перевыставления из хранилища (кнопка слот 52) */
     STORAGE_RELIST_INTERVAL_MS: 60_000,
+    /** Слотов лотов в «Хранилище» (0 — старее, 7 — новее) */
+    STORAGE_AH_SLOTS: 8,
 
     SPAWN_LOGIN: { min: 0, max: 10_000 },
     WARP_WAIT: { min: 7500, max: 9500 },
@@ -493,7 +495,9 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE) * (slot + 1), key);
+                    // новые (слот 7) — быстрее, старые (0) — медленнее; старые реже успеют купить
+                    const slotDelayMul = TIMING.STORAGE_AH_SLOTS - slot;
+                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE) * slotDelayMul, key);
                     break;
                 }
 
