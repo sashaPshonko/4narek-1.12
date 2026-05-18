@@ -825,7 +825,10 @@ function countTotalItemsInWindow(bot, itemPrices) {
 function onServerAfk(bot, name) {
     serverInAfkMode = true;
     if (afkRecoveryBusy) return;
-    if (Date.now() < afkMessageMutedUntil) return;
+    if (Date.now() < afkMessageMutedUntil) {
+        if (!mu && !walkInProgress) void waitOutOfAfk(bot, name);
+        return;
+    }
     if (Date.now() - lastAfkRecoveryAt < AFK_RECOVERY_COOLDOWN_MS) return;
     recoverFromAfk(bot, name);
 }
@@ -1128,7 +1131,11 @@ async function antiAfkMovement(bot, durationMs = null) {
 }
 
 async function safeAH(bot) {
-    if (mu || walkInProgress || afkRecoveryBusy) return;
+    const name = bot.username;
+    if (mu || walkInProgress || afkRecoveryBusy) {
+        logger.info(`${name} - safeAH пропуск (mu=${mu} walk=${walkInProgress} afk=${afkRecoveryBusy})`);
+        return;
+    }
     netakbistro = true;
     let key = botKey;
     touchActivity();
@@ -1136,7 +1143,7 @@ async function safeAH(bot) {
     botUpdateWindow = true;
     while (key === botKey) {
         if (serverInAfkMode) {
-            await delay(500);
+            await waitOutOfAfk(bot, name);
             continue;
         }
         await antiAfkMovement(bot, getRandomDelayInRange(2500, 3500));
@@ -1586,6 +1593,7 @@ async function recoverFromAfk(bot, name) {
             return;
         }
 
+        serverInAfkMode = false;
         botMenu = analysisAH;
         touchActivity();
 
