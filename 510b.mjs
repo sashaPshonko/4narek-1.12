@@ -23,7 +23,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const botsPath = join(__dirname, './bots/511b.json');
+const botsPath = join(__dirname, './bots/510b.json');
 const token = '8722518852:AAGhgHQMBZqjNm__onmM_Ac-veB93BYMvNY';
 const alertChatID = -1003827870631;
 const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
