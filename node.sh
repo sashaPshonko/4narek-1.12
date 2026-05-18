@@ -25,7 +25,7 @@ git pull
 chmod +x xray.sh xray-check.sh
 sudo bash xray.sh
 
-nohup bash scripts/502.sh > bot.log 2>&1 &
+nohup bash scripts/510.sh > bot.log 2>&1 &
 
 Отключите VPN и Proxy и повторите попытку входа
 
