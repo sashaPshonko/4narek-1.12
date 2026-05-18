@@ -31,6 +31,7 @@ echo "⚙️ Создаём config.json..."
 sudo tee /opt/xray/config.json > /dev/null <<EOF
 {
   "inbounds": [{
+    "listen": "127.0.0.1",
     "port": 1080,
     "protocol": "socks",
     "settings": { "auth": "no", "udp": true }
@@ -62,16 +63,29 @@ sudo tee /opt/xray/config.json > /dev/null <<EOF
 }
 EOF
 
-# Запускаем Xray в фоне (через nohup, лог в /opt/xray/xray.log)
-echo "🚀 Запускаем Xray..."
-sudo nohup /opt/xray/xray run > /opt/xray/xray.log 2>&1 &
-
-# Проверяем, что порт открыт
-sleep 2
-if ss -lnt | grep -q ':1080'; then
-    echo "✅ Xray запущен и слушает порт 1080 (SOCKS5)"
-else
-    echo "⚠️ Внимание: порт 1080 не прослушивается. Проверьте лог: /opt/xray/xray.log"
+# Останавливаем старый процесс, если был
+if pgrep -x xray >/dev/null; then
+    echo "🔄 Останавливаем старый xray..."
+    sudo pkill -x xray || true
+    sleep 1
 fi
 
-echo "✅ Установка завершена. Теперь ваш бот может использовать socks5://127.0.0.1:1080"
+# Запускаем Xray в фоне
+echo "🚀 Запускаем Xray..."
+cd /opt/xray
+sudo nohup /opt/xray/xray run -c /opt/xray/config.json >> /opt/xray/xray.log 2>&1 &
+
+sleep 2
+if ss -lnt | grep -q ':1080'; then
+    echo "✅ Xray слушает 127.0.0.1:1080 (SOCKS5)"
+    if curl -sf --max-time 10 -x socks5h://127.0.0.1:1080 -o /dev/null https://api.telegram.org; then
+        echo "✅ Telegram API доступен через прокси"
+    else
+        echo "⚠️ Порт открыт, но Telegram не отвечает — смотри /opt/xray/xray.log"
+    fi
+else
+    echo "⚠️ Порт 1080 не слушается. Лог: tail -50 /opt/xray/xray.log"
+    exit 1
+fi
+
+echo "✅ Готово. Перезапусти оркестратор (502b / 509b …)"
