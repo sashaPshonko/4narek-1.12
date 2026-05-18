@@ -18,7 +18,7 @@ let needReset = false;
 let mu = false
 let netakbistro = true
 let enoughItems = false
-/** Есть ли хотя бы один наш предмет на АХ (слоты 0–7 в «Хранилище») */
+/** Есть ли хотя бы один наш предмет на АХ (слоты 0–4 в «Хранилище») */
 let hasItemOnAH = false
 let isKrush = false
 let needSendAH = true
@@ -71,8 +71,8 @@ const TIMING = {
     AH_MOVE_BURST_MS: 3_000,
     /** Интервал перевыставления из хранилища (кнопка слот 52) */
     STORAGE_RELIST_INTERVAL_MS: 60_000,
-    /** Слотов лотов в «Хранилище» (0 — старее, 7 — новее) */
-    STORAGE_AH_SLOTS: 8,
+    /** Слотов лотов в «Хранилище» (0 — старее, 4 — новее) */
+    STORAGE_AH_SLOTS: 5,
 
     SPAWN_LOGIN: { min: 0, max: 10_000 },
     WARP_WAIT: { min: 7500, max: 9500 },
@@ -82,7 +82,7 @@ const TIMING = {
     PAUSE: { min: 1000, max: 2500 },
 
     /** Между 1-й и 2-й командой /ah sell */
-    AH_SELL_REPEAT: { min: 300, max: 600 },
+    AH_SELL_REPEAT: { min: 500, max: 1200 },
 
     /** Клики по GUI (аукцион, хранилище, ресет) */
     WINDOW: { min: 1500, max: 4500 },
@@ -428,7 +428,7 @@ async function launchBookBuyer(name, password, anarchy) {
 
                 if (needSendAH) {
                     botAh = []
-                    for (let i = 0; i < 8; i++) {
+                    for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
                         if (currentSlot) {
                             botCount++;
@@ -479,7 +479,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 // Проверка цен (оставляем)
-                for (let i = 7; i >= 0; i--) {
+                for (let i = TIMING.STORAGE_AH_SLOTS - 1; i >= 0; i--) {
                     const currentSlot = bot.currentWindow?.slots[i];
                     if (!currentSlot) continue;
 
@@ -498,7 +498,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, storageSlotClickDelayMs(slot), key);
+                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE), key);
                     break;
                 }
 
@@ -804,7 +804,7 @@ async function launchBookBuyer(name, password, anarchy) {
             }
 
             // ← ДОБАВИТЬ проверку krush
-            if (messageText.includes('круш')) {
+            if (messageText.toLowerCase().includes('круш')) {
                 isKrush = true
                 bot.chat(`/ah sell ${finalPrice}`)
                 await rnd(TIMING.AH_SELL_REPEAT);
@@ -828,7 +828,7 @@ function getIdBySellPrice(itemPrices, val) {
 
 function scanHasItemOnAH(bot, itemPrices) {
     if (!bot.currentWindow?.slots) return false;
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
         const slotData = bot.currentWindow.slots[i];
         if (slotData && isItemMatchingConfig(slotData, itemPrices)) {
             return true;
@@ -1039,15 +1039,6 @@ function getRandomDelayInRange(min, max) {
 
 function delayMs(range) {
     return getRandomDelayInRange(range.min, range.max);
-}
-
-/** Слот 7 — один PAUSE; каждый шаг к 0 — +¼ нового PAUSE. */
-function storageSlotClickDelayMs(slot) {
-    let delay = delayMs(TIMING.PAUSE);
-    for (let s = slot + 1; s < TIMING.STORAGE_AH_SLOTS; s++) {
-        delay += Math.round(delayMs(TIMING.PAUSE) / 4);
-    }
-    return delay;
 }
 
 async function rnd(range) {
