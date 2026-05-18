@@ -328,7 +328,6 @@ async function initTelegram() {
         if ((Date.now() / 1000) - msg.date > 10) return;
         await tgBot.sendMessage(alertChatID, '🔄 Обновление, перезапуск...');
         isShuttingDown = true;
-        await stopWorkers();
         exec('git pull', async (err, stdout) => {
             if (err) {
                 await sendAlert(`❌ Git pull error: ${err.message}`);
@@ -360,7 +359,6 @@ async function initTelegram() {
         if ((Date.now() / 1000) - msg.date > 10) return;
         await tgBot.sendMessage(alertChatID, '🔄 Перезагрузка конфигов, перезапуск...');
         isShuttingDown = true;
-        await stopWorkers();
         process.exit(0);
     });
     
