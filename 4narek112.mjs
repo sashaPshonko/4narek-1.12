@@ -18,6 +18,8 @@ let needReset = false;
 let mu = false
 let netakbistro = true
 let enoughItems = false
+/** Есть ли хотя бы один наш предмет на АХ (слоты 0–7 в «Хранилище») */
+let hasItemOnAH = false
 let isKrush = false
 let needSendAH = true
 let typeSell = ""
@@ -65,6 +67,8 @@ const TIMING = {
     LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
     MOVE_BURST_MS: 4_000,
     AH_MOVE_BURST_MS: 3_000,
+    /** Интервал перевыставления из хранилища (кнопка слот 52) */
+    STORAGE_RELIST_INTERVAL_MS: 60_000,
 
     SPAWN_LOGIN: { min: 0, max: 10_000 },
     WARP_WAIT: { min: 7500, max: 9500 },
@@ -361,8 +365,8 @@ async function launchBookBuyer(name, password, anarchy) {
                     botNeedSell = false;
                 }
 
-                if (resetime > 60 || needReset || enoughItems) {
-                    logger.info(`${name} - ресет`);
+                if (needReset || enoughItems || resetime * 1000 >= TIMING.STORAGE_RELIST_INTERVAL_MS) {
+                    logger.info(`${name} - ресет (хранилище)`);
                     botMenu = myItems;
                     await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
                     break;
@@ -438,25 +442,28 @@ async function launchBookBuyer(name, password, anarchy) {
                     parentPort.postMessage(msg)
                 }
 
-                if (!bot.currentWindow?.slots[0]) enoughItems = false
+                hasItemOnAH = scanHasItemOnAH(bot, itemPrices);
+                if (!hasItemOnAH) {
+                    enoughItems = false;
+                }
                 key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
                     break;
                 }
                 needReset = false;
-                logger.info(`${name} - ${botMenu}`);
+                logger.info(`${name} - ${botMenu} (на АХ: ${hasItemOnAH ? 'есть' : 'нет'})`);
 
                 botCount = 0;
                 botAh = [];
                 let slot = null;
 
-                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                if (shouldOpenStorageRelist()) {
+                    logger.info(`${name} - перевыставление из хранилища (enoughItems=${enoughItems})`);
                     botTimeReset = Date.now();
-                    if (bot.currentWindow?.slots[0]) {
-                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
-                        break
-                    }
+                    enoughItems = false;
+                    await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                    break;
                 }
 
                 // Проверка цен (оставляем)
@@ -645,10 +652,18 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
+            hasItemOnAH = true;
             if (botTypeSell) {
                 parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
             }
             botCount++;
+            return;
+        }
+
+        if (messageText.includes('успешно перевыставлены')) {
+            botTimeReset = Date.now();
+            enoughItems = false;
+            hasItemOnAH = true;
             return;
         }
 
@@ -797,6 +812,22 @@ async function launchBookBuyer(name, password, anarchy) {
 function getIdBySellPrice(itemPrices, val) {
     const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
     return foundItem ? foundItem.id : "";
+}
+
+function scanHasItemOnAH(bot, itemPrices) {
+    if (!bot.currentWindow?.slots) return false;
+    for (let i = 0; i < 8; i++) {
+        const slotData = bot.currentWindow.slots[i];
+        if (slotData && isItemMatchingConfig(slotData, itemPrices)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function shouldOpenStorageRelist() {
+    const elapsed = Date.now() - botTimeReset;
+    return enoughItems || (elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS && hasItemOnAH);
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
