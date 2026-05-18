@@ -450,7 +450,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 hasItemOnAH = scanHasItemOnAH(bot, itemPrices);
-                if (!hasItemOnAH) {
+                // как в рабочем: сброс только если в хранилище пусто (слот 0), не по isItemMatchingConfig
+                if (!bot.currentWindow?.slots[0]) {
                     enoughItems = false;
                 }
                 key = botKey;
@@ -465,7 +466,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (shouldOpenStorageRelist()) {
+                if (shouldOpenStorageRelist(bot)) {
                     logger.info(`${name} - перевыставление из хранилища (слот 52)`);
                     botTimeReset = Date.now();
                     await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
@@ -831,10 +832,12 @@ function scanHasItemOnAH(bot, itemPrices) {
     return false;
 }
 
-/** Слот 52 — только по таймеру, если на АХ есть лоты. enoughItems → клик по слоту в цикле цен (снять и продать). */
-function shouldOpenStorageRelist() {
+/** Слот 52 — по таймеру, если в хранилище есть лот (слот 0). При enoughItems — только клик по слоту в цикле цен. */
+function shouldOpenStorageRelist(bot) {
     const elapsed = Date.now() - botTimeReset;
-    return elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS && hasItemOnAH;
+    return elapsed >= TIMING.STORAGE_RELIST_INTERVAL_MS
+        && !enoughItems
+        && Boolean(bot.currentWindow?.slots[0]);
 }
 
 function countTotalItemsInWindow(bot, itemPrices) {
