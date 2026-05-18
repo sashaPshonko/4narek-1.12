@@ -377,7 +377,6 @@ function connectWebSocket() {
                         .map(item => ({
                             ...item,
                             priceSell: dataObj.prices[item.id],
-                            ratio: dataObj.ratios?.[item.id] || item.ratio || 0.8
                         }))
                         .filter(item => item.priceSell !== undefined);
                     

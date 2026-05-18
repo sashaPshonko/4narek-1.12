@@ -67,6 +67,7 @@ const AFK_RECOVERY_COOLDOWN_MS = 12000;
 const AFK_MESSAGE_MUTE_MS = 30000;
 const IDLE_SOFT_MS = 30000;
 const IDLE_HARD_MS = 120000;
+const ANTI_AFK_WALK_INTERVAL_MS = 120000;
 const MOVE_KEYS = ['forward', 'back', 'left', 'right'];
 
 const DELAY = {
@@ -78,6 +79,7 @@ const DELAY = {
 };
 
 let lastWarpTime = 0;
+let lastSellWalkAt = 0;
 let walkInProgress = false;
 let sellAfkAbort = false;
 let afkRecoveryBusy = false;
@@ -89,9 +91,6 @@ let idleWatchBusy = false;
 let botReadySent = false;
 let sellConfirmPrice = 0;
 let sellAwaitingConfirm = false;
-let lastSellEndedAt = 0;
-let sellFinishing = false;
-const SELL_COOLDOWN_MS = 5000;
 
 const analysisAH = 'Анализ аукциона';
 const myItems = 'Хранилище';
@@ -247,6 +246,7 @@ async function launchBookBuyer(name, password, anarchy) {
         botCount = 0;
         botAh = [];
         botNeedSell = false;
+        lastSellWalkAt = Date.now();
         onAnarchy = false;
         botStartClickTime = null;
         botUpdateWindow = false;
@@ -308,12 +308,11 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (idle < IDLE_SOFT_MS) return;
-        if (sellFinishing || Date.now() - lastSellEndedAt < SELL_COOLDOWN_MS) return;
 
         idleWatchBusy = true;
         (async () => {
             try {
-                if (mu || sellFinishing) return;
+                if (mu) return;
 
                 logger.info(`${name} - watchdog: нет активности ${Math.floor(idle / 1000)}с`);
                 touchActivity();
@@ -347,24 +346,20 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                const msSinceSell = Date.now() - lastSellEndedAt;
-                const pastSellCooldown = msSinceSell > SELL_COOLDOWN_MS;
-                const wantSell = pastSellCooldown && (uptime > 55 || botNeedSell);
-                const hasItems = hasSellableItemsInInventory(bot, itemPrices);
-                if (wantSell) {
-                    if (hasItems) {
-                        const reasons = [];
-                        if (uptime > 55) reasons.push(`uptime=${uptime}s`);
-                        if (botNeedSell) reasons.push('botNeedSell');
-                        logger.info(`${name} - продажа [LOG: ${reasons.join(', ') || '?'}, cooldown=${Math.floor(msSinceSell / 1000)}s, items=да]`);
+                const hasItemsToSell = hasSellableItemsInInventory(bot, itemPrices);
+                const walkDue = Date.now() - lastSellWalkAt >= ANTI_AFK_WALK_INTERVAL_MS;
+
+                if (uptime > 55 || botNeedSell || walkDue) {
+                    if (hasItemsToSell || walkDue) {
+                        if (hasItemsToSell) {
+                            logger.info(`${name} - продажа`);
+                        } else {
+                            logger.info(`${name} - прогулка anti-AFK (${Math.floor((Date.now() - lastSellWalkAt) / 1000)}с без прогулки)`);
+                        }
                         await sellItems(bot, itemPrices);
                         break;
                     }
-                    logger.info(`${name} - [LOG] sell пропущен: botNeedSell=${botNeedSell} uptime=${uptime}s, но в инвентаре нечего выставлять → анализ`);
-                    botNeedSell = false;
-                } else if (botNeedSell || uptime > 55) {
-                    logger.info(`${name} - [LOG] sell отложен: botNeedSell=${botNeedSell} uptime=${uptime}s cooldown=${Math.floor(msSinceSell / 1000)}s/${SELL_COOLDOWN_MS / 1000}s → анализ`);
-                    if (botNeedSell && !pastSellCooldown) botNeedSell = false;
+                    if (!walkDue) botNeedSell = false;
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
@@ -904,6 +899,7 @@ async function sellItems(bot, itemPrices, botName = '') {
     const endSellTime = Date.now() + delayMs(WARP_WAIT);
 
     await antiAfkMovement(bot, getRandomDelayInRange(4500, 6000));
+    lastSellWalkAt = Date.now();
 
     logger.info(`${bot.username} - прогулка завершена`);
 
@@ -1008,15 +1004,12 @@ async function sellItems(bot, itemPrices, botName = '') {
     } finally {
         if (sellAfkAbort) {
             sellAfkAbort = false;
-            sellFinishing = false;
             botStartTime = Date.now();
-            lastSellEndedAt = Date.now();
             mu = false;
             logger.info(`${bot.username} - продажа прервана (AFK), safeAH вызовет обработчик`);
             return;
         }
 
-        sellFinishing = true;
         touchActivity();
         logger.info(`${bot.username} - продажа завершена`);
         await rnd(DELAY.CHAT);
@@ -1048,23 +1041,18 @@ async function sellItems(bot, itemPrices, botName = '') {
         }
 
         botStartTime = Date.now();
-        lastSellEndedAt = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
         await rnd(DELAY.CHAT);
         while (Date.now() < endSellTime) await delay(100)
 
         if (sellNeedRestart) {
-            sellFinishing = false;
             sellNeedRestart = false;
             logger.info(`${bot.username} - выход, перезапуск будет в rtp`);
             return;  // не вызываем safeAH, не меняем botMenu
         }
 
         botMenu = analysisAH;
-        generateRandomKey(bot);
-        sellFinishing = false;
-        touchActivity();
         await safeAH(bot);
     }
 }
@@ -1203,7 +1191,6 @@ async function getBestAHSlot(bot, itemPrices) {
         if (!slotData) continue;
 
         const currentUUID = getItemUUID(slotData);
-        console.log(`uuid - ${currentUUID}`)
 
         if (currentUUID && itemsBuying?.includes(currentUUID)) {
             console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
