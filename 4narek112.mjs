@@ -82,7 +82,7 @@ let lastWarpTime = 0;
 let lastSellWalkAt = 0;
 let walkInProgress = false;
 let sellAfkAbort = false;
-let openingAuction = false;
+let afkHandlerBusy = false;
 let watchdogBusy = false;
 let botReadySent = false;
 
@@ -295,7 +295,7 @@ async function launchBookBuyer(name, password, anarchy) {
     bot.once('spawn', () => {
         if (watchdogTimer) return;
         watchdogTimer = setInterval(() => {
-            if (watchdogBusy || walkInProgress || openingAuction) return;
+            if (watchdogBusy || walkInProgress || afkHandlerBusy) return;
 
             const idle = Date.now() - botTimeActive;
             const sellStuck = mu && idle >= IDLE_HARD_MS;
@@ -318,7 +318,6 @@ async function launchBookBuyer(name, password, anarchy) {
                     } else {
                         logger.info(`${name} - watchdog: простой ${Math.floor(idle / 1000)}с`);
                         generateRandomKey(bot);
-                        openingAuction = false;
                     }
                     botMenu = analysisAH;
                     await safeAH(bot);
@@ -814,23 +813,29 @@ function countTotalItemsInWindow(bot, itemPrices) {
 }
 
 async function handleAfkMessage(bot, name) {
-    logger.info(`${name} - AFK, стоп продажи → аукцион`);
-    sellAfkAbort = true;
-    mu = false;
-    generateRandomKey(bot);
-    openingAuction = false;
+    if (afkHandlerBusy) return;
+    afkHandlerBusy = true;
 
-    if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-    await rnd(DELAY.CHAT);
-    await walk(bot, false);
+    try {
+        logger.info(`${name} - AFK, стоп продажи → аукцион`);
+        sellAfkAbort = true;
+        mu = false;
+        generateRandomKey(bot);
 
-    if (hasSellableItemsInInventory(bot, itemPrices)) {
-        botNeedSell = true;
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+        await rnd(DELAY.CHAT);
+        await walk(bot, false);
+
+        if (hasSellableItemsInInventory(bot, itemPrices)) {
+            botNeedSell = true;
+        }
+
+        botMenu = analysisAH;
+        touchActivity();
+        await safeAH(bot);
+    } finally {
+        afkHandlerBusy = false;
     }
-
-    botMenu = analysisAH;
-    touchActivity();
-    await safeAH(bot);
 }
 
 async function sellItemOnAh(bot, price, name) {
@@ -854,6 +859,7 @@ async function sellItems(bot, itemPrices, botName = '') {
     }
     mu = true;
     sellAfkAbort = false;
+    generateRandomKey(bot);
     bot.chat(anarchyCommand);
     await delay(400);
 
@@ -1009,6 +1015,7 @@ async function sellItems(bot, itemPrices, botName = '') {
             return;  // не вызываем safeAH, не меняем botMenu
         }
 
+        generateRandomKey(bot);
         botMenu = analysisAH;
         await safeAH(bot);
     }
@@ -1102,24 +1109,19 @@ async function antiAfkMovement(bot, durationMs = null) {
 
 async function safeAH(bot) {
     if (mu) return;
-    if (openingAuction) return;
 
-    openingAuction = true;
-    try {
-        netakbistro = true;
-        const key = botKey;
-        touchActivity();
-        botMenu = analysisAH;
-        botUpdateWindow = true;
+    netakbistro = true;
+    const key = botKey;
+    touchActivity();
+    botMenu = analysisAH;
+    botUpdateWindow = true;
 
-        while (key === botKey) {
-            await antiAfkMovement(bot, getRandomDelayInRange(2500, 3500));
-            await rnd(AH_AFTER_MOVE);
-            bot.chat(ahCommand);
-            await rnd(AH_CMD_WAIT);
-        }
-    } finally {
-        openingAuction = false;
+    while (key === botKey) {
+        if (mu) break;
+        await antiAfkMovement(bot, getRandomDelayInRange(2500, 3500));
+        await rnd(AH_AFTER_MOVE);
+        bot.chat(ahCommand);
+        await rnd(AH_CMD_WAIT);
     }
 }
 
