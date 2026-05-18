@@ -867,15 +867,13 @@ async function sellItems(bot, itemPrices, botName = '') {
     bot.chat(anarchyCommand);
     await delay(400);
 
+    let endSellTime = Date.now();
     const now = Date.now();
     if (now - lastWarpTime >= WARP_COOLDOWN_MS) {
         lastWarpTime = now;
-        const warp = getRandomElement(WARPS);
-        bot.chat(`/warp ${warp}`);
-        await rnd(WARP_WAIT);
+        bot.chat(`/warp ${getRandomElement(WARPS)}`);
+        endSellTime = Date.now() + 8000;
     }
-
-    const endSellTime = Date.now() + delayMs(WARP_WAIT);
 
     await antiAfkMovement(bot, getRandomDelayInRange(4500, 6000));
     lastSellWalkAt = Date.now();
