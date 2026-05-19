@@ -434,14 +434,10 @@ async function launchBookBuyer(name, password, anarchy) {
                 const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
 
                 const hasItemsToSell = hasSellableItemsInInventory(bot, itemPrices);
-                const walkDue = Date.now() - lastSellWalkAt >= TIMING.ANTI_AFK_SELL_WALK_MS;
+                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
 
-                if (walkDue || (botNeedSell && hasItemsToSell)) {
-                    if (hasItemsToSell) {
-                        logger.info(`${name} - продажа`);
-                    } else {
-                        logger.info(`${name} - прогулка anti-AFK (${Math.floor((Date.now() - lastSellWalkAt) / 1000)}с без прогулки)`);
-                    }
+                if (uptime > 55 || (botNeedSell && hasItemsToSell)) {
+                    logger.info(`${name} - продажа`);
                     await sellItems(bot, itemPrices);
                     break;
                 }
@@ -451,10 +447,16 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
-                    logger.info(`${name} - ресет (хранилище)`);
-                    needReset = false;
-                    botMenu = myItems;
-                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                    if (!hasLotsOnAH && !enoughItems) {
+                        logger.info(`${name} - на АХ нет лотов, пропуск хранилища`);
+                        needReset = false;
+                        if (resetime > 60) botTimeReset = Date.now();
+                    } else {
+                        logger.info(`${name} - ресет (хранилище)`);
+                        needReset = false;
+                        botMenu = myItems;
+                        await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                    }
                     break;
                 }
 
@@ -508,7 +510,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     break;
                 }
 
-                if (needSendAH) {
+                 if (needSendAH) {
                     botAh = []
                     for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
