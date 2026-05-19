@@ -27,9 +27,9 @@ let sellNeedRestart = false
 let currentSellItem = null; // временный предмет для продажи
 let pendingSellPrice = null
 
-/** Мин. цена лота на АХ за 5 мин (матч по конфигу, дороже порога покупки, полная прочность) */
+/** Мин. цена лота на АХ за 10 мин (матч по конфигу, дороже порога покупки, полная прочность) */
 const ahMarketFloors = new Map();
-const AH_MARKET_FLOOR_MS = 5 * 60 * 1000;
+const AH_MARKET_FLOOR_MS = 10 * 60 * 1000;
 let ahMarketFloorTimer = null;
 
 // Глобальные переменные для состояния бота

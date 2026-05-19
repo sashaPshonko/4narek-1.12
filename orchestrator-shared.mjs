@@ -262,27 +262,36 @@ export function terminateWorkerEntry(entry) {
     });
 }
 
-/** Агрегация минимальных цен лотов с АХ от воркеров → Go раз в intervalMs */
-export function createMarketFloorTracker({ intervalMs = 5 * 60 * 1000, onFlush }) {
+/** Агрегация мин. цен лотов с АХ от воркеров → Go раз в intervalMs (по умолчанию 10 мин) */
+export function createMarketFloorTracker({ intervalMs = 10 * 60 * 1000, onFlush }) {
     const agg = new Map();
     let timer = null;
+    let gotDataThisWindow = false;
 
     return {
         mergeFromWorker(floors) {
             if (!floors || typeof floors !== 'object') return;
+            let merged = false;
             for (const [id, price] of Object.entries(floors)) {
                 const p = Number(price);
                 if (!p || p <= 0) continue;
+                merged = true;
                 const prev = agg.get(id);
                 if (prev === undefined || p < prev) agg.set(id, p);
             }
+            if (merged) gotDataThisWindow = true;
         },
         start() {
             if (timer) return;
             timer = setInterval(() => {
-                if (agg.size === 0) return;
+                if (!gotDataThisWindow || agg.size === 0) {
+                    agg.clear();
+                    gotDataThisWindow = false;
+                    return;
+                }
                 onFlush(Object.fromEntries(agg));
                 agg.clear();
+                gotDataThisWindow = false;
             }, intervalMs);
         },
     };
