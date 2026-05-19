@@ -547,7 +547,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0] && !botNeedSell) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0]) {
                     await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
                     botTimeReset = Date.now();
                     break;
@@ -851,19 +851,16 @@ async function launchBookBuyer(name, password, anarchy) {
 
             pendingSellPrice = null;
             parentPort.postMessage({ name: "set_max_price", type: id, price: finalPrice });
-            return;
+                await chatAhSell(bot, balance);
         }
 
         if (messageText.includes('[☃] Минимальная цена')) {
             let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
-            balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-
-            const slotHotBar = bot.quickBarSlot;
+                await chatAhSell(bot, finalPrice);
             const slot = transform(slotHotBar);
             const item = bot.inventory.slots[slot];
             if (!item) return;
+            pendingSellPrice = null;
 
             const currentPrice = getPriceByEnchantments(item, itemPrices);
             const id = getIDByEnchantments(item, itemPrices);
@@ -914,21 +911,21 @@ function countTotalItemsInWindow(bot, itemPrices) {
     return totalCount;
 }
 
-function parseAhListedPrice(messageText) {
-    const m = messageText.match(/за\s+[$]?\s*([\d.,\s]+)/i);
-    const raw = m ? m[1] : (messageText.match(/[$]\s*([\d.,]+)/)?.[1]);
-    if (!raw) return null;
-    const n = parseInt(raw.replace(/[.,\s]/g, ''), 10);
-    return Number.isFinite(n) ? n : null;
-}
-
-async function chatAhSell(bot, price) {
-    pendingSellPrice = price;
+    bot.chat(anarchyCommand);
     await rnd(TIMING.SELL);
-    bot.chat(`/ah sell ${price}`);
-    while (pendingSellPrice !== null) {
-        await delay(TIMING.POLL_MS);
+
+    let endSellTime = Date.now();
+    const now = Date.now();
+    if (now - lastWarpTime >= TIMING.WARP_COOLDOWN_MS) {
+        lastWarpTime = now;
+        bot.chat(`/warp ${getRandomElement(WARPS)}`);
+        endSellTime = Date.now() + TIMING.WARP_AFTER_SELL_MS;
     }
+    lastSellWalkAt = Date.now();
+
+    const endTime = Date.now() + TIMING.MOVE_BURST_MS;
+    while (Date.now() < endTime) {
+        await rnd(TIMING.SELL_MOVE);
 }
 
 async function sellItems(bot, itemPrices) {
@@ -994,7 +991,7 @@ async function sellItems(bot, itemPrices) {
                         await rnd(TIMING.SELL_HOTBAR);
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await chatAhSell(bot, price);
+                    await ahSellTwice(bot, price);
                     soldAnything = true;
                 } else {
                     await rnd(TIMING.SELL_TOSS);
@@ -1013,6 +1010,7 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = firstInventorySlot; invSlot < firstSellSlot; invSlot++) {
+                        while (isKrush) await delay(TIMING.POLL_MS);
                         if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
