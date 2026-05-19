@@ -547,7 +547,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0] && !botNeedSell) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0]) {
                     await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
                     botTimeReset = Date.now();
                     break;
