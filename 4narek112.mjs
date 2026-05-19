@@ -20,12 +20,12 @@ let netakbistro = true
 let enoughItems = false
 /** Есть лоты на АХ: true — чат «выставлен на продажу»; false — в хранилище 0 лотов */
 let hasLotsOnAH = false
-let isKrush = false
 let needSendAH = true
 let typeSell = ""
 
 let sellNeedRestart = false
 let currentSellItem = null; // временный предмет для продажи
+let pendingSellPrice = null
 
 /** Мин. цена лота на АХ за 5 мин (матч по конфигу, дороже порога покупки, полная прочность) */
 const ahMarketFloors = new Map();
@@ -97,19 +97,31 @@ const TIMING = {
     UNLIST: { min: 1500, max: 3500 },
 
     /** /ah sell, закрытие окна в sellItems */
-    SELL: { min: 1000, max: 1500 },
+    SELL: { min: 1000, max: 2500 },
+
+    /** Второй /ah sell (подтверждение) */
+    SELL_CONFIRM: { min: 1000, max: 2500 },
+
+    /** setQuickBarSlot в sellItems */
+    SELL_HOTBAR: { min: 350, max: 700 },
+
+    /** moveSlotItem в sellItems (рюкзак → хотбар) */
+    SELL_INV_MOVE: { min: 400, max: 800 },
 
     /** tossStack внутри sellItems */
-    SELL_TOSS: { min: 1500, max: 3500 },
+    SELL_TOSS: { min: 1000, max: 3000 },
+
+    /** toss в finally sellItems */
+    SELL_CLEANUP: { min: 1000, max: 3000 },
 
     /** Прогулка в sellItems */
     SELL_MOVE: { min: 700, max: 1500 },
 
-    /** Перекладка в хотбар (moveSlotItem) */
+    /** Перекладка в хотбар (moveSlotItem) вне sellItems */
     INVENTORY_MOVE: { min: 1500, max: 2500 },
 
-    /** Смена слота хотбара (setQuickBarSlot) */
-    HOTBAR_SLOT: { min: 1000, max: 2000 },
+    /** Смена слота хотбара вне sellItems */
+    HOTBAR_SLOT: { min: 500, max: 1500 },
 
     /** safeAH: пауза после движения перед /ah search */
     AH_CMD: { min: 2000, max: 3500 },
@@ -717,8 +729,22 @@ async function launchBookBuyer(name, password, anarchy) {
             return;
         }
 
+        if (messageText.includes('[☃] Вы пытаетесь')) {
+            if (pendingSellPrice !== null) {
+                await rnd(TIMING.SELL);
+                bot.chat(`/ah sell ${pendingSellPrice}`);
+            }
+            return;
+        }
+
         if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
             hasLotsOnAH = true;
+            if (pendingSellPrice !== null) {
+                const listed = parseAhListedPrice(messageText);
+                if (listed !== null && listed === pendingSellPrice) {
+                    pendingSellPrice = null;
+                }
+            }
             if (botTypeSell) {
                 parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
             }
@@ -750,6 +776,7 @@ async function launchBookBuyer(name, password, anarchy) {
             messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
             enoughItems = true
             botAhFull = true;
+            pendingSellPrice = null;
             return;
         }
 
@@ -816,6 +843,7 @@ async function launchBookBuyer(name, password, anarchy) {
             let finalPrice = basePrice + marker;
             if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
 
+            pendingSellPrice = null;
             parentPort.postMessage({ name: "set_max_price", type: id, price: finalPrice });
             return;
         }
@@ -846,20 +874,16 @@ async function launchBookBuyer(name, password, anarchy) {
             // Если предмет сильно сломан — не обновляем конфиг, а просто выставляем по цене сервера
             if (isDamaged) {
                 logger.info(`${bot.username} - сломанный предмет (${Math.floor(durabilityPercent * 100)}%), выставляем по цене ${balance}`);
-                bot.chat(`/ah sell ${balance}`);
+                await chatAhSell(bot, balance);
                 return;
             }
 
-            // ← ДОБАВИТЬ проверку krush
             if (messageText.toLowerCase().includes('круш')) {
-                isKrush = true
-                bot.chat(`/ah sell ${finalPrice}`)
-                await rnd(TIMING.SELL);
-                bot.chat(`/ah sell ${finalPrice}`)
-                isKrush = false
-                return
+                await chatAhSell(bot, finalPrice);
+                return;
             }
 
+            pendingSellPrice = null;
             parentPort.postMessage({ name: "set_min_price", type: id, price: finalPrice });
             return;
         }
@@ -882,6 +906,23 @@ function countTotalItemsInWindow(bot, itemPrices) {
         if (isItemMatchingConfig(slotData, itemPrices)) totalCount++;
     }
     return totalCount;
+}
+
+function parseAhListedPrice(messageText) {
+    const m = messageText.match(/за\s+[$]?\s*([\d.,\s]+)/i);
+    const raw = m ? m[1] : (messageText.match(/[$]\s*([\d.,]+)/)?.[1]);
+    if (!raw) return null;
+    const n = parseInt(raw.replace(/[.,\s]/g, ''), 10);
+    return Number.isFinite(n) ? n : null;
+}
+
+async function chatAhSell(bot, price) {
+    pendingSellPrice = price;
+    await rnd(TIMING.SELL);
+    bot.chat(`/ah sell ${price}`);
+    while (pendingSellPrice !== null) {
+        await delay(TIMING.POLL_MS);
+    }
 }
 
 async function sellItems(bot, itemPrices) {
@@ -907,7 +948,7 @@ async function sellItems(bot, itemPrices) {
 
     const endTime = Date.now() + TIMING.MOVE_BURST_MS;
     while (Date.now() < endTime) {
-        await rnd(TIMING.CHAT);
+        await rnd(TIMING.SELL_MOVE);
         const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
         bot.setControlState(randomMove, true);
         await rnd(TIMING.SELL_MOVE);
@@ -932,12 +973,10 @@ async function sellItems(bot, itemPrices) {
                 mu = false;
                 return;
             }
-            while (isKrush) await delay(TIMING.POLL_MS);
             let soldAnything = false;
 
             for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
                 if (botAhFull) break;
-                while (isKrush) await delay(TIMING.POLL_MS);
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
                 if (!item) continue;
@@ -946,13 +985,10 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     typeSell = getIDByEnchantments(item, itemPrices);
                     if (bot.quickBarSlot !== quickSlot) {
-                        await rnd(TIMING.SELL);
+                        await rnd(TIMING.SELL_HOTBAR);
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await rnd(TIMING.SELL);
-                    bot.chat(`/ah sell ${price}`);
-                    await rnd(TIMING.SELL);
-                    bot.chat(`/ah sell ${price}`);
+                    await chatAhSell(bot, price);
                     soldAnything = true;
                 } else {
                     await rnd(TIMING.SELL_TOSS);
@@ -971,7 +1007,6 @@ async function sellItems(bot, itemPrices) {
 
                 if (freeSlot !== null) {
                     for (let invSlot = firstInventorySlot; invSlot < firstSellSlot; invSlot++) {
-                        while (isKrush) await delay(TIMING.POLL_MS);
                         if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
                         if (!item) continue;
@@ -980,15 +1015,12 @@ async function sellItems(bot, itemPrices) {
                         if (price > 0) {
                             typeSell = getIDByEnchantments(item, itemPrices);
                             if (bot.quickBarSlot !== freeSlot) {
-                                await rnd(TIMING.SELL);
+                                await rnd(TIMING.SELL_HOTBAR);
                                 await bot.setQuickBarSlot(freeSlot);
                             }
-                            await rnd(TIMING.INVENTORY_MOVE);
+                            await rnd(TIMING.SELL_INV_MOVE);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await rnd(TIMING.SELL);
-                            bot.chat(`/ah sell ${price}`);
-                            await rnd(TIMING.SELL);
-                            bot.chat(`/ah sell ${price}`);
+                            await chatAhSell(bot, price);
                             soldAnything = true;
                         } else {
                             await rnd(TIMING.SELL_TOSS);
@@ -1005,7 +1037,7 @@ async function sellItems(bot, itemPrices) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
-        await rnd(TIMING.SELL);
+        await delay(300);
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
             if (sellNeedRestart) {
@@ -1016,13 +1048,13 @@ async function sellItems(bot, itemPrices) {
             const slotData = bot.inventory.slots[i];
             if (!slotData) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await rnd(TIMING.SELL);
+                await rnd(TIMING.SELL_CLEANUP);
                 await bot.tossStack(slotData);
             }
         }
 
         bot.chat('/balance');
-        await rnd(TIMING.SELL);
+        await rnd(TIMING.SELL_CLEANUP);
 
         if (!hasSellableItemsInInventory(bot, itemPrices)) {
             botNeedSell = false;
