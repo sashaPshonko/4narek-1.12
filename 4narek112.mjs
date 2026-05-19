@@ -659,7 +659,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
         if (messageText.includes('успешно перевыставлены')) {
             botTimeReset = Date.now();
-            enoughItems = false;
             return;
         }
 
