@@ -67,27 +67,50 @@ const TIMING = {
     LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
     MOVE_BURST_MS: 4_000,
     AH_MOVE_BURST_MS: 3_000,
-    /** Слотов лотов в «Хранилище» (0 — старее, 4 — новее) */
     STORAGE_AH_SLOTS: 5,
 
     SPAWN_LOGIN: { min: 0, max: 10_000 },
     WARP_WAIT: { min: 7100, max: 7200 },
     AFTER_ANARCHY_CMD: { min: 1500, max: 3500 },
 
-    /** Пауза: чат, /ah sell, GUI — как в рабочем */
-    PAUSE: { min: 1000, max: 1500 },
+    /** Все tossStack */
+    TOSS: { min: 1500, max: 3000 },
 
-    /** Перекладка в хотбар (moveSlotItem) */
-    INVENTORY_MOVE: { min: 1000, max: 1500 },
+    /** Чат: /ah sell, /l, /an, закрытие окон, баланс */
+    CHAT: { min: 1500, max: 2500 },
 
-    /** Смена слота хотбара (setQuickBarSlot) */
-    HOTBAR_SLOT: { min: 150, max: 700 },
-
-    /** Клики по GUI (аукцион, хранилище, ресет) */
+    /** Клики GUI кроме покупки и снятия лота */
     WINDOW: { min: 1500, max: 4500 },
 
+    /** Стекло на АХ (как в рабочем) */
+    GLASS: { min: 700, max: 1000 },
+
+    /** Покупка лота: (min–max) × (слот + 2) */
+    BUY_SLOT: { min: 500, max: 700 },
+
+    /** Снятие лота из хранилища */
+    UNLIST: { min: 1500, max: 3500 },
+
+    /** /ah sell, закрытие окна в sellItems */
+    SELL: { min: 1000, max: 1500 },
+
+    /** tossStack внутри sellItems */
+    SELL_TOSS: { min: 1500, max: 3500 },
+
+    /** Прогулка в sellItems */
+    SELL_MOVE: { min: 700, max: 1500 },
+
+    /** Перекладка в хотбар (moveSlotItem) */
+    INVENTORY_MOVE: { min: 1500, max: 2500 },
+
+    /** Смена слота хотбара (setQuickBarSlot) */
+    HOTBAR_SLOT: { min: 1000, max: 2000 },
+
+    /** safeAH: пауза после движения перед /ah search */
+    AH_CMD: { min: 2000, max: 3500 },
+
     /** RTP-телепорт */
-    RTP: { min: 8000, max: 9500 },
+    RTP: { min: 7100, max: 7300 },
 
     /** Быстрый опрос (krush, ожидание варпа) */
     POLL_MS: 100,
@@ -280,9 +303,9 @@ async function launchBookBuyer(name, password, anarchy) {
         botReadySent = false;
 
         logger.info(`${name} успешно проник на сервер.`);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.CHAT);
         bot.chat(loginCommand);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.CHAT);
         bot.chat(anarchyCommand);
         markAnarchyJoin();
         await waitAnarchyReady();
@@ -398,7 +421,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (bot.currentWindow.slots[0] && bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 31, delayMs(TIMING.WINDOW), key)
+                    await safeClickBuy(bot, 31, delayMs(TIMING.GLASS), key)
                     break
                 }
 
@@ -415,7 +438,7 @@ async function launchBookBuyer(name, password, anarchy) {
                             netakbistro = false;
                             await safeClickBuy(bot, slotToBuy, 2355, key);
                         } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, delayMs(TIMING.PAUSE) * (slotToBuy + 2), key);
+                            await safeClickBuy(bot, slotToBuy, delayMs(TIMING.BUY_SLOT) * (slotToBuy + 2), key);
                         } else {
                             await safeClickBuy(bot, slotToReloadAH, delayMs(TIMING.WINDOW), key);
                         }
@@ -494,7 +517,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     botAhFull = false;
                     botNeedSell = true;
                     botMenu = myItems;
-                    await safeClickBuy(bot, slot, delayMs(TIMING.PAUSE), key);
+                    await safeClickBuy(bot, slot, delayMs(TIMING.UNLIST), key);
                     break;
                 }
 
@@ -530,7 +553,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     }
                 }
                 logger.info(`${bot.username} никуда не кликнул`);
-                await rnd(TIMING.PAUSE);
+                await rnd(TIMING.CHAT);
                 if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
 
                 break;
@@ -550,7 +573,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     if (!slotData) continue;
                     if (!isItemMatchingConfig(slotData, itemPrices)) {
                         await bot.tossStack(slotData);
-                        await rnd(TIMING.PAUSE);
+                        await rnd(TIMING.TOSS);
                     }
                 }
 
@@ -618,7 +641,7 @@ async function launchBookBuyer(name, password, anarchy) {
             botPrices = [];
             botCount = 0;
             netakbistro = true;
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             bot.chat(anarchyCommand);
             markAnarchyJoin();
             await waitAnarchyReady();
@@ -670,9 +693,9 @@ async function launchBookBuyer(name, password, anarchy) {
             messageText.includes('Данная команда недоступна в режиме AFK') ||
             messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
 
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
 
             if (messageText.includes('После входа')) {
                 await walk(bot);
@@ -705,11 +728,11 @@ async function launchBookBuyer(name, password, anarchy) {
 
 
         if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             bot.chat('/clan withdraw 3000000');
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             botMenu = analysisAH;
             await safeAH(bot);
             return;
@@ -734,7 +757,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 return;
             }
             if (balance > minBalance) {
-                await rnd(TIMING.PAUSE);
+                await rnd(TIMING.CHAT);
                 bot.chat(`/clan invest ${balance - minBalance}`);
             }
             return;
@@ -794,7 +817,7 @@ async function launchBookBuyer(name, password, anarchy) {
             if (messageText.toLowerCase().includes('круш')) {
                 isKrush = true
                 bot.chat(`/ah sell ${finalPrice}`)
-                await rnd(TIMING.PAUSE);
+                await rnd(TIMING.SELL);
                 bot.chat(`/ah sell ${finalPrice}`)
                 isKrush = false
                 return
@@ -828,13 +851,13 @@ async function sellItems(bot, itemPrices) {
     botNeedSell = false;
     needSendAH = true;
     if (mu) {
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.SELL_MOVE);
         await safeAH(bot);
         return;
     }
     mu = true;
     bot.chat(anarchyCommand);
-    await rnd(TIMING.PAUSE);
+    await rnd(TIMING.SELL);
 
     let endSellTime = Date.now();
     const now = Date.now();
@@ -847,10 +870,10 @@ async function sellItems(bot, itemPrices) {
 
     const endTime = Date.now() + TIMING.MOVE_BURST_MS;
     while (Date.now() < endTime) {
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.CHAT);
         const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
         bot.setControlState(randomMove, true);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.SELL_MOVE);
         bot.setControlState(randomMove, false);
     }
     releaseMovementKeys(bot);
@@ -861,7 +884,7 @@ async function sellItems(bot, itemPrices) {
         await waitAnarchyReady();
         touchActivity();
         if (bot.currentWindow) {
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.SELL);
             bot.closeWindow(bot.currentWindow);
         }
 
@@ -886,16 +909,16 @@ async function sellItems(bot, itemPrices) {
                 if (price > 0) {
                     typeSell = getIDByEnchantments(item, itemPrices);
                     if (bot.quickBarSlot !== quickSlot) {
-                        await rnd(TIMING.HOTBAR_SLOT);
+                        await rnd(TIMING.SELL);
                         await bot.setQuickBarSlot(quickSlot);
                     }
-                    await rnd(TIMING.PAUSE);
+                    await rnd(TIMING.SELL);
                     bot.chat(`/ah sell ${price}`);
-                    await rnd(TIMING.PAUSE);
+                    await rnd(TIMING.SELL);
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
                 } else {
-                    await rnd(TIMING.PAUSE);
+                    await rnd(TIMING.SELL_TOSS);
                     await bot.tossStack(item);
                 }
             }
@@ -920,18 +943,18 @@ async function sellItems(bot, itemPrices) {
                         if (price > 0) {
                             typeSell = getIDByEnchantments(item, itemPrices);
                             if (bot.quickBarSlot !== freeSlot) {
-                                await rnd(TIMING.HOTBAR_SLOT);
+                                await rnd(TIMING.SELL);
                                 await bot.setQuickBarSlot(freeSlot);
                             }
                             await rnd(TIMING.INVENTORY_MOVE);
                             await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await rnd(TIMING.PAUSE);
+                            await rnd(TIMING.SELL);
                             bot.chat(`/ah sell ${price}`);
-                            await rnd(TIMING.PAUSE);
+                            await rnd(TIMING.SELL);
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
                         } else {
-                            await rnd(TIMING.PAUSE);
+                            await rnd(TIMING.SELL_TOSS);
                             await bot.tossStack(item);
                         }
                     }
@@ -945,7 +968,7 @@ async function sellItems(bot, itemPrices) {
         logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
     } finally {
         logger.info(`${bot.username} - продажа завершена`);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.SELL);
 
         for (let i = firstAHSlot; i < lastInventorySlot; i++) {
             if (sellNeedRestart) {
@@ -956,13 +979,13 @@ async function sellItems(bot, itemPrices) {
             const slotData = bot.inventory.slots[i];
             if (!slotData) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await rnd(TIMING.PAUSE);
+                await rnd(TIMING.SELL);
                 await bot.tossStack(slotData);
             }
         }
 
         bot.chat('/balance');
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.SELL);
 
         if (!hasSellableItemsInInventory(bot, itemPrices)) {
             botNeedSell = false;
@@ -971,7 +994,7 @@ async function sellItems(bot, itemPrices) {
         botStartTime = Date.now();
         mu = false;
         logger.info(`${bot.username} - мьютекс снят`);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.SELL);
         while (Date.now() < endSellTime) await delay(TIMING.POLL_MS);
 
         if (sellNeedRestart) {
@@ -1088,9 +1111,9 @@ async function safeAH(bot) {
             await delay(TIMING.MOVE_KEY_PAUSE_MS);
         }
         releaseMovementKeys(bot);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.AH_CMD);
         bot.chat(ahCommand);
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.AH_CMD);
     }
 }
 
@@ -1527,7 +1550,7 @@ async function walk(bot) {
     walkInProgress = true;
 
     try {
-        await rnd(TIMING.PAUSE);
+        await rnd(TIMING.CHAT);
         const now = Date.now();
         if (now - lastWarpTime >= TIMING.WARP_COOLDOWN_MS) {
             lastWarpTime = now;
@@ -1538,9 +1561,9 @@ async function walk(bot) {
         const endTime = Date.now() + TIMING.MOVE_BURST_MS;
         while (Date.now() < endTime) {
             const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             bot.setControlState(randomMove, true);
-            await rnd(TIMING.PAUSE);
+            await rnd(TIMING.CHAT);
             bot.setControlState(randomMove, false);
         }
         releaseMovementKeys(bot);
@@ -1566,7 +1589,7 @@ async function safeClickBuy(bot, slot, time, key) {
     }
     botUpdateWindow = true;
     if (bot.currentWindow) {
-        touchActivity();
+        botTimeActive = Date.now();
         await bot.clickWindow(slot, leftMouseButton, 1);
     }
 }
