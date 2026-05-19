@@ -447,16 +447,9 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
-                    if (!hasLotsOnAH && !enoughItems) {
-                        logger.info(`${name} - на АХ нет лотов, пропуск хранилища`);
-                        needReset = false;
-                        if (resetime > 60) botTimeReset = Date.now();
-                    } else {
-                        logger.info(`${name} - ресет (хранилище)`);
-                        needReset = false;
-                        botMenu = myItems;
-                        await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-                    }
+                    logger.info(`${name} - ресет`);
+                    botMenu = myItems;
+                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
                     break;
                 }
 
@@ -501,16 +494,8 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
-                key = botKey;
 
-                if (botNeedSell && hasSellableItemsInInventory(bot, itemPrices)) {
-                    logger.info(`${name} - перевыставление → на АХ`);
-                    botMenu = analysisAH;
-                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-                    break;
-                }
-
-                 if (needSendAH) {
+                if (needSendAH) {
                     botAh = []
                     for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
@@ -539,6 +524,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (!bot.currentWindow?.slots[0]) enoughItems = false;
+                key = botKey;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
                     break;
@@ -550,7 +536,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (!botNeedSell && Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
+                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
                     if (bot.currentWindow?.slots[0]) {
                         await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
