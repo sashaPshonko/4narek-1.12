@@ -76,7 +76,7 @@ const TIMING = {
     PAUSE: { min: 1000, max: 1500 },
 
     /** Перекладка в хотбар (moveSlotItem) */
-    INVENTORY_MOVE: { min: 700, max: 1500 },
+    INVENTORY_MOVE: { min: 1000, max: 1500 },
 
     /** Смена слота хотбара (setQuickBarSlot) */
     HOTBAR_SLOT: { min: 150, max: 700 },
