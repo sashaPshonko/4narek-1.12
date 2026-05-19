@@ -451,15 +451,11 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
-                    if (!hasLotsOnAH && !enoughItems) {
-                        logger.info(`${name} - на АХ нет лотов, пропуск хранилища`);
-                        needReset = false;
-                    } else {
-                        logger.info(`${name} - ресет`);
-                        botMenu = myItems;
-                        await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-                        break;
-                    }
+                    logger.info(`${name} - ресет (хранилище)`);
+                    needReset = false;
+                    botMenu = myItems;
+                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                    break;
                 }
 
 
@@ -503,6 +499,15 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
+                key = botKey;
+
+                if (botNeedSell && hasSellableItemsInInventory(bot, itemPrices)) {
+                    logger.info(`${name} - перевыставление → на АХ`);
+                    botMenu = analysisAH;
+                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                    break;
+                }
+
                 if (needSendAH) {
                     botAh = []
                     for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
@@ -531,11 +536,7 @@ async function launchBookBuyer(name, password, anarchy) {
                     parentPort.postMessage(msg)
                 }
 
-                if (!bot.currentWindow?.slots[0]) {
-                    hasLotsOnAH = false;
-                    enoughItems = false;
-                }
-                key = botKey;
+                if (!bot.currentWindow?.slots[0]) enoughItems = false;
                 if (bot.currentWindow.slots[27]) {
                     logger.error('суки обновили аукцион');
                     break;
@@ -547,10 +548,12 @@ async function launchBookBuyer(name, password, anarchy) {
                 botAh = [];
                 let slot = null;
 
-                if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0]) {
-                    await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                if (!botNeedSell && Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
                     botTimeReset = Date.now();
-                    break;
+                    if (bot.currentWindow?.slots[0]) {
+                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                        break;
+                    }
                 }
 
                 for (let i = TIMING.STORAGE_AH_SLOTS - 1; i >= 0; i--) {
