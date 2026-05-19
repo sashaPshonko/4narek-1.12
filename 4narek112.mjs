@@ -661,7 +661,7 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 //
         if (messageText.toLowerCase().includes('вы забанены')) {
-            parentPort.postMessage(`${workerData.username} - забанен`);
+            parentPort.postMessage({ name: 'banned' });
             return;
         }
         if (messageText.toLowerCase().includes('Отключите VPN и Proxy и повторите попытку входа')) {

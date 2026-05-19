@@ -88,6 +88,94 @@ export function clearBotPresence(username, botItems, botInventory) {
     botInventory.delete(username);
 }
 
+/** Статус для /ping: в игре ≠ просто запущенный воркер */
+export function getWorkerHealthStats(bots, workers) {
+    const banned = [];
+    const waiting = [];
+    let active = 0;
+    let workersRunning = 0;
+
+    for (const bot of bots.values()) {
+        const username = bot.username;
+        const entry = workers.get(username);
+        const hasWorker = !!(entry?.worker && !entry.worker.terminated);
+        if (hasWorker) workersRunning++;
+
+        if (bot.banned) {
+            banned.push(username);
+            continue;
+        }
+        if (bot.success && hasWorker) {
+            active++;
+        } else if (hasWorker) {
+            waiting.push(username);
+        }
+    }
+
+    return {
+        configured: bots.size,
+        active,
+        workersRunning,
+        banned,
+        waiting,
+    };
+}
+
+export function formatOrchestratorPing(stats) {
+    const { configured, active, workersRunning, banned, waiting } = stats;
+    const ok = active === configured && banned.length === 0 && waiting.length === 0;
+    let text = `${ok ? '✅' : '⚠️'} В игре: ${active}/${configured}`;
+    const extras = [];
+    if (workersRunning !== active) extras.push(`воркеров: ${workersRunning}`);
+    if (waiting.length) extras.push(`ждут вход: ${waiting.join(', ')}`);
+    if (extras.length) text += ` (${extras.join(', ')})`;
+    if (banned.length) text += `\n🚫 Забанены: ${banned.join(', ')}`;
+    return text;
+}
+
+export async function stopWorkerNoRestart(username, ctx) {
+    const bot = ctx.bots?.get(username);
+    if (bot) {
+        bot.success = false;
+        bot.isManualStop = true;
+    }
+    const pending = ctx.pendingRestarts?.get(username);
+    if (pending) {
+        clearTimeout(pending);
+        ctx.pendingRestarts.delete(username);
+    }
+    const entry = ctx.workers.get(username);
+    if (!entry) return;
+    clearBotPresence(username, ctx.botItems, ctx.botInventory);
+    await ctx.terminateWorkerEntry(entry);
+    ctx.workers.delete(username);
+    ctx.pushPresenceToGo?.();
+}
+
+export async function markBotBanned(username, ctx) {
+    const bot = ctx.bots.get(username);
+    if (bot) {
+        bot.banned = true;
+        bot.success = false;
+        bot.isManualStop = true;
+    }
+    await stopWorkerNoRestart(username, ctx);
+    await ctx.sendAlert(`🚫 ${username} забанен`);
+}
+
+/** true — обработано, не слать как обычный лог */
+export async function handleWorkerStatusMessage(message, username, ctx) {
+    if (message?.name === 'banned') {
+        await markBotBanned(username, ctx);
+        return true;
+    }
+    if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {
+        await markBotBanned(username, ctx);
+        return true;
+    }
+    return false;
+}
+
 /** Сумма предметов только от живых ботов (мёртвые = 0 в отчёте) */
 export function collectPresenceItemCounts(bots, workers, botItems, botInventory) {
     const itemsCount = new Map();
