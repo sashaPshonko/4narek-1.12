@@ -17,7 +17,17 @@ import {
     shouldRestartWorkerOnExit,
     getWorkerRestartDelayMs,
     terminateWorkerEntry,
+    createMarketFloorTracker,
 } from './orchestrator-shared.mjs';
+
+const marketFloorTracker = createMarketFloorTracker({
+    onFlush(floors) {
+        if (!socket || !isSocketOpen) return;
+        socket.send(JSON.stringify({ action: 'ah_market_floor', floors }));
+        console.log('[AH floor] → Go:', floors);
+    },
+});
+marketFloorTracker.start();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -200,6 +210,8 @@ async function runWorker(bot) {
                                 price: message.price 
                             }));
                         }
+                    } else if (message.name === 'ah_market_floor') {
+                        marketFloorTracker.mergeFromWorker(message.floors);
                     } else if (typeof message === 'string') {
                         // Любая строка от воркера отправляется в Telegram
                         await sendAlert(`📝 ${message}`);

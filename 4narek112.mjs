@@ -27,6 +27,11 @@ let typeSell = ""
 let sellNeedRestart = false
 let currentSellItem = null; // временный предмет для продажи
 
+/** Мин. цена лота на АХ за 5 мин (матч по конфигу, дороже порога покупки, полная прочность) */
+const ahMarketFloors = new Map();
+const AH_MARKET_FLOOR_MS = 5 * 60 * 1000;
+let ahMarketFloorTimer = null;
+
 // Глобальные переменные для состояния бота
 let botStartTime = Date.now() - 55000
 let botAhFull = false
@@ -230,6 +235,37 @@ function getDurabilityPercent(item) {
     return (item.maxDurability - damage) / item.maxDurability;
 }
 
+function hasFullDurabilityForAhScan(item) {
+    if (!item?.maxDurability) return true;
+    return getDurabilityPercent(item) >= 0.99;
+}
+
+function ensureAhMarketFloorTimer() {
+    if (ahMarketFloorTimer) return;
+    ahMarketFloorTimer = setInterval(() => {
+        if (ahMarketFloors.size === 0) return;
+        parentPort.postMessage({
+            name: 'ah_market_floor',
+            floors: Object.fromEntries(ahMarketFloors),
+        });
+        ahMarketFloors.clear();
+    }, AH_MARKET_FLOOR_MS);
+}
+
+/** Лот подходит по конфигу, но дороже порога покупки — запоминаем для Go */
+function recordAhMarketFloor(slotData, config, maxBuyPrice) {
+    if (!hasFullDurabilityForAhScan(slotData)) return;
+    const price = getPriceFromItem(slotData);
+    if (!price) return;
+    const buyCap = maxBuyPrice - config.nacenka;
+    if (price < buyCap) return;
+    const lotPrice = Math.floor(price);
+    const prev = ahMarketFloors.get(config.id);
+    if (prev === undefined || lotPrice < prev) {
+        ahMarketFloors.set(config.id, lotPrice);
+    }
+}
+
 function getSellPriceWithDurability(item, itemPrices) {
     const config = findMatchingConfigItem(item, itemPrices);
     if (!config) return 0;
@@ -303,6 +339,7 @@ async function launchBookBuyer(name, password, anarchy) {
         botReadySent = false;
 
         logger.info(`${name} успешно проник на сервер.`);
+        ensureAhMarketFloorTimer();
         await rnd(TIMING.CHAT);
         bot.chat(loginCommand);
         await rnd(TIMING.CHAT);
@@ -1157,6 +1194,8 @@ async function getBestAHSlot(bot, itemPrices) {
 
             const maxBuyPrice = getMaxBuyPriceWithDurability(slotData, itemPrices);
             if (maxBuyPrice === 0) continue;
+
+            recordAhMarketFloor(slotData, config, maxBuyPrice);
 
             if (price >= maxBuyPrice - config.nacenka) continue;
             if (!config.priceSell) continue;
