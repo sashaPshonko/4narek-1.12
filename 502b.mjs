@@ -18,16 +18,17 @@ import {
     getWorkerRestartDelayMs,
     terminateWorkerEntry,
     createMarketFloorTracker,
+    sendMarketFloorsToGo,
     getWorkerHealthStats,
     formatOrchestratorPing,
     handleWorkerStatusMessage,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
-    onFlush(floors) {
-        if (!socket || !isSocketOpen) return;
-        socket.send(JSON.stringify({ action: 'ah_market_floor', floors }));
-        console.log('[AH floor] → Go:', floors);
+    onFlush(floors, meta) {
+        if (sendMarketFloorsToGo(socket, isSocketOpen, floors, meta)) {
+            console.log('[AH floor] → Go:', floors, meta);
+        }
     },
 });
 marketFloorTracker.start();
@@ -226,7 +227,7 @@ async function runWorker(bot) {
                             }));
                         }
                     } else if (message.name === 'ah_market_floor') {
-                        marketFloorTracker.mergeFromWorker(message.floors);
+                        marketFloorTracker.mergeFromWorker(message);
                     } else if (message.name === 'banned' || typeof message === 'string') {
                         const handled = await handleWorkerStatusMessage(message, username, workerStatusCtx());
                         if (!handled && typeof message === 'string') {

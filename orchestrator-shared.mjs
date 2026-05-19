@@ -9,6 +9,27 @@
  * Бот в getBestAHSlot покупает только catalog.type === bot.goType.
  */
 
+/** Окно сбора мин. цен на АХ перед отправкой в Go */
+export const MARKET_FLOOR_WINDOW_MS = 10 * 60 * 1000;
+export const MARKET_FLOOR_CHECK_MS = 30 * 1000;
+/** Допуск на джиттер таймеров (воркер / оркестратор / сеть) */
+export const MARKET_FLOOR_WINDOW_SLACK_MS = 5000;
+
+export function sendMarketFloorsToGo(socket, isOpen, floors, meta) {
+    if (!socket || !isOpen || !floors || Object.keys(floors).length === 0) return false;
+    if (!meta?.window_start_ms || !meta?.window_end_ms) return false;
+    const span = meta.window_end_ms - meta.window_start_ms;
+    if (span < MARKET_FLOOR_WINDOW_MS - MARKET_FLOOR_WINDOW_SLACK_MS) return false;
+    socket.send(JSON.stringify({
+        action: 'ah_market_floor',
+        floors,
+        window_start_ms: meta.window_start_ms,
+        window_end_ms: meta.window_end_ms,
+        window_ms: MARKET_FLOOR_WINDOW_MS,
+    }));
+    return true;
+}
+
 /** AH search в боте (human) → go type для сервера */
 export const ITEM_TO_GO_TYPE = {
     'netherite sword': 'netherite_sword-1.21',
@@ -262,37 +283,69 @@ export function terminateWorkerEntry(entry) {
     });
 }
 
-/** Агрегация мин. цен лотов с АХ от воркеров → Go раз в intervalMs (по умолчанию 10 мин) */
-export function createMarketFloorTracker({ intervalMs = 10 * 60 * 1000, onFlush }) {
+/** Агрегация мин. цен от воркеров; в Go только после полного окна windowMs */
+export function createMarketFloorTracker({
+    windowMs = MARKET_FLOOR_WINDOW_MS,
+    checkMs = MARKET_FLOOR_CHECK_MS,
+    onFlush,
+}) {
     const agg = new Map();
     let timer = null;
     let gotDataThisWindow = false;
+    let windowStartMs = null;
+    let windowEndMs = null;
+
+    const resetWindow = () => {
+        agg.clear();
+        gotDataThisWindow = false;
+        windowStartMs = null;
+        windowEndMs = null;
+    };
+
+    const mergeFloors = (floors) => {
+        if (!floors || typeof floors !== 'object') return false;
+        let merged = false;
+        for (const [id, price] of Object.entries(floors)) {
+            const p = Number(price);
+            if (!p || p <= 0) continue;
+            merged = true;
+            const prev = agg.get(id);
+            if (prev === undefined || p < prev) agg.set(id, p);
+        }
+        return merged;
+    };
 
     return {
-        mergeFromWorker(floors) {
-            if (!floors || typeof floors !== 'object') return;
-            let merged = false;
-            for (const [id, price] of Object.entries(floors)) {
-                const p = Number(price);
-                if (!p || p <= 0) continue;
-                merged = true;
-                const prev = agg.get(id);
-                if (prev === undefined || p < prev) agg.set(id, p);
+        mergeFromWorker(payload) {
+            const floors = payload?.floors ?? payload;
+            const ws = Number(payload?.window_start_ms);
+            const we = Number(payload?.window_end_ms);
+            if (!mergeFloors(floors)) return;
+            gotDataThisWindow = true;
+            if (Number.isFinite(ws) && ws > 0) {
+                windowStartMs = windowStartMs === null ? ws : Math.min(windowStartMs, ws);
             }
-            if (merged) gotDataThisWindow = true;
+            if (Number.isFinite(we) && we > 0) {
+                windowEndMs = windowEndMs === null ? we : Math.max(windowEndMs, we);
+            }
         },
         start() {
             if (timer) return;
             timer = setInterval(() => {
-                if (!gotDataThisWindow || agg.size === 0) {
-                    agg.clear();
-                    gotDataThisWindow = false;
+                if (!gotDataThisWindow || agg.size === 0 || windowStartMs === null || windowEndMs === null) {
+                    resetWindow();
                     return;
                 }
-                onFlush(Object.fromEntries(agg));
-                agg.clear();
-                gotDataThisWindow = false;
-            }, intervalMs);
+                const span = windowEndMs - windowStartMs;
+                if (span < windowMs - MARKET_FLOOR_WINDOW_SLACK_MS) {
+                    return;
+                }
+                onFlush(Object.fromEntries(agg), {
+                    window_start_ms: windowStartMs,
+                    window_end_ms: windowEndMs,
+                });
+                resetWindow();
+            }, checkMs);
         },
     };
 }
