@@ -45,6 +45,8 @@ let botPrices = []
 let botCount = 0
 let botAh = []
 let botNeedSell = false
+/** Время запуска воркера — первую минуту лобби-сообщения не обрабатываем */
+let botWorkerStartTime = 0
 let botStartClickTime = null
 let botUpdateWindow = false
 let botMenu = 'Анализ аукциона'
@@ -69,6 +71,8 @@ const TIMING = {
     IDLE_HARD_MS: 120_000,
     ANTI_AFK_SELL_WALK_MS: 55_000,
     ANARCHY_JOIN_WAIT_MS: 11_000,
+    /** Не реагировать на лобби-рассылки после старта воркера */
+    LOBBY_IGNORE_MS: 60_000,
     WARP_COOLDOWN_MS: 55_000,
     WARP_AFTER_SELL_MS: 8_000,
     LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
@@ -323,6 +327,7 @@ function getMaxBuyPriceWithDurability(item, itemPrices) {
 }
 
 async function launchBookBuyer(name, password, anarchy) {
+    botWorkerStartTime = Date.now();
 
     await rnd(TIMING.SPAWN_LOGIN);
 
@@ -697,6 +702,9 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (isLobbyBroadcastMessage(messageText)) {
+            if (Date.now() - botWorkerStartTime < TIMING.LOBBY_IGNORE_MS) {
+                return;
+            }
             logger.info(`${name} - лобби, продажа`);
             await sellItems(bot, itemPrices);
             return;
