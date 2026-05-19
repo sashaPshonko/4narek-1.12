@@ -69,17 +69,17 @@ const TIMING = {
     STORAGE_AH_SLOTS: 5,
 
     SPAWN_LOGIN: { min: 0, max: 10_000 },
-    WARP_WAIT: { min: 7500, max: 9500 },
+    WARP_WAIT: { min: 7100, max: 7200 },
     AFTER_ANARCHY_CMD: { min: 1500, max: 3500 },
 
     /** Пауза: чат, /ah sell, GUI — как в рабочем */
     PAUSE: { min: 1000, max: 1500 },
 
     /** Перекладка в хотбар (moveSlotItem) */
-    INVENTORY_MOVE: { min: 1000, max: 1500 },
+    INVENTORY_MOVE: { min: 700, max: 1500 },
 
     /** Смена слота хотбара (setQuickBarSlot) */
-    HOTBAR_SLOT: { min: 500, max: 1000 },
+    HOTBAR_SLOT: { min: 150, max: 700 },
 
     /** Клики по GUI (аукцион, хранилище, ресет) */
     WINDOW: { min: 1500, max: 4500 },
