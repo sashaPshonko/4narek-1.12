@@ -18,6 +18,8 @@ let needReset = false;
 let mu = false
 let netakbistro = true
 let enoughItems = false
+/** Есть лоты на АХ: true — чат «выставлен на продажу»; false — в хранилище 0 лотов */
+let hasLotsOnAH = false
 let isKrush = false
 let needSendAH = true
 let typeSell = ""
@@ -270,6 +272,7 @@ async function launchBookBuyer(name, password, anarchy) {
         botCount = 0;
         botAh = [];
         botNeedSell = false;
+        hasLotsOnAH = false;
         lastSellWalkAt = Date.now();
         botStartClickTime = null;
         botUpdateWindow = false;
@@ -370,10 +373,15 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (resetime > 60 || needReset || enoughItems) {
-                    logger.info(`${name} - ресет`);
-                    botMenu = myItems;
-                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-                    break;
+                    if (!hasLotsOnAH && !enoughItems) {
+                        logger.info(`${name} - на АХ нет лотов, пропуск хранилища`);
+                        needReset = false;
+                    } else {
+                        logger.info(`${name} - ресет`);
+                        botMenu = myItems;
+                        await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                        break;
+                    }
                 }
 
 
@@ -417,7 +425,6 @@ async function launchBookBuyer(name, password, anarchy) {
 
             case myItems:
                 generateRandomKey(bot);
-
                 if (needSendAH) {
                     botAh = []
                     for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
@@ -447,6 +454,7 @@ async function launchBookBuyer(name, password, anarchy) {
                 }
 
                 if (!bot.currentWindow?.slots[0]) {
+                    hasLotsOnAH = false;
                     enoughItems = false;
                 }
                 key = botKey;
@@ -462,8 +470,8 @@ async function launchBookBuyer(name, password, anarchy) {
                 let slot = null;
 
                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60 && bot.currentWindow?.slots[0] && !botNeedSell) {
-                    botTimeReset = Date.now();
                     await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
+                    botTimeReset = Date.now();
                     break;
                 }
 
@@ -650,15 +658,11 @@ async function launchBookBuyer(name, password, anarchy) {
         }
 
         if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
+            hasLotsOnAH = true;
             if (botTypeSell) {
                 parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
             }
             botCount++;
-            return;
-        }
-
-        if (messageText.includes('успешно перевыставлены')) {
-            botTimeReset = Date.now();
             return;
         }
 
@@ -876,7 +880,7 @@ async function sellItems(bot, itemPrices) {
                 while (isKrush) await delay(TIMING.POLL_MS);
                 const slotIndex = firstSellSlot + quickSlot;
                 const item = bot.inventory.slots[slotIndex];
-                if (!isSellableItem(item)) continue;
+                if (!item) continue;
 
                 const price = getBestSellPrice(bot, item, itemPrices);
                 if (price > 0) {
@@ -890,7 +894,7 @@ async function sellItems(bot, itemPrices) {
                     await rnd(TIMING.PAUSE);
                     bot.chat(`/ah sell ${price}`);
                     soldAnything = true;
-                } else if (isItemMatchingConfig(item, itemPrices)) {
+                } else {
                     await rnd(TIMING.PAUSE);
                     await bot.tossStack(item);
                 }
@@ -910,7 +914,7 @@ async function sellItems(bot, itemPrices) {
                         while (isKrush) await delay(TIMING.POLL_MS);
                         if (botAhFull) break;
                         const item = bot.inventory.slots[invSlot];
-                        if (!isSellableItem(item)) continue;
+                        if (!item) continue;
 
                         const price = getBestSellPrice(bot, item, itemPrices);
                         if (price > 0) {
@@ -926,7 +930,7 @@ async function sellItems(bot, itemPrices) {
                             await rnd(TIMING.PAUSE);
                             bot.chat(`/ah sell ${price}`);
                             soldAnything = true;
-                        } else if (isItemMatchingConfig(item, itemPrices)) {
+                        } else {
                             await rnd(TIMING.PAUSE);
                             await bot.tossStack(item);
                         }
@@ -950,7 +954,7 @@ async function sellItems(bot, itemPrices) {
                 break;
             }
             const slotData = bot.inventory.slots[i];
-            if (!isSellableItem(slotData)) continue;
+            if (!slotData) continue;
             if (!isItemMatchingConfig(slotData, itemPrices)) {
                 await rnd(TIMING.PAUSE);
                 await bot.tossStack(slotData);
