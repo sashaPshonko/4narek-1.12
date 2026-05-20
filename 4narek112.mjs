@@ -939,7 +939,7 @@ async function sellItems(bot, itemPrices) {
         return;
     }
     mu = true;
-    bot.chat(anarchyCommand);
+    bot.chat(anarchyCommand); // на всякий случай; без waitAnarchyReady
     await rnd(TIMING.SELL);
 
     let endSellTime = Date.now();
@@ -964,7 +964,6 @@ async function sellItems(bot, itemPrices) {
     logger.info(`${bot.username} - прогулка завершена`);
 
     try {
-        await waitAnarchyReady();
         touchActivity();
         if (bot.currentWindow) {
             await rnd(TIMING.SELL);
