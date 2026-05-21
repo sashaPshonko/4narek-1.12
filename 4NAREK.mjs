@@ -773,6 +773,7 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
+        logInfo(config.afk);
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
         await antiAfkIfNeeded();

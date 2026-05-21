@@ -3,6 +3,7 @@
   "ANARCHY_DELAY": { "min": 3000, "max": 5000 },
   "WALK_DELAY": { "min": 900, "max": 2000 },
   "POLL": 200,
+  "500MS": 500,
   "WAIT_ANARCHY": 11000,
   "HOTBAR_DELAY": { "min": 500, "max": 1500 },
   "POLL_WALK": { "min": 100, "max": 300 },
