@@ -605,12 +605,12 @@ async function sellItems() {
             while (Date.now() < walkEnd) {
                 const move = getRandomMove();
                 await rnd('POLL_WALK');
-                bot.setControlState(move, true);
+                await bot.setControlState(move, true);
                 await rnd('WALK_DELAY');
-                bot.setControlState(move, false);
+                await bot.setControlState(move, false);
             }
             config.walkTime = Date.now();
-            moves.forEach((m) => bot.setControlState(m, false));
+            moves.forEach(async (m) => await bot.setControlState(m, false));
         }
 
         if (canSell) {
@@ -745,12 +745,12 @@ async function antiAfkIfNeeded() {
         while (Date.now() < walkEnd) {
             const move = getRandomMove();
             await rnd('POLL_WALK');
-            bot.setControlState(move, true);
+            await bot.setControlState(move, true);
             await rnd('WALK_DELAY');
-            bot.setControlState(move, false);
+            await bot.setControlState(move, false);
         }
         config.walkTime = Date.now();
-        moves.forEach((m) => bot.setControlState(m, false));
+        moves.forEach(async (m) => await bot.setControlState(m, false));
     }
 }
 
