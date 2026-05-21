@@ -1,0 +1,15 @@
+{
+  "BASE_DELAY": { "min": 1000, "max": 3000 },
+  "ANARCHY_DELAY": { "min": 3000, "max": 5000 },
+  "WALK_DELAY": { "min": 900, "max": 1500 },
+  "POLL": 100,
+  "WAIT_ANARCHY": 11000,
+  "HOTBAR_DELAY": { "min": 500, "max": 1500 },
+  "POLL_WALK": { "min": 100, "max": 400 },
+  "WINDOW_DELAY": { "min": 1500, "max": 4500 },
+  "GLASS": { "min": 200, "max": 800 },
+  "BUY_SLOT": { "min": 500, "max": 700 },
+  "UNLIST": { "min": 1500, "max": 3500 },
+  "AH_CMD": { "min": 2000, "max": 3500 },
+  "CHECK_WINDOW": 5000
+}

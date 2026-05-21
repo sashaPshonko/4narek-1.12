@@ -1,4 +1,18 @@
 {
+  "name": "4narek-1.12",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start:502": "node 502b.mjs",
+    "start:503": "node 503b.mjs",
+    "start:504": "node 504b.mjs",
+    "start:506": "node 506b.mjs",
+    "start:507": "node 507b.mjs",
+    "start:508": "node 508b.mjs",
+    "start:509": "node 509b.mjs",
+    "start:510": "node 510b.mjs"
+  },
   "dependencies": {
     "do_username": "^1.0.0",
     "minecraft-protocol": "^1.64.0",
