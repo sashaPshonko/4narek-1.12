@@ -85,10 +85,6 @@ function logWarn(msg) {
     console.log(`${logTag()} ${ANSI.yellow}⚡${ANSI.reset} ${msg}`);
 }
 
-function logAfk(msg) {
-    console.log(`${logTag()} ${ANSI.red}${ANSI.bold}AFK${ANSI.reset} ${ANSI.red}${msg}${ANSI.reset}`);
-}
-
 function isLobbyBroadcastMessage(text) {
     return LOBBY_BROADCAST_MARKERS.some((marker) => text.includes(marker));
 }
@@ -124,28 +120,6 @@ const config = {
 var bot = null;
 /** UUID лотов, которые уже кликают / в очереди (с оркестратора) */
 let itemsBuying = [];
-/** Позиция с сервера (обновляется только на forcedMove / entityMoved своего бота). */
-let serverPosition = null;
-
-function syncServerPosition() {
-    if (bot?.entity?.position) {
-        serverPosition = bot.entity.position.clone();
-    }
-}
-
-/** Клон последней серверной позиции; если ещё не было пакета — текущая entity. */
-function getServerPosition() {
-    if (serverPosition) return serverPosition.clone();
-    if (bot?.entity?.position) return bot.entity.position.clone();
-    return null;
-}
-
-function attachServerPositionTracking() {
-    bot.on('forcedMove', syncServerPosition);
-    bot.on('entityMoved', (entity) => {
-        if (entity === bot.entity) syncServerPosition();
-    });
-}
 
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
@@ -271,7 +245,6 @@ async function handleChatMessage(text) {
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
         config.afk = true;
-        logAfk('сервер: команда недоступна в режиме AFK');
         return;
     }
     if (text.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
@@ -356,15 +329,8 @@ function main() {
         port: 25565,
         username: config.username,
         password: config.password,
-        version: '1.21.8',
+        version: '1.21.4',
         chatLengthLimit: 256,
-    });
-    attachServerPositionTracking();
-
-    bot.on('error', (err) => {
-        parentPort.postMessage(JSON.stringify(err));
-        console.error(`${logTag()} ${ANSI.red}⛔ end${ANSI.reset}: ${JSON.stringify(err)}`);
-        process.exit(1);
     });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
@@ -394,7 +360,6 @@ function main() {
     });
 
     bot.once('spawn', async () => {
-        syncServerPosition();
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
         await rnd('BASE_DELAY');
@@ -600,13 +565,6 @@ async function tossTrashAtSlot(slot) {
     }
 }
 
-function getRandomElement(array) {
-    if (!Array.isArray(array) || array.length === 0) {
-        throw new Error("Input must be a non-empty array");
-    }
-    return array[Math.floor(Math.random() * array.length)];
-}
-
 async function sellItems() {
     logOk('продажа → старт');
     try {
@@ -643,7 +601,16 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            await walk();
+            const walkEnd = Date.now() + 3000;
+            while (Date.now() < walkEnd) {
+                const move = getRandomMove();
+                await rnd('POLL_WALK');
+                await bot.setControlState(move, true);
+                await rnd('WALK_DELAY');
+                await bot.setControlState(move, false);
+            }
+            config.walkTime = Date.now();
+            moves.forEach(async (m) => await bot.setControlState(m, false));
         }
 
         if (canSell) {
@@ -766,75 +733,24 @@ function hasBotItem() {
     }
 }
 
-const WALK_DIR_TIMEOUT_MS = 2000;
-const WALK_MAX_MS = 20_000;
-
-function pickMoveKey(exclude = null) {
-    const pool = exclude ? moves.filter((m) => m !== exclude) : moves;
-    return getRandomElement(pool.length ? pool : moves);
+function getRandomMove() {
+    return moves[Math.floor(Math.random() * moves.length)];
 }
 
-/** Движение, пока серверная позиция не сместится на 0.8–1.2 блока; раз в 2 с — другая сторона. */
-async function walk() {
-    const walkStart = getServerPosition();
-    if (!walkStart) {
-        logWarn('ходьба: нет серверной позиции');
-        return;
-    }
-
-    const needDist = 0.8 + Math.random() * 0.4;
-    const walkStartedAt = Date.now();
-    logInfo(
-        `ХОДЬБА - СТАРТ @ ${walkStart.x.toFixed(1)} ${walkStart.y.toFixed(1)} ${walkStart.z.toFixed(1)} (нужно ${needDist.toFixed(2)} блок.)`
-    );
-
-    let lastKey = null;
-
-    try {
-        while (getServerPosition().distanceTo(walkStart) < needDist) {
-            if (Date.now() - walkStartedAt > WALK_MAX_MS) {
-                logWarn(`ходьба: таймаут ${WALK_MAX_MS / 1000}с`);
-                break;
-            }
-
-            const key = pickMoveKey(lastKey);
-            lastKey = key;
-            const dirStartedAt = Date.now();
-
-            bot.clearControlStates();
-            bot.setControlState(key, true);
-            bot.setControlState('sprint', true);
-
-            while (getServerPosition().distanceTo(walkStart) < needDist) {
-                if (Date.now() - walkStartedAt > WALK_MAX_MS) break;
-                await bot.waitForTicks(1);
-
-                if (Date.now() - dirStartedAt >= WALK_DIR_TIMEOUT_MS) {
-                    break;
-                }
-            }
-
-            bot.clearControlStates();
-        }
-    } finally {
-        bot.clearControlStates();
-    }
-
-    const walkEnd = getServerPosition();
-    const elapsedSec = (Date.now() - walkStartedAt) / 1000;
-    const serverDist = walkEnd.distanceTo(walkStart);
-    logOk(
-        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${walkEnd.x.toFixed(1)} ${walkEnd.y.toFixed(1)} ${walkEnd.z.toFixed(1)} | ` +
-        `прошёл ${serverDist.toFixed(2)} из ${needDist.toFixed(2)} блок.`
-    );
-    config.walkTime = Date.now();
-}
-
+/** Одно движение, если сервер пометил бота AFK (как перед /ah sell). */
 async function antiAfkIfNeeded() {
     if (config.afk) {
-        logAfk('сходу с AFK → ходьба');
         config.afk = false;
-        await walk();
+        const walkEnd = Date.now() + 3000;
+        while (Date.now() < walkEnd) {
+            const move = getRandomMove();
+            await rnd('POLL_WALK');
+            await bot.setControlState(move, true);
+            await rnd('WALK_DELAY');
+            await bot.setControlState(move, false);
+        }
+        config.walkTime = Date.now();
+        moves.forEach(async (m) => await bot.setControlState(m, false));
     }
 }
 
@@ -857,11 +773,11 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
-        if (config.afk) logAfk('режим AFK (safeAH)');
+        logInfo(config.afk);
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
-        await rnd('AH_CMD');
         await antiAfkIfNeeded();
+        await rnd('AH_CMD');
         config.menu = analysisAH;
         bot.chat(`/ah search ${config.item}`);
         await rnd('AH_CMD');
