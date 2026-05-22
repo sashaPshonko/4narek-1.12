@@ -334,7 +334,7 @@ function main() {
         port: 25565,
         username: config.username,
         password: config.password,
-        version: '1.21.4',
+        version: '1.21.8',
         chatLengthLimit: 256,
     });
     bot.on('scoreboardCreated', (scoreboard) => {
