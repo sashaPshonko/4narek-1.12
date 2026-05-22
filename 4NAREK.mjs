@@ -27,7 +27,7 @@ const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
-const WALK_RADIUS = 3;
+const WALK_RADIUS = 4;
 const WALK_PATH_TIMEOUT_MS = 2000;
 
 let botMovements = null;
@@ -777,12 +777,13 @@ function pickRandomWalkGoal() {
     return null;
 }
 
-/** Pathfinder: идём на случайный блок в радиусе 3. */
+/** Pathfinder: идём на случайный блок в радиусе WALK_RADIUS. */
 async function walk() {
     if (!bot?.entity?.position || !botMovements) {
         logWarn('ходьба: нет бота или pathfinder');
         return;
     }
+    await waitWarpTeleport();
 
     if (bot.currentWindow) {
         await rnd('BASE_DELAY');
