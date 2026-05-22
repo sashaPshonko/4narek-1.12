@@ -129,6 +129,7 @@ const config = {
     needReloadAH: false,
     balance: null,
     needSendAH: true,
+    needAdd: false,
 };
 
 var bot = null;
@@ -321,6 +322,12 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        return;
+    }
+    if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
+        config.needAdd = true;
+        if (!config.hasDangerousTrash) await sellItems();
+        await safeAH();
         return;
     }
     if (isLobbyBroadcastMessage(text)) {
@@ -687,6 +694,10 @@ async function sellItems() {
                         await rnd('AH_CMD');
                         bot.chat(`/clan invest ${investSum}`);
                     }
+                }
+                if (saveSum != null && config.balance != null && config.balance < saveSum) {
+                    bot.chat(`/clan withdraw ${Math.floor(saveSum - config.balance)}`);
+                    config.needAdd = false;
                 }
             }
         }
