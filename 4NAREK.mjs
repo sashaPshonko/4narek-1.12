@@ -823,9 +823,11 @@ async function walk() {
     const walkEnd = getServerPosition();
     const elapsedSec = (Date.now() - walkStartedAt) / 1000;
     const serverDist = walkEnd.distanceTo(walkStart);
+    const localDist = bot.entity.position.distanceTo(walkStart);
     logOk(
-        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${walkEnd.x.toFixed(1)} ${walkEnd.y.toFixed(1)} ${walkEnd.z.toFixed(1)} ` +
-        `(сервер +${serverDist.toFixed(2)} / ${needDist.toFixed(2)})`
+        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${walkEnd.x.toFixed(1)} ${walkEnd.y.toFixed(1)} ${walkEnd.z.toFixed(1)} | ` +
+        `прошёл ${serverDist.toFixed(2)} из ${needDist.toFixed(2)} блок. (сервер)` +
+        (Math.abs(localDist - serverDist) > 0.05 ? `, локально ${localDist.toFixed(2)}` : '')
     );
     config.walkTime = Date.now();
 }
