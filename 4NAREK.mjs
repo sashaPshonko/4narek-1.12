@@ -7,6 +7,7 @@ import {
     getItemUUID,
     getPriceFromAhItem,
     findMatchingConfigItem,
+    getDurabilityPercent,
 } from './items/slotInfo.mjs';
 
 const STORAGE_AH_SLOTS = 5;
@@ -282,6 +283,12 @@ async function handleChatMessage(text) {
         let finalPrice = basePrice + marker;
         if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
         config.needPrice = finalPrice;
+        const heldItem = bot.inventory.slots[quickToHotbarSlot(bot.quickBarSlot)];
+        const durabilityPercent = getDurabilityPercent(heldItem);
+        if (durabilityPercent < 0.9) {
+            logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — в оркестратор не шлём`);
+            return;
+        }
         parentPort.postMessage({ name: 'set_max_price', type: info.id, price: finalPrice });
         return;
     }

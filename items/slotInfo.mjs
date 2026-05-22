@@ -41,7 +41,7 @@ const customNameMap = {
     'Авто-плавка': 'smelting',
 };
 
-function getDurabilityPercent(item) {
+export function getDurabilityPercent(item) {
     if (!item.maxDurability) return 1;
     const damageComp = item.components?.find((c) => c.type === 'damage');
     const damage = damageComp?.data || 0;
