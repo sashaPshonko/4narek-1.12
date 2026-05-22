@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import mineflayer from 'mineflayer';
+import pathfinderPlugin from 'mineflayer-pathfinder';
 import { workerData, parentPort } from 'worker_threads';
+
+const { pathfinder, Movements, goals: { GoalNear } } = pathfinderPlugin;
 import { rnd } from './delay/delay.mjs';
 import {
     getSlotInfo,
@@ -24,7 +27,10 @@ const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
-const moves = ['forward', 'back', 'left', 'right'];
+const WALK_RADIUS = 3;
+const WALK_PATH_TIMEOUT_MS = 2000;
+
+let botMovements = null;
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
@@ -328,6 +334,13 @@ parentPort.on('message', (data) => {
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
+function initBotMovements() {
+    botMovements = new Movements(bot);
+    botMovements.canDig = false;
+    botMovements.allow1by1towers = false;
+    botMovements.allowParkour = false;
+}
+
 function main() {
     bot = mineflayer.createBot({
         host: 'mc.funtime.su',
@@ -337,6 +350,7 @@ function main() {
         version: '1.21.4',
         chatLengthLimit: 256,
     });
+    bot.loadPlugin(pathfinder);
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
@@ -365,6 +379,7 @@ function main() {
     });
 
     bot.once('spawn', async () => {
+        initBotMovements();
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
         await rnd('BASE_DELAY');
@@ -606,16 +621,7 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            const walkEnd = Date.now() + 3000;
-            while (Date.now() < walkEnd) {
-                const move = getRandomMove();
-                await rnd('POLL_WALK');
-                await bot.setControlState(move, true);
-                await rnd('WALK_DELAY');
-                await bot.setControlState(move, false);
-            }
-            config.walkTime = Date.now();
-            moves.forEach(async (m) => await bot.setControlState(m, false));
+            await walk();
         }
 
         if (canSell) {
@@ -738,25 +744,93 @@ function hasBotItem() {
     }
 }
 
-function getRandomMove() {
-    return moves[Math.floor(Math.random() * moves.length)];
+/** Случайная достижимая точка в радиусе WALK_RADIUS блоков. */
+function pickRandomWalkGoal() {
+    const base = bot.entity.position.floored();
+    const offsets = [];
+
+    for (let dx = -WALK_RADIUS; dx <= WALK_RADIUS; dx++) {
+        for (let dz = -WALK_RADIUS; dz <= WALK_RADIUS; dz++) {
+            for (let dy = -1; dy <= 2; dy++) {
+                if (dx === 0 && dz === 0 && dy === 0) continue;
+                if (dx * dx + dz * dz > WALK_RADIUS * WALK_RADIUS) continue;
+                offsets.push([dx, dy, dz]);
+            }
+        }
+    }
+
+    for (let i = offsets.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
+    }
+
+    bot.pathfinder.setMovements(botMovements);
+    for (const [dx, dy, dz] of offsets) {
+        const goal = base.offset(dx, dy, dz);
+        const path = bot.pathfinder.getPathTo(
+            botMovements,
+            new GoalNear(goal.x, goal.y, goal.z, 1),
+            WALK_PATH_TIMEOUT_MS
+        );
+        if (path.status === 'success' || path.status === 'partial') {
+            return goal;
+        }
+    }
+    return null;
 }
 
-/** Одно движение, если сервер пометил бота AFK (как перед /ah sell). */
+/** Pathfinder: идём на случайный блок в радиусе 3. */
+async function walk() {
+    if (!bot?.entity?.position || !botMovements) {
+        logWarn('ходьба: нет бота или pathfinder');
+        return;
+    }
+
+    if (bot.currentWindow) {
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
+    }
+
+    const goal = pickRandomWalkGoal();
+    if (!goal) {
+        logWarn(`ходьба: нет достижимого блока в радиусе ${WALK_RADIUS}`);
+        return;
+    }
+
+    const walkStartedAt = Date.now();
+    const start = bot.entity.position.clone();
+    logInfo(
+        `ХОДЬБА - СТАРТ @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)} → ` +
+        `${goal.x} ${goal.y} ${goal.z}`
+    );
+
+    try {
+        bot.pathfinder.setMovements(botMovements);
+        bot.pathfinder.setGoal(null);
+        await bot.pathfinder.goto(new GoalNear(goal.x, goal.y, goal.z, 1));
+    } catch (err) {
+        logWarn(`ходьба: pathfinder — ${err?.message ?? err}`);
+    } finally {
+        bot.pathfinder.setGoal(null);
+        bot.clearControlStates();
+    }
+
+    const finish = bot.entity.position.clone();
+    const elapsedSec = (Date.now() - walkStartedAt) / 1000;
+    const dist = finish.distanceTo(start);
+    logOk(
+        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)} | ` +
+        `прошёл ${dist.toFixed(2)} блок.`
+    );
+    config.walkTime = Date.now();
+}
+
+/** Сход с AFK — pathfinder-ходьба. */
 async function antiAfkIfNeeded() {
     if (config.afk) {
         logAfk('сходу с AFK → ходьба');
         config.afk = false;
-        const walkEnd = Date.now() + 3000;
-        while (Date.now() < walkEnd) {
-            const move = getRandomMove();
-            await rnd('POLL_WALK');
-            await bot.setControlState(move, true);
-            await rnd('WALK_DELAY');
-            await bot.setControlState(move, false);
-        }
-        config.walkTime = Date.now();
-        moves.forEach(async (m) => await bot.setControlState(m, false));
+        await walk();
     }
 }
 
