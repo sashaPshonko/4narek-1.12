@@ -337,6 +337,11 @@ function main() {
         version: '1.21.8',
         chatLengthLimit: 256,
     });
+    bot.on('error', (err) => {
+        parentPort.postMessage(JSON.stringify(err));
+        console.error(`${logTag()} ${ANSI.red}⛔ end${ANSI.reset}: ${JSON.stringify(err)}`);
+        process.exit(1);
+    });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
