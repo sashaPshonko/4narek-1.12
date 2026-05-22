@@ -618,7 +618,7 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            await walk(4000);
+            await walk();
         }
 
         if (canSell) {
@@ -757,8 +757,9 @@ async function walk() {
     while (rel < -Math.PI) rel += 2 * Math.PI;
     let key = getRandomElement(['forward', 'back', 'left', 'right']);
 
+    const walkStartedAt = Date.now();
     logInfo(
-        ` ХОДЬБА - СТАРТ ${(durationMs / 1000).toFixed(1)}с @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
+        `ХОДЬБА - СТАРТ @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
     );
 
     await rnd('POLL');
@@ -767,8 +768,9 @@ async function walk() {
     await bot.clearControlStates();
 
     const finish = bot.entity.position.clone();
+    const elapsedSec = (Date.now() - walkStartedAt) / 1000;
     logOk(
-        ` ХОДЬБА - КОНЕЦ ${(durationMs / 1000).toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
+        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
     );
     config.walkTime = Date.now();
 }
@@ -777,7 +779,7 @@ async function antiAfkIfNeeded() {
     if (config.afk) {
         logAfk('сходу с AFK → ходьба');
         config.afk = false;
-        await walk(delayMs({ min: 2000, max: 3500 }));
+        await walk();
     }
 }
 
