@@ -85,6 +85,10 @@ function logWarn(msg) {
     console.log(`${logTag()} ${ANSI.yellow}⚡${ANSI.reset} ${msg}`);
 }
 
+function logAfk(msg) {
+    console.log(`${logTag()} ${ANSI.red}${ANSI.bold}AFK${ANSI.reset} ${ANSI.red}${msg}${ANSI.reset}`);
+}
+
 function isLobbyBroadcastMessage(text) {
     return LOBBY_BROADCAST_MARKERS.some((marker) => text.includes(marker));
 }
@@ -245,6 +249,7 @@ async function handleChatMessage(text) {
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
         config.afk = true;
+        logAfk('сервер: команда недоступна в режиме AFK');
         return;
     }
     if (text.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
@@ -740,6 +745,7 @@ function getRandomMove() {
 /** Одно движение, если сервер пометил бота AFK (как перед /ah sell). */
 async function antiAfkIfNeeded() {
     if (config.afk) {
+        logAfk('сходу с AFK → ходьба');
         config.afk = false;
         const walkEnd = Date.now() + 3000;
         while (Date.now() < walkEnd) {
@@ -773,7 +779,7 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
-        logInfo(config.afk);
+        if (config.afk) logAfk('режим AFK (safeAH)');
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
         await antiAfkIfNeeded();
