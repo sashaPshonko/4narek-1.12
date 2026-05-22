@@ -336,7 +336,7 @@ function main() {
         port: 25565,
         username: config.username,
         password: config.password,
-        version: '1.21.11',
+        version: '1.21.4',
         chatLengthLimit: 256,
     });
     bot.on('scoreboardCreated', (scoreboard) => {
@@ -363,6 +363,13 @@ function main() {
 
     bot.on('kicked', (reason) => {
         console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${JSON.stringify(reason)}`);
+        process.exit(1);
+    });
+    bot.on('end', () => {
+        process.exit(1);
+    });
+    bot.on('error', (err) => {
+        console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
         process.exit(1);
     });
 
