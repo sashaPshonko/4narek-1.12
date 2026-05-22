@@ -568,6 +568,7 @@ async function tossTrashAtSlot(slot) {
 async function sellItems() {
     logOk('продажа → старт');
     try {
+        console.log(JSON.stringify(bot.entity.position));
         config.needSell = false;
         config.needSendAH = true;
         await joinAnarchy();
@@ -601,16 +602,7 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            const walkEnd = Date.now() + 3000;
-            while (Date.now() < walkEnd) {
-                const move = getRandomMove();
-                await rnd('POLL_WALK');
-                await bot.setControlState(move, true);
-                await rnd('WALK_DELAY');
-                await bot.setControlState(move, false);
-            }
-            config.walkTime = Date.now();
-            moves.forEach(async (m) => await bot.setControlState(m, false));
+            await walkRandomOffsets(4000);
         }
 
         if (canSell) {
@@ -733,24 +725,44 @@ function hasBotItem() {
     }
 }
 
-function getRandomMove() {
-    return moves[Math.floor(Math.random() * moves.length)];
+/** Клавиша WASD к случайному смещению (dx, dz) в мировых координатах. */
+function controlForOffset(dx, dz) {
+    const yaw = bot.entity.yaw;
+    const targetYaw = Math.atan2(-dx, -dz);
+    let rel = targetYaw - yaw;
+    while (rel > Math.PI) rel -= 2 * Math.PI;
+    while (rel < -Math.PI) rel += 2 * Math.PI;
+    if (rel >= -Math.PI / 4 && rel < Math.PI / 4) return 'forward';
+    if (rel >= Math.PI / 4 && rel < (3 * Math.PI) / 4) return 'right';
+    if (rel >= -(3 * Math.PI) / 4 && rel < -Math.PI / 4) return 'left';
+    return 'back';
+}
+
+/** Одно прожатие: случайная цель ±2 блока → одна клавиша. */
+async function stepTowardRandomOffset() {
+    const dx = (Math.random() * 2 - 1) * 2;
+    const dz = (Math.random() * 2 - 1) * 2;
+    const control = controlForOffset(dx, dz);
+    await rnd('POLL_WALK');
+    bot.setControlState(control, true);
+    await rnd('WALK_DELAY');
+    bot.setControlState(control, false);
+    for (const m of moves) bot.setControlState(m, false);
+}
+
+async function walkRandomOffsets(durationMs) {
+    const walkEnd = Date.now() + durationMs;
+    while (Date.now() < walkEnd) {
+        await stepTowardRandomOffset();
+    }
+    config.walkTime = Date.now();
 }
 
 /** Одно движение, если сервер пометил бота AFK (как перед /ah sell). */
 async function antiAfkIfNeeded() {
     if (config.afk) {
         config.afk = false;
-        const walkEnd = Date.now() + 3000;
-        while (Date.now() < walkEnd) {
-            const move = getRandomMove();
-            await rnd('POLL_WALK');
-            await bot.setControlState(move, true);
-            await rnd('WALK_DELAY');
-            await bot.setControlState(move, false);
-        }
-        config.walkTime = Date.now();
-        moves.forEach(async (m) => await bot.setControlState(m, false));
+        await walkRandomOffsets(4000);
     }
 }
 

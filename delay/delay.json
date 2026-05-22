@@ -1,8 +1,8 @@
 {
   "BASE_DELAY": { "min": 1000, "max": 3000 },
   "ANARCHY_DELAY": { "min": 3000, "max": 5000 },
-  "WALK_DELAY": { "min": 900, "max": 2000 },
-  "POLL": 200,
+  "WALK_DELAY": { "min": 900, "max": 1500 },
+  "POLL": 100,
   "500MS": 500,
   "WAIT_ANARCHY": 11000,
   "HOTBAR_DELAY": { "min": 500, "max": 1500 },
