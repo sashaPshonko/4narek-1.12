@@ -756,13 +756,13 @@ async function walk(_ms) {
         `${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
     );
 
-    bot.clearControlStates();
-    bot.setControlState(key, true);
-    bot.setControlState('sprint', true);
+    await bot.clearControlStates();
+    await bot.setControlState(key, true);
+    await bot.setControlState('sprint', true);
     try {
         await bot.waitForTicks(ticks);
     } finally {
-        bot.clearControlStates();
+        await bot.clearControlStates();
     }
 
     const finish = bot.entity.position.clone();
