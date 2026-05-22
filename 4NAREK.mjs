@@ -28,6 +28,13 @@ const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', '
 const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
 /** Доля полного круга за один осмотр (0.25 = 90°). */
 const LOOK_SPIN_TURNS = 0.25;
+/** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
+const LOOK_SPIN_AVG_YAW_UNITS = 4;
+
+function lookAroundSpinStepCount() {
+    const totalTurn = Math.PI * 2 * LOOK_SPIN_TURNS;
+    return Math.ceil(totalTurn / (LOOK_SPIN_AVG_YAW_UNITS * LOOK_GCD_STEP));
+}
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
@@ -606,14 +613,14 @@ async function sellItems() {
                 await rnd('BASE_DELAY');
                 await bot.closeWindow(bot.currentWindow);
             }
-            await lookAroundSpin();
-            // if (config.lastWarpTime < Date.now() - 120000) {
-            //     const warp = warps[Math.floor(Math.random() * warps.length)];
-            //     await rnd('BASE_DELAY');
-            //     bot.chat(`/warp ${warp}`);
-            // }
+            if (config.lastWarpTime < Date.now() - 120000) {
+                const warp = warps[Math.floor(Math.random() * warps.length)];
+                await rnd('BASE_DELAY');
+                bot.chat(`/warp ${warp}`);
+            }
 
             if (canSell) {
+                await lookAroundSpin();
                 await dropTrash();
             }
 
@@ -739,7 +746,7 @@ function hasBotItem() {
     }
 }
 
-/** Осмотр: мелкие GCD-шаги (плавно), угол задаёт LOOK_SPIN_TURNS. */
+/** Осмотр: от текущего yaw/pitch сервера, мелкие GCD-шаги, фикс. число итераций. */
 async function lookAroundSpin() {
     if (!bot?.entity) return;
 
@@ -747,32 +754,27 @@ async function lookAroundSpin() {
     const startPitch = bot.entity.pitch;
     const maxPitch = (Math.PI / 2) * 0.22;
     const turnDir = Math.random() < 0.5 ? -1 : 1;
-    const totalTurn = Math.PI * 2 * LOOK_SPIN_TURNS;
+    const steps = lookAroundSpinStepCount();
+    const plannedDeg = LOOK_SPIN_TURNS * 360;
 
-    let turned = 0;
-    let targetYaw = bot.entity.yaw;
-    let targetPitch = startPitch;
-
-    while (turned < totalTurn) {
+    for (let i = 0; i < steps; i++) {
         const yawUnits = 2 + Math.floor(Math.random() * 5);
-        const yawStep = turnDir * yawUnits * LOOK_GCD_STEP;
-        targetYaw += yawStep;
-        turned += Math.abs(yawStep);
+        const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
 
+        let pitch = bot.entity.pitch;
         if (Math.random() < 0.15) {
             const pitchUnits = 1 + Math.floor(Math.random() * 2);
-            targetPitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
-            targetPitch = Math.max(-maxPitch, Math.min(maxPitch, targetPitch));
+            pitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
+            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
         }
 
-        await bot.look(targetYaw, targetPitch, false);
+        await bot.look(yaw, pitch, false);
         if (Math.random() < 0.07) await bot.waitForTicks(1);
     }
 
-    const turnedDeg = (turned * 180) / Math.PI;
     const elapsedSec = (Date.now() - startedAt) / 1000;
     logOk(
-        `ОСМОТР ~${turnedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с ` +
+        `ОСМОТР ${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с ` +
         `pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
     );
     config.walkTime = Date.now();
