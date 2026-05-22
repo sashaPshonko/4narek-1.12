@@ -124,6 +124,28 @@ const config = {
 var bot = null;
 /** UUID лотов, которые уже кликают / в очереди (с оркестратора) */
 let itemsBuying = [];
+/** Позиция с сервера (обновляется только на forcedMove / entityMoved своего бота). */
+let serverPosition = null;
+
+function syncServerPosition() {
+    if (bot?.entity?.position) {
+        serverPosition = bot.entity.position.clone();
+    }
+}
+
+/** Клон последней серверной позиции; если ещё не было пакета — текущая entity. */
+function getServerPosition() {
+    if (serverPosition) return serverPosition.clone();
+    if (bot?.entity?.position) return bot.entity.position.clone();
+    return null;
+}
+
+function attachServerPositionTracking() {
+    bot.on('forcedMove', syncServerPosition);
+    bot.on('entityMoved', (entity) => {
+        if (entity === bot.entity) syncServerPosition();
+    });
+}
 
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
@@ -337,6 +359,8 @@ function main() {
         version: '1.21.8',
         chatLengthLimit: 256,
     });
+    attachServerPositionTracking();
+
     bot.on('error', (err) => {
         parentPort.postMessage(JSON.stringify(err));
         console.error(`${logTag()} ${ANSI.red}⛔ end${ANSI.reset}: ${JSON.stringify(err)}`);
@@ -370,6 +394,7 @@ function main() {
     });
 
     bot.once('spawn', async () => {
+        syncServerPosition();
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
         await rnd('BASE_DELAY');
@@ -741,37 +766,66 @@ function hasBotItem() {
     }
 }
 
-/** Один шаг в случайную сторону, 2–4 с. */
+const WALK_DIR_TIMEOUT_MS = 2000;
+const WALK_MAX_MS = 20_000;
+
+function pickMoveKey(exclude = null) {
+    const pool = exclude ? moves.filter((m) => m !== exclude) : moves;
+    return getRandomElement(pool.length ? pool : moves);
+}
+
+/** Движение, пока серверная позиция не сместится на 0.8–1.2 блока; раз в 2 с — другая сторона. */
 async function walk() {
-    if (!bot?.entity?.position) {
-        logWarn('ходьба: нет бота или позиции');
+    const walkStart = getServerPosition();
+    if (!walkStart) {
+        logWarn('ходьба: нет серверной позиции');
         return;
     }
 
-    const start = bot.entity.position.clone();
-
-    const dx = (Math.random() * 2 - 1) * 2;
-    const dz = (Math.random() * 2 - 1) * 2;
-    let rel = Math.atan2(-dx, -dz) - bot.entity.yaw;
-    while (rel > Math.PI) rel -= 2 * Math.PI;
-    while (rel < -Math.PI) rel += 2 * Math.PI;
-    let key = getRandomElement(['forward', 'back', 'left', 'right']);
-
+    const needDist = 0.8 + Math.random() * 0.4;
     const walkStartedAt = Date.now();
     logInfo(
-        `ХОДЬБА - СТАРТ @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
+        `ХОДЬБА - СТАРТ @ ${walkStart.x.toFixed(1)} ${walkStart.y.toFixed(1)} ${walkStart.z.toFixed(1)} (нужно ${needDist.toFixed(2)} блок.)`
     );
 
-    await rnd('POLL');
-    console.log(key);
-    await bot.setControlState(key, true);
-    await rnd('WALK_DELAY');
-    await bot.clearControlStates();
+    let lastKey = null;
 
-    const finish = bot.entity.position.clone();
+    try {
+        while (getServerPosition().distanceTo(walkStart) < needDist) {
+            if (Date.now() - walkStartedAt > WALK_MAX_MS) {
+                logWarn(`ходьба: таймаут ${WALK_MAX_MS / 1000}с`);
+                break;
+            }
+
+            const key = pickMoveKey(lastKey);
+            lastKey = key;
+            const dirStartedAt = Date.now();
+
+            bot.clearControlStates();
+            bot.setControlState(key, true);
+            bot.setControlState('sprint', true);
+
+            while (getServerPosition().distanceTo(walkStart) < needDist) {
+                if (Date.now() - walkStartedAt > WALK_MAX_MS) break;
+                await bot.waitForTicks(1);
+
+                if (Date.now() - dirStartedAt >= WALK_DIR_TIMEOUT_MS) {
+                    break;
+                }
+            }
+
+            bot.clearControlStates();
+        }
+    } finally {
+        bot.clearControlStates();
+    }
+
+    const walkEnd = getServerPosition();
     const elapsedSec = (Date.now() - walkStartedAt) / 1000;
+    const serverDist = walkEnd.distanceTo(walkStart);
     logOk(
-        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
+        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${walkEnd.x.toFixed(1)} ${walkEnd.y.toFixed(1)} ${walkEnd.z.toFixed(1)} ` +
+        `(сервер +${serverDist.toFixed(2)} / ${needDist.toFixed(2)})`
     );
     config.walkTime = Date.now();
 }
