@@ -29,6 +29,13 @@ const lastHotbarSlot = 44;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
 const WALK_RADIUS = 4;
 const WALK_PATH_TIMEOUT_MS = 2000;
+const WALK_GOTO_MAX_MS = 5_000;
+
+function walkGotoTimeout(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 
 let botMovements = null;
 
@@ -803,25 +810,34 @@ async function walk() {
         `${goal.x} ${goal.y} ${goal.z}`
     );
 
+    let gotoTimedOut = false;
     try {
         bot.pathfinder.setMovements(botMovements);
         bot.pathfinder.setGoal(null);
-        await bot.pathfinder.goto(new GoalNear(goal.x, goal.y, goal.z, 1));
+        const goalNear = new GoalNear(goal.x, goal.y, goal.z, 1);
+        await Promise.race([
+            bot.pathfinder.goto(goalNear),
+            walkGotoTimeout(WALK_GOTO_MAX_MS).then(() => {
+                gotoTimedOut = true;
+            }),
+        ]);
+        if (gotoTimedOut) {
+            logWarn(`ходьба: таймаут goto ${WALK_GOTO_MAX_MS / 1000}с`);
+        }
     } catch (err) {
         logWarn(`ходьба: pathfinder — ${err?.message ?? err}`);
     } finally {
         bot.pathfinder.setGoal(null);
         bot.clearControlStates();
+        const finish = bot.entity.position.clone();
+        const elapsedSec = (Date.now() - walkStartedAt) / 1000;
+        const dist = finish.distanceTo(start);
+        logOk(
+            `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)} | ` +
+            `прошёл ${dist.toFixed(2)} блок.`
+        );
+        config.walkTime = Date.now();
     }
-
-    const finish = bot.entity.position.clone();
-    const elapsedSec = (Date.now() - walkStartedAt) / 1000;
-    const dist = finish.distanceTo(start);
-    logOk(
-        `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)} | ` +
-        `прошёл ${dist.toFixed(2)} блок.`
-    );
-    config.walkTime = Date.now();
 }
 
 /** Сход с AFK — pathfinder-ходьба. */
