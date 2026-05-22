@@ -1,9 +1,6 @@
 import fs from 'fs/promises';
 import mineflayer from 'mineflayer';
-import pathfinderPlugin from 'mineflayer-pathfinder';
 import { workerData, parentPort } from 'worker_threads';
-
-const { pathfinder, Movements, goals: { GoalNear } } = pathfinderPlugin;
 import { rnd } from './delay/delay.mjs';
 import {
     getSlotInfo,
@@ -27,18 +24,9 @@ const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
-const WALK_RADIUS = 4;
-const WALK_PATH_TIMEOUT_MS = 2000;
-const WALK_GOTO_MAX_MS = 5_000;
-const AFK_MIN_MOVE_BLOCKS = 0.5;
 
-function walkGotoTimeout(ms) {
-    return new Promise((resolve) => {
-        setTimeout(resolve, ms);
-    });
-}
-
-let botMovements = null;
+/** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
+const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
@@ -342,23 +330,15 @@ parentPort.on('message', (data) => {
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-function initBotMovements() {
-    botMovements = new Movements(bot);
-    botMovements.canDig = false;
-    botMovements.allow1by1towers = false;
-    botMovements.allowParkour = false;
-}
-
 function main() {
     bot = mineflayer.createBot({
         host: 'mc.funtime.su',
         port: 25565,
         username: config.username,
         password: config.password,
-        version: '1.21.4',
+        version: '1.21.11',
         chatLengthLimit: 256,
     });
-    bot.loadPlugin(pathfinder);
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
@@ -387,7 +367,6 @@ function main() {
     });
 
     bot.once('spawn', async () => {
-        initBotMovements();
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
         await rnd('BASE_DELAY');
@@ -422,7 +401,7 @@ function main() {
             case analysisAH:
                 if (config.walkTime < Date.now() - 55000 ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
-                    logInfo('АХ → sellItems (прогулка/needSell)');
+                    logInfo('АХ → sellItems (осмотр/needSell)');
                     await sellItems();
                     if (!config.hasDangerousTrash) await safeAH();
                     break;
@@ -619,12 +598,12 @@ async function sellItems() {
                 await rnd('BASE_DELAY');
                 await bot.closeWindow(bot.currentWindow);
             }
-            await walk();
-            if (config.lastWarpTime < Date.now() - 120000) {
-                const warp = warps[Math.floor(Math.random() * warps.length)];
-                await rnd('BASE_DELAY');
-                bot.chat(`/warp ${warp}`);
-            }
+            await lookAroundSpin();
+            // if (config.lastWarpTime < Date.now() - 120000) {
+            //     const warp = warps[Math.floor(Math.random() * warps.length)];
+            //     await rnd('BASE_DELAY');
+            //     bot.chat(`/warp ${warp}`);
+            // }
 
             if (canSell) {
                 await dropTrash();
@@ -752,117 +731,54 @@ function hasBotItem() {
     }
 }
 
-/** Случайная достижимая точка в радиусе WALK_RADIUS блоков. */
-function pickRandomWalkGoal() {
-    const base = bot.entity.position.floored();
-    const offsets = [];
+/** Быстрый осмотр вокруг: GCD-шаги, bot.look без force — плавные look-пакеты. */
+async function lookAroundSpin() {
+    if (!bot?.entity) return;
 
-    for (let dx = -WALK_RADIUS; dx <= WALK_RADIUS; dx++) {
-        for (let dz = -WALK_RADIUS; dz <= WALK_RADIUS; dz++) {
-            if (dx === 0 && dz === 0) continue;
-            if (dx * dx + dz * dz > WALK_RADIUS * WALK_RADIUS) continue;
-            offsets.push([dx, 0, dz]);
+    const startPitch = bot.entity.pitch;
+    const maxPitch = (Math.PI / 2) * 0.22;
+    const turnDir = Math.random() < 0.5 ? -1 : 1;
+    const totalTurn = Math.PI * 2 * (0.96 + Math.random() * 0.08);
+
+    let turned = 0;
+    let targetYaw = bot.entity.yaw;
+    let targetPitch = startPitch;
+
+    while (turned < totalTurn) {
+        const yawUnits = 2 + Math.floor(Math.random() * 5);
+        const yawStep = turnDir * yawUnits * LOOK_GCD_STEP;
+        targetYaw += yawStep;
+        turned += Math.abs(yawStep);
+
+        if (Math.random() < 0.15) {
+            const pitchUnits = 1 + Math.floor(Math.random() * 2);
+            targetPitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
+            targetPitch = Math.max(-maxPitch, Math.min(maxPitch, targetPitch));
         }
+
+        await bot.look(targetYaw, targetPitch, false);
+        if (Math.random() < 0.07) await bot.waitForTicks(1);
     }
 
-    for (let i = offsets.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
-    }
-
-    bot.pathfinder.setMovements(botMovements);
-    for (const [dx, dy, dz] of offsets) {
-        const goal = base.offset(dx, dy, dz);
-        const path = bot.pathfinder.getPathTo(
-            botMovements,
-            new GoalNear(goal.x, goal.y, goal.z, 1),
-            WALK_PATH_TIMEOUT_MS
-        );
-        if (path.status === 'success' || path.status === 'partial') {
-            return goal;
-        }
-    }
-    return null;
+    const turnedDeg = (turned * 180) / Math.PI;
+    logOk(`ОСМОТР ~${turnedDeg.toFixed(0)}° pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`);
+    config.walkTime = Date.now();
 }
 
-/** Pathfinder: идём на случайный блок в радиусе WALK_RADIUS. Возвращает пройденные блоки. */
-async function walk({ skipWarpWait = false } = {}) {
-    if (!bot?.entity?.position || !botMovements) {
-        logWarn('ходьба: нет бота или pathfinder');
-        return 0;
-    }
-    if (!skipWarpWait) await waitWarpTeleport();
-
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
-
-    const goal = pickRandomWalkGoal();
-    if (!goal) {
-        logWarn(`ходьба: нет достижимого блока в радиусе ${WALK_RADIUS}`);
-        return 0;
-    }
-
-    const walkStartedAt = Date.now();
-    const start = bot.entity.position.clone();
-    logInfo(
-        `ХОДЬБА - СТАРТ @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)} → ` +
-        `${goal.x} ${goal.y} ${goal.z}`
-    );
-
-    let gotoTimedOut = false;
-    let dist = 0;
-    try {
-        bot.pathfinder.setMovements(botMovements);
-        bot.pathfinder.setGoal(null);
-        const goalNear = new GoalNear(goal.x, goal.y, goal.z, 1);
-        await Promise.race([
-            bot.pathfinder.goto(goalNear),
-            walkGotoTimeout(WALK_GOTO_MAX_MS).then(() => {
-                gotoTimedOut = true;
-            }),
-        ]);
-        if (gotoTimedOut) {
-            logWarn(`ходьба: таймаут goto ${WALK_GOTO_MAX_MS / 1000}с`);
-        }
-    } catch (err) {
-        logWarn(`ходьба: pathfinder — ${err?.message ?? err}`);
-    } finally {
-        bot.pathfinder.setGoal(null);
-        bot.clearControlStates();
-        const finish = bot.entity.position.clone();
-        const elapsedSec = (Date.now() - walkStartedAt) / 1000;
-        dist = finish.distanceTo(start);
-        logOk(
-            `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)} | ` +
-            `прошёл ${dist.toFixed(2)} блок.`
-        );
-        config.walkTime = Date.now();
-    }
-    return dist;
-}
-
-/** Сход с AFK — только pathfinder; afk снимаем, если реально сдвинулись. */
+/** Сход с AFK — крутим головой. */
 async function antiAfkIfNeeded() {
     if (!config.afk) return;
 
-    logAfk('сходу с AFK → ходьба');
+    logAfk('сходу с AFK → осмотр');
 
     if (bot.currentWindow) {
         await rnd('BASE_DELAY');
         await bot.closeWindow(bot.currentWindow);
     }
 
-    const dist = await walk();
-    if (dist < AFK_MIN_MOVE_BLOCKS) {
-        config.afk = true;
-        logAfk(`AFK не снят (прошёл ${dist.toFixed(2)} блок.)`);
-        return;
-    }
-
+    await lookAroundSpin();
     config.afk = false;
-    logOk(`AFK снят (прошёл ${dist.toFixed(2)} блок.)`);
+    logOk('AFK снят');
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
