@@ -575,10 +575,16 @@ async function tossTrashAtSlot(slot) {
     }
 }
 
+function getRandomElement(array) {
+    if (!Array.isArray(array) || array.length === 0) {
+        throw new Error("Input must be a non-empty array");
+    }
+    return array[Math.floor(Math.random() * array.length)];
+}
+
 async function sellItems() {
     logOk('продажа → старт');
     try {
-        console.log(JSON.stringify(bot.entity.position));
         config.needSell = false;
         config.needSendAH = true;
         await joinAnarchy();
