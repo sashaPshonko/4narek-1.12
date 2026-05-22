@@ -14,7 +14,6 @@ const STORAGE_AH_SLOTS = 5;
 const firstAHSlot = 0;
 const lastAHSlot = 17;
 const slotToReloadAH = 49;
-const slotGlass = 31;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
@@ -299,8 +298,8 @@ async function handleChatMessage(text) {
         return;
     }
 
-    if (text.includes('вы забанены')) {
-        parentPort.postMessage({ name: 'banned' });
+    if (text.toLowerCase().includes('вы забанены')) {
+        parentPort.postMessage(`${workerData.username} - забанен`);
         return;
     }
     if (text.includes('Отключите VPN и Proxy и повторите попытку входа')) {
