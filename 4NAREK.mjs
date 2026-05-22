@@ -762,8 +762,8 @@ async function walk(_ms) {
     );
 
     await bot.clearControlStates();
-    await bot.setControlState(key, true);
     await bot.setControlState('sprint', true);
+    await bot.setControlState(key, true);
     try {
         await bot.waitForTicks(ticks);
     } finally {
