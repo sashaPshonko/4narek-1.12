@@ -742,15 +742,13 @@ function hasBotItem() {
 }
 
 /** Один шаг в случайную сторону, 2–4 с. */
-async function walk(_ms) {
+async function walk() {
     if (!bot?.entity?.position) {
         logWarn('ходьба: нет бота или позиции');
         return;
     }
 
     const start = bot.entity.position.clone();
-    const durationMs = 2000 + Math.floor(Math.random() * 2000);
-    const ticks = Math.max(1, Math.round(durationMs / 50));
 
     const dx = (Math.random() * 2 - 1) * 2;
     const dz = (Math.random() * 2 - 1) * 2;
@@ -760,7 +758,7 @@ async function walk(_ms) {
     let key = getRandomElement(['forward', 'back', 'left', 'right']);
 
     logInfo(
-        `${(durationMs / 1000).toFixed(1)}с @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
+        `${ ХОДЬБА - СТАРТ (durationMs / 1000).toFixed(1)}с @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
     );
 
     await rnd('POLL');
@@ -770,7 +768,7 @@ async function walk(_ms) {
 
     const finish = bot.entity.position.clone();
     logOk(
-        `${(durationMs / 1000).toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
+        `${ ХОДЬБА - КОНЕЦ (durationMs / 1000).toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
     );
     config.walkTime = Date.now();
 }
