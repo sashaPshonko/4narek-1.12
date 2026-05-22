@@ -602,7 +602,7 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            await walkRandomOffsets(4000);
+            await walk(4000);
         }
 
         if (canSell) {
@@ -725,44 +725,33 @@ function hasBotItem() {
     }
 }
 
-/** Клавиша WASD к случайному смещению (dx, dz) в мировых координатах. */
-function controlForOffset(dx, dz) {
-    const yaw = bot.entity.yaw;
-    const targetYaw = Math.atan2(-dx, -dz);
-    let rel = targetYaw - yaw;
-    while (rel > Math.PI) rel -= 2 * Math.PI;
-    while (rel < -Math.PI) rel += 2 * Math.PI;
-    if (rel >= -Math.PI / 4 && rel < Math.PI / 4) return 'forward';
-    if (rel >= Math.PI / 4 && rel < (3 * Math.PI) / 4) return 'right';
-    if (rel >= -(3 * Math.PI) / 4 && rel < -Math.PI / 4) return 'left';
-    return 'back';
-}
+/** Ходьба: случайная точка рядом → одна клавиша WASD, так ~3–4 с. */
+async function walk(ms) {
+    if (!bot) return;
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+        const dx = (Math.random() * 2 - 1) * 2;
+        const dz = (Math.random() * 2 - 1) * 2;
+        let rel = Math.atan2(-dx, -dz) - bot.entity.yaw;
+        while (rel > Math.PI) rel -= 2 * Math.PI;
+        while (rel < -Math.PI) rel += 2 * Math.PI;
+        let key = 'forward';
+        if (rel >= Math.PI / 4 && rel < (3 * Math.PI) / 4) key = 'right';
+        else if (rel < -Math.PI / 4 && rel >= -(3 * Math.PI) / 4) key = 'left';
+        else if (Math.abs(rel) >= (3 * Math.PI) / 4) key = 'back';
 
-/** Одно прожатие: случайная цель ±2 блока → одна клавиша. */
-async function stepTowardRandomOffset() {
-    const dx = (Math.random() * 2 - 1) * 2;
-    const dz = (Math.random() * 2 - 1) * 2;
-    const control = controlForOffset(dx, dz);
-    await rnd('POLL_WALK');
-    bot.setControlState(control, true);
-    await rnd('WALK_DELAY');
-    bot.setControlState(control, false);
-    for (const m of moves) bot.setControlState(m, false);
-}
-
-async function walkRandomOffsets(durationMs) {
-    const walkEnd = Date.now() + durationMs;
-    while (Date.now() < walkEnd) {
-        await stepTowardRandomOffset();
+        await rnd('POLL_WALK');
+        await bot.setControlState(key, true);
+        await rnd('WALK_DELAY');
+        await bot.setControlState(key, false);
     }
     config.walkTime = Date.now();
 }
 
-/** Одно движение, если сервер пометил бота AFK (как перед /ah sell). */
 async function antiAfkIfNeeded() {
     if (config.afk) {
         config.afk = false;
-        await walkRandomOffsets(4000);
+        await walk(4000);
     }
 }
 
@@ -788,8 +777,8 @@ async function safeAH() {
         logInfo(config.afk);
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
-        await antiAfkIfNeeded();
         await rnd('AH_CMD');
+        await antiAfkIfNeeded();
         config.menu = analysisAH;
         bot.chat(`/ah search ${config.item}`);
         await rnd('AH_CMD');
