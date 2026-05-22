@@ -32,6 +32,8 @@ const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
 const LOOK_SPIN_TURNS = 0.15;
 /** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
 const LOOK_SPIN_AVG_YAW_UNITS = 4;
+/** Макс. длительность осмотра (мс). */
+const LOOK_SPIN_TIMEOUT_MS = 4000;
 
 function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
     const totalTurn = Math.PI * 2 * turns;
@@ -775,8 +777,12 @@ async function lookAroundSpin() {
     const turnDir = Math.random() < 0.5 ? -1 : 1;
     const steps = lookAroundSpinStepCount();
     const plannedDeg = LOOK_SPIN_TURNS * 360;
+    const deadline = startedAt + LOOK_SPIN_TIMEOUT_MS;
+    let doneSteps = 0;
 
     for (let i = 0; i < steps; i++) {
+        if (Date.now() >= deadline) break;
+
         const yawUnits = 2 + Math.floor(Math.random() * 5);
         const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
 
@@ -788,12 +794,15 @@ async function lookAroundSpin() {
         }
 
         await bot.look(yaw, pitch, false);
+        doneSteps++;
     }
 
     const elapsedSec = (Date.now() - startedAt) / 1000;
+    const timedOut = doneSteps < steps;
     logOk(
-        `ОСМОТР ${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с ` +
-        `pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
+        `ОСМОТР ${doneSteps}/${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с` +
+        (timedOut ? ' (таймаут 4с)' : '') +
+        ` pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
     );
     config.walkTime = Date.now();
 }
