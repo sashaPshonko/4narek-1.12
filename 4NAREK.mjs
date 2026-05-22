@@ -30,6 +30,7 @@ const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', '
 const WALK_RADIUS = 4;
 const WALK_PATH_TIMEOUT_MS = 2000;
 const WALK_GOTO_MAX_MS = 5_000;
+const AFK_MIN_MOVE_BLOCKS = 0.5;
 
 function walkGotoTimeout(ms) {
     return new Promise((resolve) => {
@@ -784,13 +785,13 @@ function pickRandomWalkGoal() {
     return null;
 }
 
-/** Pathfinder: идём на случайный блок в радиусе WALK_RADIUS. */
-async function walk() {
+/** Pathfinder: идём на случайный блок в радиусе WALK_RADIUS. Возвращает пройденные блоки. */
+async function walk({ skipWarpWait = false } = {}) {
     if (!bot?.entity?.position || !botMovements) {
         logWarn('ходьба: нет бота или pathfinder');
-        return;
+        return 0;
     }
-    await waitWarpTeleport();
+    if (!skipWarpWait) await waitWarpTeleport();
 
     if (bot.currentWindow) {
         await rnd('BASE_DELAY');
@@ -800,7 +801,7 @@ async function walk() {
     const goal = pickRandomWalkGoal();
     if (!goal) {
         logWarn(`ходьба: нет достижимого блока в радиусе ${WALK_RADIUS}`);
-        return;
+        return 0;
     }
 
     const walkStartedAt = Date.now();
@@ -811,6 +812,7 @@ async function walk() {
     );
 
     let gotoTimedOut = false;
+    let dist = 0;
     try {
         bot.pathfinder.setMovements(botMovements);
         bot.pathfinder.setGoal(null);
@@ -831,22 +833,36 @@ async function walk() {
         bot.clearControlStates();
         const finish = bot.entity.position.clone();
         const elapsedSec = (Date.now() - walkStartedAt) / 1000;
-        const dist = finish.distanceTo(start);
+        dist = finish.distanceTo(start);
         logOk(
             `ХОДЬБА - КОНЕЦ ${elapsedSec.toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)} | ` +
             `прошёл ${dist.toFixed(2)} блок.`
         );
         config.walkTime = Date.now();
     }
+    return dist;
 }
 
-/** Сход с AFK — pathfinder-ходьба. */
+/** Сход с AFK — только pathfinder; afk снимаем, если реально сдвинулись. */
 async function antiAfkIfNeeded() {
-    if (config.afk) {
-        logAfk('сходу с AFK → ходьба');
-        config.afk = false;
-        await walk();
+    if (!config.afk) return;
+
+    logAfk('сходу с AFK → ходьба');
+
+    if (bot.currentWindow) {
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
     }
+
+    const dist = await walk();
+    if (dist < AFK_MIN_MOVE_BLOCKS) {
+        config.afk = true;
+        logAfk(`AFK не снят (прошёл ${dist.toFixed(2)} блок.)`);
+        return;
+    }
+
+    config.afk = false;
+    logOk(`AFK снят (прошёл ${dist.toFixed(2)} блок.)`);
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
@@ -872,6 +888,10 @@ async function safeAH() {
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
         await antiAfkIfNeeded();
+        if (config.afk) {
+            await rnd('AH_CMD');
+            continue;
+        }
         await rnd('AH_CMD');
         config.menu = analysisAH;
         bot.chat(`/ah search ${config.item}`);
