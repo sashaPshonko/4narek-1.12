@@ -26,13 +26,13 @@ const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', '
 
 /** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
 const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
-/** Доля полного круга за один осмотр (0.25 = 90°). */
-const LOOK_SPIN_TURNS = 0.25;
+/** Доля полного круга (~0.15 ≈ 54°, ~90 шагов, ~4–5 с). */
+const LOOK_SPIN_TURNS = 0.15;
 /** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
 const LOOK_SPIN_AVG_YAW_UNITS = 4;
 
-function lookAroundSpinStepCount() {
-    const totalTurn = Math.PI * 2 * LOOK_SPIN_TURNS;
+function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
+    const totalTurn = Math.PI * 2 * turns;
     return Math.ceil(totalTurn / (LOOK_SPIN_AVG_YAW_UNITS * LOOK_GCD_STEP));
 }
 
@@ -695,8 +695,8 @@ async function sellItems() {
                         bot.chat(`/clan invest ${investSum}`);
                     }
                 }
-                if (saveSum != null && config.balance != null && config.balance < saveSum) {
-                    bot.chat(`/clan withdraw ${Math.floor(saveSum - config.balance)}`);
+                if (saveSum != null && config.balance != null && config.balance < saveSum/2) {
+                    bot.chat(`/clan withdraw ${Math.floor(saveSum/2 - config.balance)}`);
                     config.needAdd = false;
                 }
             }
@@ -780,7 +780,6 @@ async function lookAroundSpin() {
         }
 
         await bot.look(yaw, pitch, false);
-        if (Math.random() < 0.07) await bot.waitForTicks(1);
     }
 
     const elapsedSec = (Date.now() - startedAt) / 1000;
