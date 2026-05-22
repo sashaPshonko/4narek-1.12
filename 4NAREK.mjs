@@ -32,8 +32,9 @@ const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
 const LOOK_SPIN_TURNS = 0.15;
 /** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
 const LOOK_SPIN_AVG_YAW_UNITS = 4;
-/** Макс. длительность осмотра (мс). */
-const LOOK_SPIN_TIMEOUT_MS = 4000;
+/** Длительность осмотра (мс): случайно от 3 до 4 с на каждый вызов. */
+const LOOK_SPIN_TIMEOUT_MIN_MS = 3000;
+const LOOK_SPIN_TIMEOUT_MAX_MS = 4000;
 
 function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
     const totalTurn = Math.PI * 2 * turns;
@@ -134,6 +135,7 @@ const config = {
     balance: null,
     needSendAH: true,
     needAdd: false,
+    timeActive: Date.now(),
 };
 
 var bot = null;
@@ -408,7 +410,16 @@ function main() {
         await safeAH();
     });
 
+    bot.on('physicTick', async () => {
+        if (Date.now() - config.timeActive > 60000) {
+            config.timeActive = Date.now();
+            await sellItems();
+            await safeAH();
+        }
+    })
+
     bot.on('windowOpen', async () => {
+        config.timeActive = Date.now();
         // if (bot.currentWindow) {
         //     const { slots, ...winWithoutSlots } = bot.currentWindow;
         //     console.log(JSON.stringify({ ...winWithoutSlots, slotsCount: slots?.length ?? 0 }));
@@ -422,7 +433,8 @@ function main() {
             config.menu = myItems;
         } else if (windowJSON.includes('телепортации')) {
             config.menu = rtp;
-        } else if (windowJSON.includes('подтверждение покупки')) {
+        } else if (windowJSON.includes('подозрительная цена') ||
+            windowJSON.includes('подтверждение покупки')) {
             config.menu = accept;
         } else {
             config.menu = analysisAH;
@@ -605,6 +617,7 @@ async function tossTrashAtSlot(slot) {
 }
 
 async function sellItems() {
+    config.timeActive = Date.now();
     logOk('продажа → старт');
     try {
         config.needSell = false;
@@ -714,9 +727,7 @@ async function sellItems() {
 
     } catch (err) {
         reportError('sellItems', err);
-        await waitWarpTeleport();
     } finally {
-        await waitWarpTeleport();
         logOk('продажа → конец');
     }
 }
@@ -777,7 +788,10 @@ async function lookAroundSpin() {
     const turnDir = Math.random() < 0.5 ? -1 : 1;
     const steps = lookAroundSpinStepCount();
     const plannedDeg = LOOK_SPIN_TURNS * 360;
-    const deadline = startedAt + LOOK_SPIN_TIMEOUT_MS;
+    const timeoutMs =
+        LOOK_SPIN_TIMEOUT_MIN_MS +
+        Math.floor(Math.random() * (LOOK_SPIN_TIMEOUT_MAX_MS - LOOK_SPIN_TIMEOUT_MIN_MS + 1));
+    const deadline = startedAt + timeoutMs;
     let doneSteps = 0;
 
     for (let i = 0; i < steps; i++) {
@@ -801,7 +815,7 @@ async function lookAroundSpin() {
     const timedOut = doneSteps < steps;
     logOk(
         `ОСМОТР ${doneSteps}/${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с` +
-        (timedOut ? ' (таймаут 4с)' : '') +
+        (timedOut ? ` (таймаут ${(timeoutMs / 1000).toFixed(1)}с)` : '') +
         ` pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
     );
     config.walkTime = Date.now();
