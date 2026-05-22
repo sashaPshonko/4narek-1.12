@@ -763,6 +763,7 @@ async function walk() {
     );
 
     await rnd('POLL');
+    console.log(key);
     await bot.setControlState(key, true);
     await rnd('WALK_DELAY');
     await bot.clearControlStates();
