@@ -17,6 +17,7 @@ const slotToReloadAH = 49;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
+const slotGlass = 31;
 
 const firstInventorySlot = 9;
 const lastInventorySlot = 35;
