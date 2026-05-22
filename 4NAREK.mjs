@@ -26,6 +26,8 @@ const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', '
 
 /** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
 const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
+/** Доля полного круга за один осмотр (0.25 = 90°). */
+const LOOK_SPIN_TURNS = 0.25;
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
@@ -737,14 +739,15 @@ function hasBotItem() {
     }
 }
 
-/** Быстрый осмотр вокруг: GCD-шаги, bot.look без force — плавные look-пакеты. */
+/** Осмотр: мелкие GCD-шаги (плавно), угол задаёт LOOK_SPIN_TURNS. */
 async function lookAroundSpin() {
     if (!bot?.entity) return;
 
+    const startedAt = Date.now();
     const startPitch = bot.entity.pitch;
     const maxPitch = (Math.PI / 2) * 0.22;
     const turnDir = Math.random() < 0.5 ? -1 : 1;
-    const totalTurn = Math.PI * 2 * (0.96 + Math.random() * 0.08);
+    const totalTurn = Math.PI * 2 * LOOK_SPIN_TURNS;
 
     let turned = 0;
     let targetYaw = bot.entity.yaw;
@@ -767,7 +770,11 @@ async function lookAroundSpin() {
     }
 
     const turnedDeg = (turned * 180) / Math.PI;
-    logOk(`ОСМОТР ~${turnedDeg.toFixed(0)}° pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`);
+    const elapsedSec = (Date.now() - startedAt) / 1000;
+    logOk(
+        `ОСМОТР ~${turnedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с ` +
+        `pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
+    );
     config.walkTime = Date.now();
 }
 
