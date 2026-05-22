@@ -611,6 +611,7 @@ async function sellItems() {
                 await rnd('BASE_DELAY');
                 await bot.closeWindow(bot.currentWindow);
             }
+            await walk();
             if (config.lastWarpTime < Date.now() - 120000) {
                 const warp = warps[Math.floor(Math.random() * warps.length)];
                 await rnd('BASE_DELAY');
@@ -621,7 +622,6 @@ async function sellItems() {
                 await dropTrash();
             }
 
-            await walk();
         }
 
         if (canSell) {
@@ -751,11 +751,9 @@ function pickRandomWalkGoal() {
 
     for (let dx = -WALK_RADIUS; dx <= WALK_RADIUS; dx++) {
         for (let dz = -WALK_RADIUS; dz <= WALK_RADIUS; dz++) {
-            for (let dy = -1; dy <= 2; dy++) {
-                if (dx === 0 && dz === 0 && dy === 0) continue;
-                if (dx * dx + dz * dz > WALK_RADIUS * WALK_RADIUS) continue;
-                offsets.push([dx, dy, dz]);
-            }
+            if (dx === 0 && dz === 0) continue;
+            if (dx * dx + dz * dz > WALK_RADIUS * WALK_RADIUS) continue;
+            offsets.push([dx, 0, dz]);
         }
     }
 
