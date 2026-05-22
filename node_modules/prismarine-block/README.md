@@ -28,6 +28,12 @@ See [doc/API.md](doc/API.md)
 
 ## History
 
+### 1.23.0
+* [Update CI to Node 24 (#121)](https://github.com/PrismarineJS/prismarine-block/commit/52aef3071c85f289c05e9c94efe1bfef2ec73563) (thanks @rom1504)
+* [Fix publish condition for npm-publish v4 (#120)](https://github.com/PrismarineJS/prismarine-block/commit/c6ba1377c8ea72a75a5b0d2862ce03a05485a82b) (thanks @rom1504)
+* [Switch to trusted publishing via OIDC (#119)](https://github.com/PrismarineJS/prismarine-block/commit/36a926f8c29311eb28266377b65a12d1efa04528) (thanks @rom1504)
+* [Change boundingBox to an enum (#117)](https://github.com/PrismarineJS/prismarine-block/commit/4ef6c9ee6f19970ae4390de02314358597686cd8) (thanks @linkle69)
+
 ### 1.22.0
 * [Update sign blockEntity for 1.21.5 (#115)](https://github.com/PrismarineJS/prismarine-block/commit/a660e4a45c3afdd932d9b9311a93567c49e9c80e) (thanks @extremeheat)
 * [Bump expect from 29.7.0 to 30.0.5 (#114)](https://github.com/PrismarineJS/prismarine-block/commit/8e1eec194befe4a3d8c26a4a15d866f3fe9031eb) (thanks @dependabot[bot])

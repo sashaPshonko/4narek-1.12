@@ -1,7 +1,7 @@
 # Created from MiNET and gophertunnel docs
 # The version below is the latest version this protocol schema was updated for.
 # The output protocol.json will be in the folder for the version
-!version: 1.26.0
+!version: 1.26.20
 
 # Some ProtoDef aliases
 string: ["pstring",{"countType":"varint"}]            # String / array types
@@ -1021,7 +1021,10 @@ packet_entity_event:
       77: vibration_detected
       78: drink_milk
       79: wetness_stop
+      80: kinetic_damage_dealt
+      81: hurt_without_receiving_damage
    data: zigzag32
+   fire_at_position?: vec3f
 
 packet_mob_effect:
    !id: 0x1c
@@ -1058,7 +1061,7 @@ packet_mob_equipment:
    !id: 0x1f
    !bound: both
    runtime_entity_id: varint64
-   item: Item
+   item: ItemNew
    slot: u8
    selected_slot: u8
    window_id: WindowID
@@ -1293,14 +1296,14 @@ packet_inventory_slot:
    # Slot is the index of the slot that the packet modifies. The new item will be set to the slot at this index.
    slot: varint
    # Container is the protocol.FullContainerName that describes the container that the content is for.
-   container: FullContainerName
+   container?: FullContainerName
    # storage_item is the item that is acting as the storage container for the inventory. If the inventory is
    # not a dynamic container then this field should be left empty. When set, only the item type is used by
    # the client and none of the other stack info.
-   storage_item: Item
+   storage_item?: ItemNew
    # NewItem is the item to be put in the slot at Slot. It will overwrite any item that may currently
    # be present in that slot.
-   item: Item
+   item: ItemNew
 
 # ContainerSetData is sent by the server to update specific data of a single container, meaning a block such
 # as a furnace or a brewing stand. This data is usually used by the client to display certain features
@@ -1852,7 +1855,7 @@ packet_available_commands:
                58: raw_text
                62: json
                71: block_states
-               74: command
+               75: command
             # In MC, this + prior field are combined to one 32bit bitfield
             enum_type: lu16 =>
                0x10: valid
@@ -2133,6 +2136,7 @@ packet_play_sound:
    coordinates: BlockCoordinates
    volume: lf32
    pitch: lf32
+   handle?: lu64
 
 packet_stop_sound:
    !id: 0x57
@@ -2797,6 +2801,7 @@ packet_level_sound_event:
    # different sessions of the same world, but most servers simply fill the runtime ID of the entity out for
    # this field.
    entity_unique_id: li64
+   fire_at_position?: vec3f
 
 # LevelEventGeneric is sent by the server to send a 'generic' level event to the client. This packet sends an
 # NBT serialised object and may for that reason be used for any event holding additional data.
@@ -3545,14 +3550,11 @@ packet_filter_text_packet:
    # FromServer indicates if the packet was sent by the server or not.
    from_server: bool
 
-# ClientBoundDebugRenderer is sent by the server to spawn an outlined cube on client-side.
-packet_debug_renderer:
+# PrimitiveShapes is a packet sent by the server to instruct the client to render one or more shapes in the world.
+packet_primitive_shapes:
    !id: 0xa4
    !bound: client
-   type: string
-   has_data: bool
-   data: has_data ?
-      if true: DebugMarkerData
+   shapes: PrimitiveShape[]varint
 
 
 
@@ -3792,6 +3794,7 @@ packet_dimension_data:
          3: nether
          4: end
          5: void
+      dimension_type: zigzag32
 
 # AgentAction is an Education Edition packet sent from the server to the client to return a response to a
 # previously requested action.
@@ -4055,9 +4058,6 @@ packet_update_client_input_locks:
    !bound: client
    # Locks is an encoded bitset of all locks that are currently active. The locks are defined in the constants above.
    locks: InputLockFlags
-   # Position is the server's position of the client at the time the packet was sent. It is unclear what the exact
-   # purpose of this field is.
-   position: vec3f
 
 # Deprecated: ClientCheatAbility is deprecated as of 1.20.10.
 packet_client_cheat_ability:
@@ -4312,6 +4312,8 @@ packet_serverbound_diagnostics:
    average_remainder_time_percent: lf32
    average_unaccounted_time_percent: lf32
    memory_category_values: MemoryCategoryCounter[]varint
+   entity_diagnostics: EntityDiagnosticTimingInfo[]varint
+   system_diagnostics: SystemDiagnosticTimingInfo[]varint
 
 # CameraAimAssist is sent by the server to the client to set up aim assist for the client's camera.
 packet_camera_aim_assist:
@@ -4444,6 +4446,9 @@ packet_client_movement_prediction_sync:
    jump_strength: lf32
    health: lf32
    hunger: lf32
+   unknown_attribute_1: lf32
+   unknown_attribute_2: lf32
+   unknown_attribute_3: lf32
    entity_runtime_id: varint64
    is_flying: bool
 
@@ -4455,6 +4460,7 @@ packet_update_client_options:
       - fancy
       - advanced
       - ray_traced
+   filter_profanity?: bool
 
 # PlayerVideoCapturePacket is sent by the server to start or stop video recording for a player. This packet
 # only works on development builds and has no effect on retail builds. When recording, the client will save
@@ -4563,48 +4569,14 @@ packet_serverbound_pack_setting_change:
 packet_clientbound_data_store:
    !id: 0x14a
    !bound: client
-   entries: []varint
-      type: varint =>
-         0: update
-         1: change
-         2: removal
-      _: type ?
-         if update:
-            name: string
-            property: string
-            path: string
-            data_type: varint =>
-               0: double
-               1: bool
-               2: string
-            data: data_type ?
-               if double: lf64
-               if bool: bool
-               if string: string
-            update_count: li32
-            path_update_count: li32
-         if change:
-            name: string
-            property: string
-            update_count: varint
-            # TODO: This packet maybe defined wrong. Needs further investigation
-            data_type: varint =>
-               0: double
-               1: bool
-               2: string
-            data: data_type ?
-               if double: lf64
-               if bool: bool
-               if string: string
-         if removal:
-            name: string
+   updates: DataStoreChangeEntry[]varint
 
 packet_graphics_override_parameter:
    !id: 0x14b
    !bound: client
    values: ParameterKeyframeValue[]varint
-   float_value: lf32
-   vec3_value: vec3f
+   float_value?: lf32
+   vec3_value?: vec3f
    biome_identifier: string
    parameter_type: GraphicsOverrideParameterType
    reset: bool
@@ -4615,7 +4587,7 @@ packet_serverbound_data_store:
    name: string
    property: string
    path: string
-   data_type: varint =>
+   data_type: lu32 =>
       0: double
       1: bool
       2: string
@@ -4623,17 +4595,20 @@ packet_serverbound_data_store:
       if double: lf64
       if bool: bool
       if string: string
-   update_count: varint
-   path_update_count: li32
+   update_count: lu32
+   path_update_count: lu32
 
 packet_clientbound_data_driven_ui_show_screen:
    !id: 0x14d
    !bound: client
    screen_id: string
+   form_id: lu32
+   data_instance_id?: lu32
 
-packet_clientbound_data_driven_ui_close_all_screens:
+packet_clientbound_data_driven_ui_close_screen:
    !id: 0x14e
    !bound: client
+   form_id?: lu32
 
 packet_clientbound_data_driven_ui_reload:
    !id: 0x14f
@@ -4661,6 +4636,7 @@ packet_voxel_shapes:
    !bound: client
    shapes: VoxelShape[]varint
    name_map: VoxelShapeNameEntry[]varint
+   custom_shape_count: lu16
 
 packet_camera_spline:
    !id: 0x152
@@ -4671,3 +4647,82 @@ packet_camera_aim_assist_actor_priority:
    !id: 0x153
    !bound: client
    priority_data: CameraAimAssistActorPriorityData[]varint
+
+packet_resource_packs_ready_for_validation:
+   !id: 0x154
+   !bound: server
+
+packet_locator_bar:
+   !id: 0x155
+   !bound: client
+   waypoints: LocatorBarWaypoint[]varint
+
+packet_party_changed:
+   !id: 0x156
+   !bound: client
+   party_info?: PartyInfo
+
+packet_serverbound_data_driven_screen_closed:
+   !id: 0x157
+   !bound: server
+   form_id?: lu32
+   close_reason: u8 =>
+      0: programmatic_close
+      1: programmatic_close_all
+      2: client_canceled
+      3: user_busy
+      4: invalid_form
+
+packet_sync_world_clocks:
+   !id: 0x158
+   !bound: client
+   payload_type: varint =>
+      0: sync_state
+      1: initialize_registry
+      2: add_time_marker
+      3: remove_time_marker
+   _: payload_type ?
+      if sync_state:
+         sync_states: SyncWorldClockStateData[]varint
+      if initialize_registry:
+         clocks: WorldClockData[]varint
+      if add_time_marker:
+         add_clock_id: varint64
+         add_time_markers: TimeMarkerData[]varint
+      if remove_time_marker:
+         remove_clock_id: varint64
+         remove_time_marker_ids: varint64[]varint
+
+packet_clientbound_attribute_layer_sync:
+   !id: 0x159
+   !bound: client
+   payload_type: varint =>
+      0: update_layers
+      1: update_settings
+      2: update_environment
+      3: remove_environment
+   _: payload_type ?
+      if update_layers:
+         layers: AttributeLayerData[]varint
+      if update_settings:
+         layer_name: string
+         dimension_id: zigzag32
+         settings: AttributeLayerSettings
+      if update_environment:
+         layer_name: string
+         dimension_id: zigzag32
+         environment_attributes: EnvironmentAttributeData[]varint
+      if remove_environment:
+         layer_name: string
+         dimension_id: zigzag32
+         remove_attribute_names: string[]varint
+
+packet_server_store_info:
+   !id: 0x15a
+   !bound: client
+   store_info?: StoreEntryPointInfo
+
+packet_server_presence_info:
+   !id: 0x15b
+   !bound: client
+   presence_info?: PresenceInfo

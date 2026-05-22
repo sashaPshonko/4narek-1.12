@@ -34,6 +34,7 @@ function Physics (mcData, world) {
   const lavaIds = [blocksByName.lava.id, blocksByName.flowing_lava ? blocksByName.flowing_lava.id : -1]
   const ladderId = blocksByName.ladder.id
   const vineId = blocksByName.vine.id
+  const scaffoldingId = blocksByName.scaffolding ? blocksByName.scaffolding.id : -1 // 1.14+
 
   // NOTE: Copper trapdoors is coming in 1.21.
   const trapdoorIds = new Set()
@@ -439,6 +440,7 @@ function Physics (mcData, world) {
     const block = world.getBlock(pos)
     if (!block) { return false }
     if (block.type === ladderId || block.type === vineId) { return true }
+    if (scaffoldingId !== -1 && block.type === scaffoldingId) { return true }
 
     // Since 1.9, when a trapdoor satisfies the following conditions, it also becomes climbable:
     //  1. The trapdoor is placed directly above a ladder.
@@ -516,8 +518,8 @@ function Physics (mcData, world) {
         vel.z += lookDir.z * movingDownSpeedModifier / cosPitch
       }
 
-      if (pitch < 0.0 && cosPitch > 0.0) {
-        const lookDownSpeedModifier = horizontalSpeed * (-sinPitch) * 0.04
+      if (pitch > 0.0 && cosPitch > 0.0) {
+        const lookDownSpeedModifier = horizontalSpeed * sinPitch * 0.04
         vel.x += -lookDir.x * lookDownSpeedModifier / cosPitch
         vel.y += lookDownSpeedModifier * 3.2
         vel.z += -lookDir.z * lookDownSpeedModifier / cosPitch
