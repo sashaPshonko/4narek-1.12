@@ -751,30 +751,20 @@ async function walk(_ms) {
     let rel = Math.atan2(-dx, -dz) - bot.entity.yaw;
     while (rel > Math.PI) rel -= 2 * Math.PI;
     while (rel < -Math.PI) rel += 2 * Math.PI;
-    let key = 'forward';
-    if (rel >= Math.PI / 4 && rel < (3 * Math.PI) / 4) key = 'right';
-    else if (rel < -Math.PI / 4 && rel >= -(3 * Math.PI) / 4) key = 'left';
-    else if (Math.abs(rel) >= (3 * Math.PI) / 4) key = 'back';
+    let key = getRandomElement(['forward', 'back', 'left', 'right']);
 
     logInfo(
-        `ходьба → ${key}, ${(durationMs / 1000).toFixed(1)}с @ ` +
-        `${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
+        `${(durationMs / 1000).toFixed(1)}с @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`
     );
 
-    await bot.clearControlStates();
-    await bot.setControlState('sprint', true);
+    await rnd('POLL');
     await bot.setControlState(key, true);
-    try {
-        await bot.waitForTicks(ticks);
-    } finally {
-        await bot.clearControlStates();
-    }
+    await rnd('WALK_DELAY');
+    await bot.clearControlStates();
 
     const finish = bot.entity.position.clone();
-    const dist = start.distanceTo(finish);
     logOk(
-        `ходьба → конец: ${dist.toFixed(2)} блоков за ${(durationMs / 1000).toFixed(1)}с ` +
-        `(${start.x.toFixed(1)} ${start.z.toFixed(1)} → ${finish.x.toFixed(1)} ${finish.z.toFixed(1)})`
+        `${(durationMs / 1000).toFixed(1)}с @ ${finish.x.toFixed(1)} ${finish.y.toFixed(1)} ${finish.z.toFixed(1)}`
     );
     config.walkTime = Date.now();
 }
@@ -783,7 +773,7 @@ async function antiAfkIfNeeded() {
     if (config.afk) {
         logAfk('сходу с AFK → ходьба');
         config.afk = false;
-        await walk(4000);
+        await walk(delayMs({ min: 2000, max: 3500 }));
     }
 }
 
