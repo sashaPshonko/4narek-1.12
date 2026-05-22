@@ -725,19 +725,19 @@ function hasBotItem() {
     }
 }
 
-/** Ходьба: случайная точка рядом → одна клавиша WASD, так ~3–4 с. */
-async function walk(ms) {
+/** 3 шага: каждый идёт, пока не пройдёт 0.8–1.2 блока. */
+async function walk(_ms) {
     if (!bot?.entity?.position) {
         logWarn('ходьба: нет бота или позиции');
         return;
     }
-    const start = bot.entity.position.clone();
-    logInfo(`ходьба → старт ${ms}мс @ ${start.x.toFixed(1)} ${start.y.toFixed(1)} ${start.z.toFixed(1)}`);
 
-    let steps = 0;
-    const end = Date.now() + ms;
-    while (Date.now() < end) {
-        const beforeStep = bot.entity.position.clone();
+    const tripStart = bot.entity.position.clone();
+    logInfo(`ходьба → старт @ ${tripStart.x.toFixed(1)} ${tripStart.y.toFixed(1)} ${tripStart.z.toFixed(1)}`);
+
+    for (let step = 1; step <= 3; step++) {
+        const stepStart = bot.entity.position.clone();
+        const needDist = 0.8 + Math.random() * 0.4;
 
         const dx = (Math.random() * 2 - 1) * 2;
         const dz = (Math.random() * 2 - 1) * 2;
@@ -749,22 +749,26 @@ async function walk(ms) {
         else if (rel < -Math.PI / 4 && rel >= -(3 * Math.PI) / 4) key = 'left';
         else if (Math.abs(rel) >= (3 * Math.PI) / 4) key = 'back';
 
-        await rnd('POLL_WALK');
+        bot.clearControlStates();
         bot.setControlState(key, true);
-        await rnd('WALK_DELAY');
-        bot.setControlState(key, false);
-        for (const m of moves) bot.setControlState(m, false);
+        bot.setControlState('sprint', true);
 
-        steps++;
-        const stepDist = beforeStep.distanceTo(bot.entity.position);
-        logInfo(`ходьба → шаг ${steps}: ${key}, +${stepDist.toFixed(2)} блоков`);
+        let walked = 0;
+        for (let t = 0; t < 200 && walked < needDist; t++) {
+            await bot.waitForTicks(1);
+            walked = stepStart.distanceTo(bot.entity.position);
+        }
+
+        bot.clearControlStates();
+        logInfo(`ходьба → шаг ${step}: ${key}, ${walked.toFixed(2)}/${needDist.toFixed(2)} блоков`);
+        await rnd('POLL_WALK');
     }
 
-    const finish = bot.entity.position.clone();
-    const total = start.distanceTo(finish);
+    const tripEnd = bot.entity.position.clone();
+    const total = tripStart.distanceTo(tripEnd);
     logOk(
-        `ходьба → конец: ${steps} шагов, всего ${total.toFixed(2)} блоков ` +
-        `(${start.x.toFixed(1)} ${start.z.toFixed(1)} → ${finish.x.toFixed(1)} ${finish.z.toFixed(1)})`
+        `ходьба → конец: ${total.toFixed(2)} блоков всего ` +
+        `(${tripStart.x.toFixed(1)} ${tripStart.z.toFixed(1)} → ${tripEnd.x.toFixed(1)} ${tripEnd.z.toFixed(1)})`
     );
     config.walkTime = Date.now();
 }
