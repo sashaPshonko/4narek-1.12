@@ -731,6 +731,7 @@ async function sellItems() {
         reportError('sellItems', err);
         await waitWarpTeleport();
     } finally {
+        config.needSell = false;
         await waitWarpTeleport();
         logOk('продажа → конец');
     }
