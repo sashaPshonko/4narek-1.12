@@ -574,16 +574,19 @@ function main() {
 main();
 
 async function joinAnarchy() {
-    if (config.timeJoinAnarchy) await rnd('ANARCHY_DELAY');
-    while (!config.timeJoinAnarchy) {
-        await rnd('BASE_DELAY');
-        logInfo(`/an${config.anarchy}… (жду входа)`);
-        bot.chat(`/an${config.anarchy}`);
-        await rnd('ANARCHY_DELAY');
+    if (!config.timeJoinAnarchy) {
+        while (!config.timeJoinAnarchy) {
+            await rnd('BASE_DELAY');
+            logInfo(`/an${config.anarchy}… (жду входа)`);
+            bot.chat(`/an${config.anarchy}`);
+            await rnd('ANARCHY_DELAY');
+        }
     }
-    const waitMs = config.timeJoinAnarchy + 11000 - Date.now();
-    if (waitMs > 0) logInfo(`joinAnarchy → пауза ${Math.ceil(waitMs / 1000)}с`);
-    while (Date.now() < config.timeJoinAnarchy + 11000) await rnd('POLL');
+    const waitUntil = config.timeJoinAnarchy + 11000;
+    if (Date.now() < waitUntil) {
+        logInfo(`joinAnarchy → пауза ${Math.ceil((waitUntil - Date.now()) / 1000)}с`);
+        while (Date.now() < waitUntil) await rnd('POLL');
+    }
 }
 
 async function waitWarpTeleport() {
@@ -661,7 +664,6 @@ async function sellItems() {
 
             let currentSlot = firstHotbarSlot;
             while (hasBotItem() && !config.enoughItems && currentSlot <= lastHotbarSlot && !config.hasDangerousTrash) {
-                await joinAnarchy();
                 if (currentSlot > lastHotbarSlot) {
                     currentSlot = firstHotbarSlot;
                     continue;
@@ -727,7 +729,9 @@ async function sellItems() {
 
     } catch (err) {
         reportError('sellItems', err);
+        await waitWarpTeleport();
     } finally {
+        await waitWarpTeleport();
         logOk('продажа → конец');
     }
 }
