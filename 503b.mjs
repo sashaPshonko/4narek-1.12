@@ -220,10 +220,10 @@ async function runWorker(bot) {
                         }
                     } else if (message.name === 'ah_market_floor') {
                         marketFloorTracker.mergeFromWorker(message);
-                    } else if (message.name === 'banned' || typeof message === 'string') {
+                    } else if (typeof message === 'string') {
                         const handled = await handleWorkerStatusMessage(message, username, workerStatusCtx());
                         if (!handled && typeof message === 'string') {
-                            await sendAlert(`📝 `);
+                            await sendAlert(`${message}`);
                         }
                     }
                 } catch (error) {
