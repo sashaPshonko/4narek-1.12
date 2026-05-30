@@ -205,8 +205,24 @@ function getSlotInfoSafe(item, slotIndex) {
     }
 }
 
+const TRY_SELL_MARKER = 'выставлен на продажу за';
+
+/** Любые разделители (., запятые, $) — в строке остаются только цифры. */
+function digitsToInt(text) {
+    const digits = String(text).replace(/\D/g, '');
+    if (!digits) return NaN;
+    return parseInt(digits, 10);
+}
+
 function parseChatPrice(text) {
-    return parseInt(text.replace(/\./g, '').replace(/\D/g, ''), 10);
+    return digitsToInt(text);
+}
+
+/** Цена только из хвоста после «выставлен на продажу за» (для % 100 → тип предмета). */
+function parseTrySellPrice(text) {
+    const i = text.indexOf(TRY_SELL_MARKER);
+    if (i < 0) return NaN;
+    return digitsToInt(text.slice(i + TRY_SELL_MARKER.length));
 }
 
 function getIdBySellPrice(price) {
@@ -259,6 +275,15 @@ async function handleChatMessage(text) {
         config.needSell = true;
         return;
     }
+
+    if (text.includes(TRY_SELL_MARKER)) {
+        const price = parseTrySellPrice(text);
+        if (!Number.isFinite(price)) return;
+        const id = getIdBySellPrice(price) || config.goType;
+        if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        return;
+    }
+
     if (text.includes('[☃] Не удалось выставить') ||
         text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
         config.enoughItems = true;
@@ -590,7 +615,7 @@ async function joinAnarchy() {
 }
 
 async function waitWarpTeleport() {
-    while (Date.now() - config.lastWarpTime < 7100) await rnd('POLL');
+    while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
 /** Выброс мусора в слоте. true = ушли на RTP (нужно прервать sellItems). */

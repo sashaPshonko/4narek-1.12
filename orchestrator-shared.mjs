@@ -75,6 +75,19 @@ export function collectFleetTypes(bots) {
     return [...types];
 }
 
+/** Живые боты по go-типу (для ML / Go) */
+export function collectBotsPerType(bots, workers) {
+    const counts = {};
+    for (const [username, workerData] of workers) {
+        if (!isBotAliveForPresence(username, bots, workers)) continue;
+        const bot = bots.get(username);
+        const goType = resolveGoType(bot);
+        if (!goType) continue;
+        counts[goType] = (counts[goType] || 0) + 1;
+    }
+    return counts;
+}
+
 export function buildPresencePayload(bots, workers, botItems, botInventory) {
     const presence = collectPresenceItemCounts(bots, workers, botItems, botInventory);
     return {
@@ -82,6 +95,7 @@ export function buildPresencePayload(bots, workers, botItems, botInventory) {
         items: presence.items,
         inventory: presence.inventory,
         active_types: collectActiveTypes(bots, workers),
+        bots_per_type: collectBotsPerType(bots, workers),
     };
 }
 
