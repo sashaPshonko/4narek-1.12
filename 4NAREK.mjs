@@ -205,6 +205,52 @@ function getSlotInfoSafe(item, slotIndex) {
     }
 }
 
+/**
+ * Слот 0–4 в «Хранилище»: снять мусор, несовпадение цены или лот при переполнении.
+ * @returns {{ slot: number, reason: string } | null}
+ */
+function findStorageSlotToUnlist() {
+    let priceOrFullSlot = null;
+    let priceOrFullReason = '';
+
+    for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
+        const currentSlot = bot.currentWindow?.slots[i];
+        if (!currentSlot) continue;
+
+        const info = getSlotInfoSafe(currentSlot, i);
+
+        if (!info || info.isTrash) {
+            return { slot: i, reason: 'мусор (нет в каталоге)' };
+        }
+
+        let priceOnAH;
+        try {
+            priceOnAH = getPriceFromAhItem(currentSlot);
+        } catch (err) {
+            reportError(`хранилище слот ${i} цена`, err);
+            return { slot: i, reason: 'мусор (не читается цена)' };
+        }
+
+        if (info.sellPrice !== priceOnAH) {
+            if (priceOrFullSlot === null) {
+                priceOrFullSlot = i;
+                priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
+            }
+            continue;
+        }
+
+        if (config.enoughItems && priceOrFullSlot === null) {
+            priceOrFullSlot = i;
+            priceOrFullReason = 'переполнение хранилища';
+        }
+    }
+
+    if (priceOrFullSlot !== null) {
+        return { slot: priceOrFullSlot, reason: priceOrFullReason };
+    }
+    return null;
+}
+
 const TRY_SELL_MARKER = 'выставлен на продажу за';
 
 /** Любые разделители (., запятые, $) — в строке остаются только цифры. */
@@ -540,23 +586,11 @@ function main() {
                     }
                 }
 
-                let unlistSlot = null;
-                for (let i = 4; i >= 0; i--) {
-                    const currentSlot = bot.currentWindow?.slots[i];
-                    if (!currentSlot) continue;
+                const unlist = findStorageSlotToUnlist();
 
-                    const priceOnAH = getPriceFromAhItem(currentSlot);
-                    const info = getSlotInfoSafe(currentSlot, i);
-                    if (!info?.sellPrice) continue;
-
-                    if (info.sellPrice !== priceOnAH || config.enoughItems) {
-                        unlistSlot = i;
-                        break;
-                    }
-                }
-
-                if (unlistSlot !== null) {
-                    logInfo(`хранилище → снять лот слот ${unlistSlot}`);
+                if (unlist !== null) {
+                    logInfo(`хранилище → снять слот ${unlist.slot} (${unlist.reason})`);
+                    const unlistSlot = unlist.slot;
                     config.needSell = true;
                     config.menu = myItems;
                     await safeClickBuy(bot, unlistSlot, delayMs({ min: 1500, max: 3500 }), key);
