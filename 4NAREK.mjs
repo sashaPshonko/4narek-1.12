@@ -349,6 +349,10 @@ async function handleChatMessage(text) {
         parentPort.postMessage(`${workerData.username} - забанен`);
         return;
     }
+    if (text.toLowerCase().includes('чтобы двигаться')) {
+        parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
+        return;
+    }
     if (text.includes('Отключите VPN и Proxy и повторите попытку входа')) {
         parentPort.postMessage(`${workerData.username} - vpn спалили`);
         return;
