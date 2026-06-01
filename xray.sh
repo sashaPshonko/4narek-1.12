@@ -1,8 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# vless-ссылка (проверь, что актуальна)
-VLESS_URL="${VLESS_URL:-vless://3eeb89a5-ce22-468a-bc31-048e2494cabf@213.139.229.143:25987?encryption=none&security=reality&type=tcp&sni=images-na.ssl-images-amazon.com&fp=chrome&pbk=8n3UBOAtlSfS7gil_ym5yPiBRZNQTMxMOSkbptogChc&sid=6ba85179e30d4fc2&flow=xtls-rprx-vision#Latvia_Reality}"
+# Меняй ссылку здесь → git pull на VPS → рестарт оркестратора (xray поднимется сам)
+# security=reality — sni, fp, pbk, sid, flow в ссылке
+# security=none    — только uuid + ip:port (проще, но слабее под фильтрами)
+
+VLESS_URL='vless://92a37d98-da78-483c-a12f-b1b7ded12127@155.212.231.96:39986?type=tcp&encryption=none&security=none#mq5dypjc0k'
 
 parse_vless_param() {
     local key="$1"
@@ -11,7 +14,6 @@ parse_vless_param() {
     echo "$query" | tr '&' '\n' | sed -n "s/^${key}=//p" | head -1
 }
 
-# Парсинг без grep -P (на некоторых VPS его нет)
 REST="${VLESS_URL#vless://}"
 REST="${REST%%#*}"
 ID="${REST%%@*}"
@@ -20,20 +22,33 @@ ADDR="${HOSTPART%%:*}"
 PORT="${HOSTPART#*:}"
 PORT="${PORT%%\?*}"
 
+SECURITY="$(parse_vless_param security)"
+SECURITY="${SECURITY:-reality}"
 SNI=$(parse_vless_param sni)
 FP=$(parse_vless_param fp)
 PBK=$(parse_vless_param pbk)
 SID=$(parse_vless_param sid)
 FLOW=$(parse_vless_param flow)
+NETWORK=$(parse_vless_param type)
+NETWORK="${NETWORK:-tcp}"
 
-echo "Параметры: server=${ADDR}:${PORT} sni=${SNI} flow=${FLOW}"
+echo "Параметры: server=${ADDR}:${PORT} security=${SECURITY} network=${NETWORK}"
 
-for v in ID ADDR PORT SNI FP PBK SID FLOW; do
+for v in ID ADDR PORT; do
     if [[ -z "${!v}" ]]; then
         echo "❌ Пустой параметр: $v — проверь VLESS_URL"
         exit 1
     fi
 done
+
+if [[ "$SECURITY" == "reality" ]]; then
+    for v in SNI FP PBK SID FLOW; do
+        if [[ -z "${!v}" ]]; then
+            echo "❌ Для Reality нужен параметр $v в VLESS_URL"
+            exit 1
+        fi
+    done
+fi
 
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -61,6 +76,33 @@ if [[ ! -x /opt/xray/xray ]]; then
     sudo rm -f "$XRAY_ZIP"
 fi
 
+if [[ "$SECURITY" == "reality" ]]; then
+    USER_JSON="{
+          \"id\": \"$ID\",
+          \"encryption\": \"none\",
+          \"flow\": \"$FLOW\"
+        }"
+    STREAM_JSON="{
+      \"network\": \"$NETWORK\",
+      \"security\": \"reality\",
+      \"realitySettings\": {
+        \"fingerprint\": \"$FP\",
+        \"serverName\": \"$SNI\",
+        \"publicKey\": \"$PBK\",
+        \"shortId\": \"$SID\"
+      }
+    }"
+else
+    USER_JSON="{
+          \"id\": \"$ID\",
+          \"encryption\": \"none\"
+        }"
+    STREAM_JSON="{
+      \"network\": \"$NETWORK\",
+      \"security\": \"none\"
+    }"
+fi
+
 echo "⚙️ config.json..."
 sudo tee /opt/xray/config.json > /dev/null <<EOF
 {
@@ -79,23 +121,10 @@ sudo tee /opt/xray/config.json > /dev/null <<EOF
       "vnext": [{
         "address": "$ADDR",
         "port": $PORT,
-        "users": [{
-          "id": "$ID",
-          "encryption": "none",
-          "flow": "$FLOW"
-        }]
+        "users": [$USER_JSON]
       }]
     },
-    "streamSettings": {
-      "network": "tcp",
-      "security": "reality",
-      "realitySettings": {
-        "fingerprint": "$FP",
-        "serverName": "$SNI",
-        "publicKey": "$PBK",
-        "shortId": "$SID"
-      }
-    }
+    "streamSettings": $STREAM_JSON
   }]
 }
 EOF
@@ -110,7 +139,7 @@ sudo pkill -x xray 2>/dev/null || true
 sleep 1
 
 echo "🚀 Запуск xray..."
-sudo bash -c '/opt/xray/xray run -c /opt/xray/config.json >> /opt/xray/xray.log 2>&1 &' 
+sudo bash -c '/opt/xray/xray run -c /opt/xray/config.json >> /opt/xray/xray.log 2>&1 &'
 sleep 2
 
 if ss -lnt 2>/dev/null | grep -q ':1080' || netstat -lnt 2>/dev/null | grep -q ':1080'; then
@@ -123,10 +152,9 @@ if ss -lnt 2>/dev/null | grep -q ':1080' || netstat -lnt 2>/dev/null | grep -q '
 else
     echo "❌ Порт 1080 не поднялся. Последние строки лога:"
     sudo tail -40 /opt/xray/xray.log 2>/dev/null || echo "(лог пуст)"
-    echo ""
-    echo "Запусти вручную и смотри ошибку:"
-    echo "  cd /opt/xray && sudo ./xray run -c config.json"
     exit 1
 fi
 
-echo "✅ Готово. Перезапусти оркестратор."
+echo -n "$VLESS_URL" | sudo tee /opt/xray/vless-url.stamp > /dev/null
+
+echo "✅ Готово. Перезапусти оркестратор (502b.mjs / 510b.mjs …) или дождись автоперезапуска xray."
