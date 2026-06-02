@@ -1,3 +1,4 @@
+/** Запрещённые чары по minecraft-типу (name в каталоге). Исключения — forbidden_effects у id в items_config.json */
 const forbiddenEnchantsByType = {
     netherite_sword: ['heavy', 'unstable'],
     diamond_sword: ['heavy', 'unstable'],
@@ -56,8 +57,14 @@ function priceWithDurability(basePriceSell, durabilityPercent) {
     return price;
 }
 
-function hasForbiddenEnchant(itemType, allEnchants, configEffects = []) {
-    const forbiddenList = forbiddenEnchantsByType[itemType];
+function getForbiddenEffectNames(configItem) {
+    const byType = forbiddenEnchantsByType[configItem?.name] ?? [];
+    const extra = configItem?.forbidden_effects ?? configItem?.forbiddenEffects;
+    const fromItem = Array.isArray(extra) ? extra.map((e) => e?.name).filter(Boolean) : [];
+    return [...new Set([...byType, ...fromItem])];
+}
+
+function hasForbiddenEnchant(allEnchants, forbiddenList = [], configEffects = []) {
     if (!forbiddenList?.length) return false;
     const allowedByConfig = new Set((configEffects || []).map((e) => e?.name).filter(Boolean));
     return allEnchants.some((enchant) => {
@@ -180,7 +187,7 @@ export function findMatchingConfigItem(item, itemPrices, goType) {
             return found && found.lvl >= required.lvl;
         });
         if (!enchantsOk) continue;
-        if (hasForbiddenEnchant(item.name, allEnchants, requiredEffects)) continue;
+        if (hasForbiddenEnchant(allEnchants, getForbiddenEffectNames(configItem), requiredEffects)) continue;
 
         return configItem;
     }
