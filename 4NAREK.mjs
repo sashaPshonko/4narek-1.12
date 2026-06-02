@@ -20,11 +20,21 @@ const leftMouseButton = 0;
 const shiftClick = 1;
 const slotGlass = 31;
 
+/** mineflayer bot.inventory.slots: 0–4 крафт, 5–8 броня, 9–35 рюкзак, 36–44 хотбар, 45 offhand */
 const firstInventorySlot = 9;
 const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
+const offhandSlot = 45;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
+
+function isStorageSlot(slot) {
+    return slot >= firstInventorySlot && slot <= lastInventorySlot;
+}
+
+function isHotbarSlot(slot) {
+    return slot >= firstHotbarSlot && slot <= lastHotbarSlot;
+}
 
 /** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
 const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
@@ -43,11 +53,19 @@ function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
+    if (!isHotbarSlot(slot)) {
+        reportError('hotbarSlotToQuick', `слот ${slot} не хотбар (36–44)`);
+        return 0;
+    }
     return slot - firstHotbarSlot;
 }
 
-/** quickBar (0–8) → слот инвентаря (36–44) */
+/** quickBar (0–8) → слот инвентаря (36–44). 9 → 45 (offhand) — запрещено */
 function quickToHotbarSlot(quick) {
+    if (quick < 0 || quick > 8) {
+        reportError('quickToHotbarSlot', `quick=${quick} вне 0–8`);
+        return firstHotbarSlot;
+    }
     return firstHotbarSlot + quick;
 }
 
@@ -818,6 +836,10 @@ async function moveToHotBar() {
                 const invStack = bot.inventory.slots[src];
                 const invInfo = getSlotInfoSafe(invStack, src);
                 if (invInfo && !invInfo.isTrash) {
+                    if (!isStorageSlot(src) || !isHotbarSlot(slot)) {
+                        reportError('moveToHotBar', `недопустимый перенос ${src}→${slot}`);
+                        break;
+                    }
                     try {
                         await rnd('BASE_DELAY');
                         await bot.moveSlotItem(src, slot);
