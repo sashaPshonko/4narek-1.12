@@ -22,6 +22,9 @@ import {
     getWorkerHealthStats,
     formatOrchestratorPing,
     handleWorkerStatusMessage,
+    applyWorkerBuyingClaim,
+    buyingUuidForGo,
+    applyGoJsonUpdate,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -200,13 +203,14 @@ async function runWorker(bot) {
                     } else if (message.name === "inventory") {
                         botInventory.set(username, message.data);
                     } else if (message.name === "buying") {
-                        const updatedBuying = [...itemsBuying, message.data];
+                        const updatedBuying = applyWorkerBuyingClaim(itemsBuying, message, username);
                         for (const [user, _] of workers) {
                             safePostMessage(user, { type: 'items_buying', data: updatedBuying });
                         }
                         itemsBuying = updatedBuying;
-                        if (socket && isSocketOpen) {
-                            socket.send(JSON.stringify({ action: "add", json_data: message.data }));
+                        const goUuid = buyingUuidForGo(message);
+                        if (socket && isSocketOpen && goUuid) {
+                            socket.send(JSON.stringify({ action: "add", json_data: goUuid }));
                         }
                     } else if (message.name === 'kicked') {
                         bot.lastKickReason = message.reason || '';
@@ -472,10 +476,11 @@ function connectWebSocket() {
                 const dataObj = JSON.parse(data);
                 
                 if (dataObj.action === "json_update" && Array.isArray(dataObj.data)) {
+                    const merged = applyGoJsonUpdate(itemsBuying, dataObj.data);
                     for (const [username, _] of workers) {
-                        safePostMessage(username, { type: 'items_buying', data: dataObj.data });
+                        safePostMessage(username, { type: 'items_buying', data: merged });
                     }
-                    itemsBuying = dataObj.data;
+                    itemsBuying = merged;
                 } else if (dataObj.prices) {
                     handleServerPriceMessage(dataObj);
                 }

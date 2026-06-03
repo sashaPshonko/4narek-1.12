@@ -1,3 +1,5 @@
+import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
+
 /**
  * Общая логика оркестраторов: каталог с Go, активные типы, цены.
  *
@@ -404,4 +406,27 @@ export async function tryAutoStartBots({
     } finally {
         setPending(false);
     }
+}
+
+export function applyWorkerBuyingClaim(itemsBuying, message, workerUsername) {
+    let claim;
+    if (typeof message.data === 'string') {
+        claim = { uuid: message.data, username: workerUsername };
+    } else if (message.data && typeof message.data === 'object') {
+        claim = {
+            uuid: message.data.uuid ?? message.data,
+            username: message.data.username ?? workerUsername,
+        };
+    } else {
+        return Array.isArray(itemsBuying) ? itemsBuying : [];
+    }
+    return mergeBuyingClaim(itemsBuying, claim);
+}
+
+export function buyingUuidForGo(message) {
+    return uuidForGoBroadcast(message.data);
+}
+
+export function applyGoJsonUpdate(itemsBuying, goData) {
+    return mergeGoJsonUpdate(itemsBuying, goData);
 }
