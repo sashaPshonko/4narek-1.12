@@ -5,7 +5,7 @@ import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items
  *
  * Старая/новая броня в одном items_config.json:
  * — старые предметы: type "netherite_chestplate-1.21"
- * — новые предметы: другой type, напр. "netherite_armor-thorns-1.21" (шлем/штаны/ботинки шипы)
+ * — отдельные линейки: напр. "позорная-броня-1.21" (prot4/unb4, без шипов)
  * — в bots.json у новых трёх ботов: goType "netherite_chestplate-new-1.21"
  * — у старых ботов остаётся goType "netherite_chestplate-1.21"
  * Бот в getBestAHSlot покупает только catalog.type === bot.goType.
@@ -40,7 +40,8 @@ export const ITEM_TO_GO_TYPE = {
     'netherite chestplate': 'netherite_chestplate-1.21',
     'netherite helmet': 'netherite_helmet-1.21',
     'netherite boots': 'netherite_boots-1.21',
-    'netherite armor': 'netherite_armor-thorns-1.21',
+    'netherite armor': 'позорная-броня-1.21',
+    'netherite armour': 'позорная-броня-1.21',
     'netherite pickaxe': 'netherite_pickaxe-1.21',
     'отдача': 'отдача-1.21',
     'elytra': 'elytra-1.21',
