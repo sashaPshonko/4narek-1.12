@@ -5,10 +5,11 @@ import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items
  *
  * Старая/новая броня в одном items_config.json:
  * — старые предметы: type "netherite_chestplate-1.21"
- * — новые предметы: другой type, напр. "netherite_chestplate-new-1.21"
+ * — новые предметы: другой type, напр. "netherite_armor-thorns-1.21" (шлем/штаны/ботинки шипы)
  * — в bots.json у новых трёх ботов: goType "netherite_chestplate-new-1.21"
  * — у старых ботов остаётся goType "netherite_chestplate-1.21"
  * Бот в getBestAHSlot покупает только catalog.type === bot.goType.
+ * Матч лота: лучший id по num по всему каталогу; если type !== goType бота — не покупаем.
  */
 
 /** Окно сбора мин. цен на АХ перед отправкой в Go */
@@ -39,6 +40,7 @@ export const ITEM_TO_GO_TYPE = {
     'netherite chestplate': 'netherite_chestplate-1.21',
     'netherite helmet': 'netherite_helmet-1.21',
     'netherite boots': 'netherite_boots-1.21',
+    'netherite armor': 'netherite_armor-thorns-1.21',
     'netherite pickaxe': 'netherite_pickaxe-1.21',
     'отдача': 'отдача-1.21',
     'elytra': 'elytra-1.21',
@@ -243,18 +245,24 @@ export function collectPresenceItemCounts(bots, workers, botItems, botInventory)
 export function applyPricesToBots({ catalog, prices, bots, workers, safePostMessage }) {
     if (!prices) return { started: false, anyItems: false };
 
+    const catalogAll = mergeCatalogWithPrices(catalog, prices);
     let anyItems = false;
     for (const bot of bots.values()) {
         const goType = resolveGoType(bot);
         const botItems = itemPricesForBot(catalog, prices, goType);
         bot.itemPrices = botItems;
+        bot.catalogAll = catalogAll;
         if (botItems.length > 0) anyItems = true;
     }
 
     for (const [username] of workers) {
         const bot = bots.get(username);
         if (!bot) continue;
-        safePostMessage(username, { type: 'price', data: bot.itemPrices || [] });
+        safePostMessage(username, {
+            type: 'price',
+            data: bot.itemPrices || [],
+            catalogAll,
+        });
     }
 
     return { started: anyItems, anyItems };

@@ -163,48 +163,66 @@ function getAllEnchants(item) {
     return [...getVanillaEnchants(item), ...custom];
 }
 
-export function findMatchingConfigItem(item, itemPrices, goType) {
-    if (!item) return null;
+function catalogCandidates(itemPrices) {
     if (!Array.isArray(itemPrices)) {
         throw new Error(`itemPrices не массив (${typeof itemPrices})`);
     }
-    if (!itemPrices.length) return null;
+    return itemPrices.filter((c) => c?.id?.endsWith('1.21'));
+}
 
-    let filtered = itemPrices.filter((c) => c?.id?.endsWith('1.21'));
-    if (goType) filtered = filtered.filter((c) => c.type === goType);
-    if (!filtered.length) return null;
+function itemMatchesConfigEntry(item, configItem, allEnchants) {
+    if (item.name !== configItem.name) return false;
+    if (!loreMatchesConfig(item, configItem)) return false;
 
-    const sorted = [...filtered].sort((a, b) => b.num - a.num);
+    const requiredEffects = configItem.effects || [];
+    const enchantsOk = requiredEffects.every((required) => {
+        const found = allEnchants.find((e) => e?.name === required.name);
+        return found && found.lvl >= required.lvl;
+    });
+    if (!enchantsOk) return false;
+    if (hasForbiddenEnchant(allEnchants, getForbiddenEffectNames(configItem), requiredEffects)) {
+        return false;
+    }
+    return true;
+}
+
+/** Лучший id по num среди всего каталога (все go-типы). */
+export function findBestMatchingConfigItem(item, catalogAll) {
+    if (!item) return null;
+    const candidates = catalogCandidates(catalogAll);
+    if (!candidates.length) return null;
+
+    const sorted = [...candidates].sort((a, b) => b.num - a.num);
     const allEnchants = getAllEnchants(item);
 
     for (const configItem of sorted) {
-        if (item.name !== configItem.name) continue;
-        if (!loreMatchesConfig(item, configItem)) continue;
-
-        const requiredEffects = configItem.effects || [];
-        const enchantsOk = requiredEffects.every((required) => {
-            const found = allEnchants.find((e) => e?.name === required.name);
-            return found && found.lvl >= required.lvl;
-        });
-        if (!enchantsOk) continue;
-        if (hasForbiddenEnchant(allEnchants, getForbiddenEffectNames(configItem), requiredEffects)) continue;
-
-        return configItem;
+        if (itemMatchesConfigEntry(item, configItem, allEnchants)) return configItem;
     }
     return null;
 }
 
 /**
+ * Матч для бота: лучший по num id должен быть своего goType.
+ * @param {string|null} ownerGoType — go-тип бота; если задан и лучший id чужой — null
+ */
+export function findMatchingConfigItem(item, catalogAll, ownerGoType) {
+    const best = findBestMatchingConfigItem(item, catalogAll);
+    if (!best) return null;
+    if (ownerGoType && best.type !== ownerGoType) return null;
+    return best;
+}
+
+/**
  * @param {object|null} item — слот из bot.inventory.slots[i]
- * @param {object[]} itemPrices — каталог с ценами (из оркестратора)
- * @param {string|null} goType — тип бота из bots.json
+ * @param {object[]} catalogAll — полный каталог с ценами (все go-типы)
+ * @param {string|null} goType — go-тип бота из bots.json
  * @returns {null|{ isTrash: true }|{ id, sellPrice, buyPrice, nacenka }}
  */
-export function getSlotInfo(item, itemPrices, goType) {
+export function getSlotInfo(item, catalogAll, goType) {
     if (!item) return null;
 
     try {
-        const cfg = findMatchingConfigItem(item, itemPrices, goType);
+        const cfg = findMatchingConfigItem(item, catalogAll, goType);
         if (!cfg) return { isTrash: true };
 
         if (typeof cfg.priceSell !== 'number' || Number.isNaN(cfg.priceSell)) {

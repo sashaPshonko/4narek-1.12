@@ -141,6 +141,7 @@ const config = {
     lastWarpTime: 0,
     enoughItems: false,
     items: workerData.itemPrices ?? [],
+    catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
     walkTime: 0,
     BuyingItem: { id: '', price: 0 },
@@ -241,7 +242,7 @@ async function safeClickBuy(bot, slot, time, key) {
 
 function getSlotInfoSafe(item, slotIndex) {
     try {
-        return getSlotInfo(item, config.items, config.goType);
+        return getSlotInfo(item, config.catalogAll, config.goType);
     } catch (err) {
         reportError(`getSlotInfo slot=${slotIndex}`, err);
         return null;
@@ -471,7 +472,12 @@ async function handleChatMessage(text) {
 }
 
 parentPort.on('message', (data) => {
-    if (data.type === 'price') config.items = data.data;
+    if (data.type === 'price') {
+        config.items = data.data;
+        if (Array.isArray(data.catalogAll) && data.catalogAll.length) {
+            config.catalogAll = data.catalogAll;
+        }
+    }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
@@ -615,7 +621,11 @@ function main() {
                     for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
                         if (currentSlot) {
-                            const itemCfg = findMatchingConfigItem(currentSlot, config.items, config.goType);
+                            const itemCfg = findMatchingConfigItem(
+                                currentSlot,
+                                config.catalogAll,
+                                config.goType,
+                            );
                             if (itemCfg?.id) botAh.push(itemCfg.id);
                         } else break;
                     }
@@ -628,7 +638,11 @@ function main() {
                         const slotData = bot.inventory.slots[i];
                         if (!slotData) continue;
 
-                        const itemCfg = findMatchingConfigItem(slotData, config.items, config.goType);
+                        const itemCfg = findMatchingConfigItem(
+                            slotData,
+                            config.catalogAll,
+                            config.goType,
+                        );
                         if (itemCfg?.id) inv.push(itemCfg.id);
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
