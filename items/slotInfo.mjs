@@ -74,6 +74,21 @@ function hasForbiddenEnchant(allEnchants, forbiddenList = [], configEffects = []
     });
 }
 
+/** Уровень чара строго выше потолка (яд III не в корзину «только яд II») */
+function exceedsMaxEffectLevels(allEnchants, maxEffects = []) {
+    if (!maxEffects?.length) return false;
+    return maxEffects.some((cap) => {
+        if (!cap?.name) return false;
+        const found = allEnchants.find((e) => e?.name === cap.name);
+        return found && found.lvl > cap.lvl;
+    });
+}
+
+function getMaxEffectLevels(configItem) {
+    const raw = configItem?.max_effects ?? configItem?.maxEffects;
+    return Array.isArray(raw) ? raw : [];
+}
+
 function romanToArabic(roman) {
     const map = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
     return map[roman] || 1;
@@ -181,6 +196,9 @@ function itemMatchesConfigEntry(item, configItem, allEnchants) {
     });
     if (!enchantsOk) return false;
     if (hasForbiddenEnchant(allEnchants, getForbiddenEffectNames(configItem), requiredEffects)) {
+        return false;
+    }
+    if (exceedsMaxEffectLevels(allEnchants, getMaxEffectLevels(configItem))) {
         return false;
     }
     return true;
