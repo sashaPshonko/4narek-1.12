@@ -1,11 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-# Меняй ссылку здесь → git pull на VPS → рестарт оркестратора (xray поднимется сам)
-# security=reality — sni, fp, pbk, sid, flow в ссылке
-# security=none    — только uuid + ip:port (проще, но слабее под фильтрами)
-
-VLESS_URL='vless://92a37d98-da78-483c-a12f-b1b7ded12127@155.212.231.96:39986?type=tcp&encryption=none&security=none#mq5dypjc0k'
+# VLESS — только в xray.local.env (не в git). /update не ломается.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/xray.local.env"
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "❌ Нет ${ENV_FILE}"
+    echo "   cp xray.local.env.example xray.local.env  # и вставь VLESS_URL"
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$ENV_FILE"
+if [[ -z "${VLESS_URL:-}" ]]; then
+    echo "❌ VLESS_URL пуст в xray.local.env"
+    exit 1
+fi
 
 parse_vless_param() {
     local key="$1"

@@ -1,0 +1,2 @@
+# Меняешь ссылку здесь → git push → /update на каждом боте (прокси поднимется сам)
+vless://f51ecf09-7e3a-4a3d-8f6d-2344b239cd9f@198.13.184.163:443?type=tcp&encryption=none&security=reality&sni=www.cloudflare.com&fp=chrome&pbk=yxEwkRXKz52-9TkXNWwoy9xkT_-H5a7Z4AL82y0JC3s&sid=44ba77e6&flow=xtls-rprx-vision#vpn

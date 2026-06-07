@@ -25,6 +25,7 @@ import {
     applyWorkerBuyingClaim,
     buyingUuidForGo,
     applyGoJsonUpdate,
+    runOrchestratorUpdate,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -405,14 +406,15 @@ async function initTelegram() {
         if ((Date.now() / 1000) - msg.date > 10) return;
         await tgBot.sendMessage(alertChatID, '🔄 Обновление, перезапуск...');
         isShuttingDown = true;
-        exec('git pull', async (err, stdout) => {
-            if (err) {
-                await sendAlert(`❌ Git pull error: ${err.message}`);
-            } else {
-                console.log('Git pull выполнен:', stdout);
-            }
+        try {
+            const { head, proxyOk } = await runOrchestratorUpdate(__dirname);
+            console.log('[update] git:', head, 'proxy:', proxyOk);
+            await sendAlert(`✅ Git: ${head}\n${proxyOk ? '✅ VPN/proxy OK' : '⚠️ VPN/proxy — bash xray-check.sh'}`);
             process.exit(0);
-        });
+        } catch (err) {
+            isShuttingDown = false;
+            await sendAlert(`❌ Git: ${err.message}`);
+        }
     });
     
     tgBot.onText(/\/ping/, async (msg) => {

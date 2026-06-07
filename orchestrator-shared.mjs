@@ -1,4 +1,8 @@
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Общая логика оркестраторов: каталог с Go, активные типы, цены.
@@ -438,4 +442,21 @@ export function buyingUuidForGo(message) {
 
 export function applyGoJsonUpdate(itemsBuying, goData) {
     return mergeGoJsonUpdate(itemsBuying, goData);
+}
+
+/** git pull без локальных правок в tracked-файлах (xray.local.env перезаписывается из vless.url). */
+export async function gitPullOriginMain(repoDir, branch = 'main') {
+    await execFileAsync('git', ['fetch', 'origin'], { cwd: repoDir });
+    await execFileAsync('git', ['reset', '--hard', `origin/${branch}`], { cwd: repoDir });
+    const { stdout } = await execFileAsync('git', ['log', '-1', '--oneline'], { cwd: repoDir });
+    return stdout.trim();
+}
+
+/** /update: git + vless.url → xray + проверка Telegram API */
+export async function runOrchestratorUpdate(repoDir, branch = 'main') {
+    const head = await gitPullOriginMain(repoDir, branch);
+    const { syncVlessFromRepo, ensureTelegramProxy } = await import('./telegram-proxy.mjs');
+    await syncVlessFromRepo();
+    const proxyOk = await ensureTelegramProxy();
+    return { head, proxyOk };
 }

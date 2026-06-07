@@ -1,0 +1,4 @@
+node_modules/
+xray.local.env
+bot.log
+*.log
