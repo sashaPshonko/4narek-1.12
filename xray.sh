@@ -164,6 +164,7 @@ else
     exit 1
 fi
 
-echo -n "$VLESS_URL" | sudo tee /opt/xray/vless-url.stamp > /dev/null
+echo -n "$VLESS_URL" > "${SCRIPT_DIR}/.vless-applied.stamp"
+chmod 644 "${SCRIPT_DIR}/.vless-applied.stamp"
 
 echo "✅ Готово. Перезапусти оркестратор (502b.mjs / 510b.mjs …) или дождись автоперезапуска xray."
