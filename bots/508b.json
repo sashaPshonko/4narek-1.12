@@ -4,8 +4,8 @@
     "password": "ggggg",
     "anarchy": 504,
     "type": "4NAREK",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21",
     "clanBalanceLimit": 10
   },
   {
@@ -13,8 +13,8 @@
     "password": "ggggg",
     "anarchy": 504,
     "type": "4NAREK",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21",
     "clanBalanceLimit": 10
   },
   {
@@ -22,8 +22,8 @@
     "password": "ggggg",
     "anarchy": 504,
     "type": "4NAREK",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite boots",
+    "goType": "netherite_boots-1.21",
     "clanBalanceLimit": 10
   },
   {
@@ -52,5 +52,33 @@
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
     "clanBalanceLimit": 10
+  },
+  {
+    "username": "tablydaite2",
+    "password": "ggggg",
+    "anarchy": 502,
+    "type": "4NAREK",
+    "item": "netherite sword",
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
+  },
+  {
+    "username": "gorbtikphon2",
+    "password": "gggggg",
+    "anarchy": 502,
+    "type": "4NAREK",
+    "item": "netherite sword",
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
+  },
+  {
+    "username": "kventikasha2",
+    "password": "ggggg",
+    "anarchy": 502,
+    "type": "4NAREK",
+    "item": "netherite sword",
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10
   }
+  
 ]
