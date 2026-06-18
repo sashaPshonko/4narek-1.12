@@ -17,7 +17,7 @@ echo "Node.js установлен!"
 apt install git -y
 git clone https://github.com/sashaPshonko/4narek-1.12
 cd 4narek-1.12
-nohup bash scripts/504.sh > bot.log 2>&1 &
+nohup bash scripts/510.sh > bot.log 2>&1 &
 git pull
 chmod +x xray.sh xray-check.sh
 sudo bash xray.sh
