@@ -6,11 +6,7 @@ apt-get upgrade -y
 
 # Установка curl
 apt-get install -y curl
-
-# Добавление репозитория NodeSource для последней версии (23.x)
 curl -fsSL https://deb.nodesource.com/setup_23.x | bash -
-
-# Установка Node.js
 apt-get install -y nodejs
 
 # Проверка версии
@@ -21,12 +17,13 @@ echo "Node.js установлен!"
 apt install git -y
 git clone https://github.com/sashaPshonko/4narek-1.12
 cd 4narek-1.12
+nohup bash scripts/504.sh > bot.log 2>&1 &
 git pull
 chmod +x xray.sh xray-check.sh
 sudo bash xray.sh
 
-nohup bash scripts/510.sh > bot.log 2>&1 &
+nohup bash scripts/run/sellbot.sh > sellbot.log 2>&1 &
+nohup bash scripts/run/sell.sh > sell.log 2>&1 &
 
-Отключите VPN и Proxy и повторите попытку входа
 
 ** Чтобы ваш Аккаунт был в БЕЗОПАСНОСТИ!
