@@ -20,6 +20,7 @@ import {
     createMarketFloorTracker,
     sendMarketFloorsToGo,
     getWorkerHealthStats,
+    formatBotAlert,
     formatOrchestratorPing,
     handleWorkerStatusMessage,
     applyWorkerBuyingClaim,
@@ -67,12 +68,13 @@ function workerStatusCtx() {
 }
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
-async function sendAlert(message) {
+async function sendAlert(message, botUsername = null) {
+    const text = botUsername ? formatBotAlert(botUsername, message, bots) : message;
     try {
         if (tgBot && !isShuttingDown) {
-            await tgBot.sendMessage(alertChatID, message);
+            await tgBot.sendMessage(alertChatID, text);
         }
-        console.log(`🔔 ${message}`);
+        console.log(`🔔 ${text}`);
     } catch (error) {
         console.error('❌ Не удалось отправить алерт:', error.message);
     }
@@ -228,11 +230,11 @@ async function runWorker(bot) {
                     } else if (typeof message === 'string') {
                         const handled = await handleWorkerStatusMessage(message, username, workerStatusCtx());
                         if (!handled && typeof message === 'string') {
-                            await sendAlert(`${message}`);
+                            await sendAlert(message, username);
                         }
                     }
                 } catch (error) {
-                    await sendAlert(`❌ Ошибка в обработчике ${username}: ${error.message}`);
+                    await sendAlert(`❌ Ошибка в обработчике ${username}: ${error.message}`, username);
                 }
             });
 
@@ -240,7 +242,7 @@ async function runWorker(bot) {
                 bot.success = false;
                 clearBotPresence(username, botItems, botInventory);
                 pushPresenceToGo();
-                await sendAlert(error.message)
+                await sendAlert(error.message, username)
             });
 
             worker.on('exit', (code) => {
@@ -419,7 +421,7 @@ async function initTelegram() {
     
     tgBot.onText(/\/ping/, async (msg) => {
         if ((Date.now() / 1000) - msg.date > 10) return;
-        await tgBot.sendMessage(alertChatID, formatOrchestratorPing(getWorkerHealthStats(bots, workers)));
+        await tgBot.sendMessage(alertChatID, formatOrchestratorPing(getWorkerHealthStats(bots, workers), bots));
     });
     
     tgBot.onText(/\/start/, async (msg) => {

@@ -11,7 +11,9 @@
     "start:507": "node 507b.mjs",
     "start:508": "node 508b.mjs",
     "start:509": "node 509b.mjs",
-    "start:510": "node 510b.mjs"
+    "start:510": "node 510b.mjs",
+    "xray": "node xray.mjs",
+    "xray:check": "node xray-check.mjs"
   },
   "dependencies": {
     "do_username": "^1.0.0",

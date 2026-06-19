@@ -6,13 +6,18 @@ import { constants } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { SocksProxyAgent } from 'socks-proxy-agent';
+import {
+    parseVlessUrlLine,
+    readVlessFromRepoFile as readVlessFromRepoFileLib,
+    readVlessFromEnvFile,
+} from './lib/vless.mjs';
 
 const execAsync = promisify(exec);
 const __proxyDir = dirname(fileURLToPath(import.meta.url));
-const XRAY_SCRIPT = join(__proxyDir, 'xray.sh');
+const XRAY_SCRIPT = join(__proxyDir, 'xray.mjs');
 const XRAY_ENV_FILE = join(__proxyDir, 'xray.local.env');
 const VLESS_REPO_FILE = join(__proxyDir, 'vless.url');
-const XRAY_LOCK = '/tmp/4narek-xray-start.lock';
+const XRAY_LOCK = join(__proxyDir, '.xray-start.lock');
 const VLESS_STAMP = join(__proxyDir, '.vless-applied.stamp');
 const VLESS_STAMP_LEGACY = '/opt/xray/vless-url.stamp';
 const XRAY_RETRY_COOLDOWN_MS = 90_000;
@@ -31,35 +36,14 @@ export function resolveTelegramProxyUrl() {
     return value || 'socks5h://127.0.0.1:1080';
 }
 
-function parseVlessUrlLine(line) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
-        return null;
-    }
-    if (trimmed.startsWith('vless://')) {
-        return trimmed;
-    }
-    const m = trimmed.match(/^VLESS_URL=(?:(['"])(.*?)\1|(\S+))/);
-    return m?.[2] ?? m?.[3] ?? null;
-}
+export { parseVlessUrlLine };
 
 /** VLESS из vless.url в репо (git pull → /update) */
 export async function readVlessFromRepoFile() {
-    try {
-        const raw = await readFile(VLESS_REPO_FILE, 'utf8');
-        for (const line of raw.split('\n')) {
-            const url = parseVlessUrlLine(line);
-            if (url) {
-                return url;
-            }
-        }
-    } catch {
-        /* fall through */
-    }
-    return null;
+    return readVlessFromRepoFileLib(VLESS_REPO_FILE);
 }
 
-/** vless.url → xray.local.env (xray.sh читает env-файл) */
+/** vless.url → xray.local.env */
 export async function syncVlessFromRepo() {
     const url = await readVlessFromRepoFile();
     if (!url) {
@@ -80,20 +64,15 @@ export async function syncVlessFromRepo() {
     return true;
 }
 
-/** VLESS: сначала vless.url из репо, иначе xray.local.env на VPS */
+/** VLESS: сначала vless.url из репо, иначе xray.local.env */
 export async function readDesiredVlessUrl() {
     const fromRepo = await readVlessFromRepoFile();
     if (fromRepo) {
         return fromRepo;
     }
-    try {
-        const env = await readFile(XRAY_ENV_FILE, 'utf8');
-        const m = env.match(/^VLESS_URL=(?:(['"])(.*?)\1|(\S+))/m);
-        if (m?.[2] || m?.[3]) {
-            return m[2] ?? m[3];
-        }
-    } catch {
-        /* fall through */
+    const fromEnv = await readVlessFromEnvFile(XRAY_ENV_FILE);
+    if (fromEnv) {
+        return fromEnv;
     }
     throw new Error(
         'Нет vless.url в репо и нет xray.local.env — добавь vless.url и git push',
@@ -200,7 +179,9 @@ export async function proxyNeedsXrayRefresh(proxyUrl) {
 
 async function runXrayScript() {
     await access(XRAY_SCRIPT, constants.R_OK);
-    const cmd = process.env.TELEGRAM_XRAY_CMD || `bash ${JSON.stringify(XRAY_SCRIPT)}`;
+    const cmd =
+        process.env.TELEGRAM_XRAY_CMD ||
+        `node ${JSON.stringify(XRAY_SCRIPT)}`;
     console.log(`[Telegram] запускаю xray: ${cmd}`);
     const { stdout, stderr } = await execAsync(cmd, {
         cwd: __proxyDir,
@@ -230,7 +211,7 @@ async function startXrayWithLock(proxyUrl) {
     if (!reason) {
         return true;
     }
-    logRefreshReasonOnce(`${reason} — запускаю xray.sh…`);
+    logRefreshReasonOnce(`${reason} — запускаю xray…`);
     let lockFd;
     try {
         const { open } = await import('fs/promises');
@@ -255,11 +236,11 @@ async function startXrayWithLock(proxyUrl) {
             return true;
         }
         lastFailedXrayAt = Date.now();
-        console.error('[Telegram] xray.sh отработал, но прокси не готов — bash xray-check.sh');
+        console.error('[Telegram] xray отработал, но прокси не готов — node xray-check.mjs');
         return false;
     } catch (error) {
         lastFailedXrayAt = Date.now();
-        console.error('[Telegram] не удалось запустить xray.sh:', error.message);
+        console.error('[Telegram] не удалось запустить xray:', error.message);
         return false;
     } finally {
         try {
@@ -270,8 +251,8 @@ async function startXrayWithLock(proxyUrl) {
 }
 
 /**
- * Поднять/обновить SOCKS через xray.sh.
- * vless.url из git → xray.local.env → xray.sh (в т.ч. после /update).
+ * Поднять/обновить SOCKS через xray.mjs.
+ * vless.url из git → xray.local.env → xray.mjs (в т.ч. после /update).
  */
 export async function ensureTelegramProxy() {
     const proxyUrl = resolveTelegramProxyUrl();

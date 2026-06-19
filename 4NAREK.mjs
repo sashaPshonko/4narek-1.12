@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
 import { rnd } from './delay/delay.mjs';
+import net from 'net';
 import {
     getSlotInfo,
     getItemUUID,
@@ -159,6 +160,7 @@ const config = {
     needSendAH: true,
     needAdd: false,
     timeActive: Date.now(),
+    ip: workerData.ip,
 };
 
 var bot = null;
@@ -489,6 +491,15 @@ function main() {
         password: config.password,
         version: '1.21.4',
         chatLengthLimit: 256,
+        connect: client => {
+            client.setSocket(
+                net.connect({
+                    host: 'mc.funtime.su',
+                    port: 25565,
+                    localAddress: config.ip
+                })
+            );
+        }
     });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {

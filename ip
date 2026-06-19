@@ -1,0 +1,7 @@
+ipconfig
+
+Set-NetIPInterface -InterfaceAlias "Ethernet 4" -InterfaceMetric 1
+
+Disable-NetAdapter -Name "Ethernet 4"
+Enable-NetAdapter -Name "Ethernet 4"
+ipconfig /renew

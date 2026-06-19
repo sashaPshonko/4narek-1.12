@@ -165,15 +165,38 @@ export function getWorkerHealthStats(bots, workers) {
     };
 }
 
-export function formatOrchestratorPing(stats) {
+export function formatBotLabel(username, bots) {
+    const anarchy = bots?.get(username)?.anarchy;
+    if (anarchy != null && anarchy !== '') {
+        return `${anarchy} ${username}`;
+    }
+    return username;
+}
+
+/** Вставляет номер анархии перед username в тексте алерта. */
+export function formatBotAlert(username, message, bots) {
+    const text = String(message ?? '');
+    const label = formatBotLabel(username, bots);
+    if (label === username) {
+        return text.includes(username) ? text : `${username}: ${text}`;
+    }
+    const idx = text.indexOf(username);
+    if (idx >= 0) {
+        return text.slice(0, idx) + label + text.slice(idx + username.length);
+    }
+    return `${label}: ${text}`;
+}
+
+export function formatOrchestratorPing(stats, bots = null) {
     const { configured, active, workersRunning, banned, waiting } = stats;
+    const label = (u) => (bots ? formatBotLabel(u, bots) : u);
     const ok = active === configured && banned.length === 0 && waiting.length === 0;
     let text = `${ok ? '✅' : '⚠️'} В игре: ${active}/${configured}`;
     const extras = [];
     if (workersRunning !== active) extras.push(`воркеров: ${workersRunning}`);
-    if (waiting.length) extras.push(`ждут вход: ${waiting.join(', ')}`);
+    if (waiting.length) extras.push(`ждут вход: ${waiting.map(label).join(', ')}`);
     if (extras.length) text += ` (${extras.join(', ')})`;
-    if (banned.length) text += `\n🚫 Забанены: ${banned.join(', ')}`;
+    if (banned.length) text += `\n🚫 Забанены: ${banned.map(label).join(', ')}`;
     return text;
 }
 
@@ -204,7 +227,7 @@ export async function markBotBanned(username, ctx) {
         bot.isManualStop = true;
     }
     await stopWorkerNoRestart(username, ctx);
-    await ctx.sendAlert(`🚫 ${username} забанен`);
+    await ctx.sendAlert(formatBotAlert(username, `🚫 ${username} забанен`, ctx.bots));
 }
 
 /** true — обработано, не слать как обычный лог */

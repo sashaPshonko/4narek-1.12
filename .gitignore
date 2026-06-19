@@ -1,5 +1,7 @@
 node_modules/
 xray.local.env
 .vless-applied.stamp
+.xray-runtime/
+.xray-start.lock
 bot.log
 *.log
