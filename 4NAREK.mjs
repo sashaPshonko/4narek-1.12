@@ -483,7 +483,9 @@ parentPort.on('message', (data) => {
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-function main() {
+async function main() {
+    const raw = await fs.readFileSync('./ip.json', 'utf-8');
+    const ipJSON = JSON.parse(raw);
     bot = mineflayer.createBot({
         host: 'mc.funtime.su',
         port: 25565,
@@ -496,7 +498,7 @@ function main() {
                 net.connect({
                     host: 'mc.funtime.su',
                     port: 25565,
-                    localAddress: config.ip
+                    localAddress: ipJSON[config.ip]
                 })
             );
         }

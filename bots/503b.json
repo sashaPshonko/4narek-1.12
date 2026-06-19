@@ -1,29 +1,32 @@
 [
   {
-    "username": "dostalimenyavse1",
+    "username": "dostalimenyavse2",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "2"
   },
   {
-    "username": "skalkamozhno1",
+    "username": "skalkamozhno2",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "2"
   },
   {
-    "username": "snovaopyatnado1",
+    "username": "snovaopyatnado2",
     "password": "ggggg",
     "anarchy": 503,
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "2"
   }
 ]

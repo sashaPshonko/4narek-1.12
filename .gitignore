@@ -5,3 +5,4 @@ xray.local.env
 .xray-start.lock
 bot.log
 *.log
+ip.json
