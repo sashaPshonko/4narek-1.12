@@ -1,4 +1,4 @@
-import fs from 'fs/promises';
+import fs from 'fs'
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
 import { rnd } from './delay/delay.mjs';
@@ -483,8 +483,8 @@ parentPort.on('message', (data) => {
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-async function main() {
-    const raw = await fs.readFileSync('./ip.json', 'utf-8');
+function main() {
+    const raw = fs.readFileSync('./ip.json', 'utf-8');
     const ipJSON = JSON.parse(raw);
     bot = mineflayer.createBot({
         host: 'mc.funtime.su',
