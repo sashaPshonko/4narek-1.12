@@ -51,8 +51,8 @@ const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 let catalog = [];
 let lastPrices = {};
 let bots = new Map(); // Map<username, botConfig>
-let workers = new Map();
-const pendingRestarts = new Map();
+let workers = new Map(); // Map<username, { worker, timeoutId, restartTimerId? }>
+const pendingRestarts = new Map(); // username -> timeoutId
 let botItems = new Map();
 let botInventory = new Map();
 let itemsBuying = [];
@@ -257,6 +257,7 @@ async function runWorker(bot) {
 
                 const workerData = workers.get(username);
                 if (workerData?.timeoutId) clearTimeout(workerData.timeoutId);
+                if (workerData?.restartTimerId) clearTimeout(workerData.restartTimerId);
                 workers.delete(username);
 
                 if (!bot.isManualStop && !isShuttingDown) {
@@ -394,12 +395,16 @@ async function restartBots() {
 
 // ========== TELEGRAM КОМАНДЫ ==========
 async function initTelegram() {
+    if (SKIP_TELEGRAM) {
+        console.log('[Telegram] отключён (LOCAL_MODE) — управление только через Go WS');
+        return;
+    }
     await ensureTelegramProxy();
     tgBot = new TelegramBot(token, buildTelegramBotOptions());
     attachTelegramDiagnostics(tgBot);
 
     try {
-        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 506 запущен');
+        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 502 запущен');
     } catch (error) {
         console.error('[Telegram] не удалось отправить стартовое сообщение:', error.message);
     }
@@ -547,6 +552,9 @@ async function main() {
     await initTelegram();
     await loadBotsConfig();
     connectWebSocket();
+    if (SKIP_TELEGRAM) {
+        console.log('📌 Локальный режим: ждём каталог/цены от Go → боты стартуют сами');
+    }
 }
 
 main().catch(async (error) => {
