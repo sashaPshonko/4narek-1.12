@@ -45,8 +45,7 @@ const __dirname = dirname(__filename);
 const botsPath = join(__dirname, './bots/506b.json');
 const token = '8703392993:AAHWKcw2eu6nz9XY3nwxgH1IYD_gjZ_ExLg';
 const alertChatID = -1003827870631;
-const WEBSOCKET_URL = 'ws://127.0.0.1:8080/ws';
-
+const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 
 const LOCAL_MODE = true;
 const SKIP_TELEGRAM = LOCAL_MODE;

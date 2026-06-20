@@ -53,8 +53,7 @@ if (LOCAL_MODE) {
 const botsPath = join(__dirname, './bots/502b.json');
 const token = '8629785801:AAHppq4_VgcmbDuXdl7nNG2k-kxcf_8fG50';
 const alertChatID = -1003827870631;
-const localhost = '127.0.0.1';
-const WEBSOCKET_URL = 'ws://${localhost}:8080/ws';
+const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
 
 // ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 let catalog = [];
