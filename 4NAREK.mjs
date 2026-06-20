@@ -4,6 +4,8 @@ import { workerData, parentPort } from 'worker_threads';
 import { rnd } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+
 import {
     getSlotInfo,
     getItemUUID,
@@ -497,27 +499,17 @@ parentPort.on('message', (data) => {
 function main() {
     const raw = fs.readFileSync('./ip.json', 'utf-8');
     const ipJSON = JSON.parse(raw);
-    const proxyString = ipJSON[config.ip]; // "socks5://user:pass@host:port" или "192.168.1.100:1080"
-
-    let proxyHost, proxyPort, proxyUser, proxyPass;
-
-    // Парсим строку
-    if (proxyString.startsWith('socks5://')) {
-        const url = new URL(proxyString);
-        proxyHost = url.hostname;
-        proxyPort = parseInt(url.port) || 1080;
-        proxyUser = url.username || null;
-        proxyPass = url.password || null;
-    } else {
-        const [host, port] = proxyString.split(':');
-        proxyHost = host;
-        proxyPort = parseInt(port) || 1080;
-    }
-    console.log('[PROXY STRING]', proxyString);
+    let proxyString = ipJSON[config.ip];
 
     if (!proxyString) {
         throw new Error(`Proxy not found for key ${config.ip}`);
     }
+
+    if (!proxyString.startsWith('socks5://')) {
+        proxyString = `socks5://${proxyString}`;
+    }
+
+    const agent = new SocksProxyAgent(proxyString);
 
     // Создаём бота
     bot = mineflayer.createBot({
@@ -526,47 +518,8 @@ function main() {
         username: config.username,
         password: config.password,
         version: '1.21.4',
-        chatLengthLimit: 256,
-        connect: async (client) => {
-            try {
-                console.log(`[${config.username}] SOCKS CONNECT START`);
-        
-                const { socket } = await SocksClient.createConnection({
-                    proxy: {
-                        host: proxyHost,
-                        port: proxyPort,
-                        type: 5,
-                        userId: proxyUser,
-                        password: proxyPass
-                    },
-                    command: 'connect',
-                    destination: {
-                        host: 'mc.funtime.su',
-                        port: 25565
-                    }
-                });
-        
-                console.log(`[${config.username}] SOCKS CONNECT OK`);
-        
-                socket.on('error', err => {
-                    console.error(`[${config.username}] SOCKET ERROR`, err);
-                });
-        
-                socket.on('close', () => {
-                    console.log(`[${config.username}] SOCKET CLOSED`);
-                });
-        
-                client.setSocket(socket);
-                console.log('socket destroyed:', socket.destroyed);
-                console.log('socket readyState:', socket.readyState);
-        
-                console.log(`[${config.username}] SOCKET SET`);
-            } catch (err) {
-                console.error(`[${config.username}] SOCKS ERROR`);
-                console.error(err);
-                process.exit(1);
-            }
-        }
+        agent, // 🔥 ВОТ ЭТО ГЛАВНОЕ
+        chatLengthLimit: 256
     });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {

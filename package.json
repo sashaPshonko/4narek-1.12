@@ -26,7 +26,7 @@
     "prismarine-nbt": "^2.8.0",
     "protodef": "^1.19.0",
     "socks": "^2.8.9",
-    "socks-proxy-agent": "^10.0.0",
+    "socks-proxy-agent": "^10.1.0",
     "winston": "^3.19.0",
     "ws": "^8.19.0"
   }
