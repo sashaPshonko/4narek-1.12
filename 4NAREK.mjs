@@ -16,6 +16,16 @@ import {
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
 
+process.on('uncaughtException', err => {
+    console.error('UNCAUGHT EXCEPTION');
+    console.error(err);
+});
+
+process.on('unhandledRejection', err => {
+    console.error('UNHANDLED REJECTION');
+    console.error(err);
+});
+
 const STORAGE_AH_SLOTS = 5;
 
 const firstAHSlot = 0;
@@ -582,7 +592,8 @@ function main() {
         console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${JSON.stringify(reason)}`);
         process.exit(1);
     });
-    bot.on('end', () => {
+    bot.on('end', (reason) => {
+        console.log(reason)
         process.exit(1);
     });
     bot.on('error', (err) => {
