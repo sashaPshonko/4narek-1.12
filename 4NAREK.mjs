@@ -28,6 +28,7 @@ process.on('unhandledRejection', err => {
     console.error(err);
 });
 
+
 const STORAGE_AH_SLOTS = 5;
 
 const firstAHSlot = 0;
@@ -496,30 +497,61 @@ parentPort.on('message', (data) => {
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-function main() {
+function parseProxy(str) {
+    // socks5://user:pass@ip:port
+    const url = new URL(str);
+
+    return {
+        host: url.hostname,
+        port: Number(url.port),
+        username: url.username,
+        password: url.password,
+    };
+}
+
+function createSocksSocket(proxy, host, port) {
+    return SocksClient.createConnection({
+        proxy: {
+            host: proxy.host,
+            port: proxy.port,
+            type: 5,
+            userId: proxy.username,
+            password: proxy.password,
+        },
+        command: 'connect',
+        destination: { host, port }
+    }).then(res => res.socket);
+}
+
+async function main() {
     const raw = fs.readFileSync('./ip.json', 'utf-8');
     const ipJSON = JSON.parse(raw);
+    
     let proxyString = ipJSON[config.ip];
-
-    if (!proxyString) {
-        throw new Error(`Proxy not found for key ${config.ip}`);
-    }
-
+    
     if (!proxyString.startsWith('socks5://')) {
         proxyString = `socks5://${proxyString}`;
     }
+    
+    const url = new URL(proxyString);
+    
+    const proxy = {
+        host: url.hostname,
+        port: Number(url.port),
+        username: url.username,
+        password: url.password,
+    };
+    
+    // создаём SOCKS socket ДЛЯ MINECRAFT
+    const socket = await createSocksSocket(proxy, 'mc.funtime.su', 25565);
 
-    const agent = new SocksProxyAgent(proxyString);
 
     // Создаём бота
     bot = mineflayer.createBot({
-        host: 'mc.funtime.su',
-        port: 25565,
+        stream: socket,
         username: config.username,
         password: config.password,
         version: '1.21.4',
-        agent, // 🔥 ВОТ ЭТО ГЛАВНОЕ
-        chatLengthLimit: 256
     });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
