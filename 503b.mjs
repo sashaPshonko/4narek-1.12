@@ -42,7 +42,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const LOCAL_MODE = true;
+const LOCAL_MODE = false;
 const SKIP_TELEGRAM = LOCAL_MODE;
 if (LOCAL_MODE) {
     process.env.TELEGRAM_PROXY = 'off';
