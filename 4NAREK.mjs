@@ -512,28 +512,27 @@ function main() {
         password: config.password,
         version: '1.21.4',
         chatLengthLimit: 256,
-        connect: (client) => {
-            const socket = new net.Socket();
-            SocksClient.createConnection({
-                proxy: {
-                    host: proxyHost,
-                    port: proxyPort,
-                    type: 5,
-                    userId: proxyUser,
-                    password: proxyPass
-                },
-                command: 'connect',
-                destination: {
-                    host: 'mc.funtime.su',
-                    port: 25565
-                }
-            }, (err, info) => {
-                if (err) {
-                    console.error(`❌ ${config.username} ошибка прокси:`, err.message);
-                    process.exit(1);
-                }
-                client.setSocket(info.socket);
-            });
+        connect: async (client) => {
+            try {
+                const { socket } = await SocksClient.createConnection({
+                    proxy: {
+                        host: proxyHost,
+                        port: proxyPort,
+                        type: 5,
+                        userId: proxyUser,
+                        password: proxyPass
+                    },
+                    command: 'connect',
+                    destination: {
+                        host: 'mc.funtime.su',
+                        port: 25565
+                    }
+                });
+                client.setSocket(socket);
+            } catch (err) {
+                console.error(`❌ ${config.username} ошибка прокси:`, err.message);
+                process.exit(1);
+            }
         }
     });
     bot.on('scoreboardCreated', (scoreboard) => {
