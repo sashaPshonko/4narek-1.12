@@ -503,6 +503,11 @@ function main() {
         proxyHost = host;
         proxyPort = parseInt(port) || 1080;
     }
+    console.log('[PROXY STRING]', proxyString);
+
+    if (!proxyString) {
+        throw new Error(`Proxy not found for key ${config.ip}`);
+    }
 
     // Создаём бота
     bot = mineflayer.createBot({
@@ -512,28 +517,28 @@ function main() {
         password: config.password,
         version: '1.21.4',
         chatLengthLimit: 256,
-        connect: async (client) => {
-            try {
-                const { socket } = await SocksClient.createConnection({
-                    proxy: {
-                        host: proxyHost,
-                        port: proxyPort,
-                        type: 5,
-                        userId: proxyUser,
-                        password: proxyPass
-                    },
-                    command: 'connect',
-                    destination: {
-                        host: 'mc.funtime.su',
-                        port: 25565
-                    }
-                });
-                client.setSocket(socket);
-            } catch (err) {
-                console.error(`❌ ${config.username} ошибка прокси:`, err.message);
-                process.exit(1);
-            }
-        }
+        // connect: async (client) => {
+        //     try {
+        //         const { socket } = await SocksClient.createConnection({
+        //             proxy: {
+        //                 host: proxyHost,
+        //                 port: proxyPort,
+        //                 type: 5,
+        //                 userId: proxyUser,
+        //                 password: proxyPass
+        //             },
+        //             command: 'connect',
+        //             destination: {
+        //                 host: 'mc.funtime.su',
+        //                 port: 25565
+        //             }
+        //         });
+        //         client.setSocket(socket);
+        //     } catch (err) {
+        //         console.error(`❌ ${config.username} ошибка прокси:`, err.message);
+        //         process.exit(1);
+        //     }
+        // }
     });
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
