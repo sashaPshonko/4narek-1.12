@@ -3,6 +3,7 @@ import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
 import { rnd } from './delay/delay.mjs';
 import net from 'net';
+import { SocksClient } from 'socks';
 import {
     getSlotInfo,
     getItemUUID,
@@ -486,6 +487,24 @@ parentPort.on('message', (data) => {
 function main() {
     const raw = fs.readFileSync('./ip.json', 'utf-8');
     const ipJSON = JSON.parse(raw);
+    const proxyString = ipJSON[config.ip]; // "socks5://user:pass@host:port" или "192.168.1.100:1080"
+
+    let proxyHost, proxyPort, proxyUser, proxyPass;
+
+    // Парсим строку
+    if (proxyString.startsWith('socks5://')) {
+        const url = new URL(proxyString);
+        proxyHost = url.hostname;
+        proxyPort = parseInt(url.port) || 1080;
+        proxyUser = url.username || null;
+        proxyPass = url.password || null;
+    } else {
+        const [host, port] = proxyString.split(':');
+        proxyHost = host;
+        proxyPort = parseInt(port) || 1080;
+    }
+
+    // Создаём бота
     bot = mineflayer.createBot({
         host: 'mc.funtime.su',
         port: 25565,
@@ -493,14 +512,28 @@ function main() {
         password: config.password,
         version: '1.21.4',
         chatLengthLimit: 256,
-        connect: client => {
-            client.setSocket(
-                net.connect({
+        connect: (client) => {
+            const socket = new net.Socket();
+            SocksClient.createConnection({
+                proxy: {
+                    host: proxyHost,
+                    port: proxyPort,
+                    type: 5,
+                    userId: proxyUser,
+                    password: proxyPass
+                },
+                command: 'connect',
+                destination: {
                     host: 'mc.funtime.su',
-                    port: 25565,
-                    localAddress: ipJSON[config.ip]
-                })
-            );
+                    port: 25565
+                }
+            }, (err, info) => {
+                if (err) {
+                    console.error(`❌ ${config.username} ошибка прокси:`, err.message);
+                    process.exit(1);
+                }
+                client.setSocket(info.socket);
+            });
         }
     });
     bot.on('scoreboardCreated', (scoreboard) => {
