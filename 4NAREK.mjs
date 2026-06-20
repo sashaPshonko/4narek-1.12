@@ -557,6 +557,8 @@ function main() {
                 });
         
                 client.setSocket(socket);
+                console.log('socket destroyed:', socket.destroyed);
+                console.log('socket readyState:', socket.readyState);
         
                 console.log(`[${config.username}] SOCKET SET`);
             } catch (err) {
