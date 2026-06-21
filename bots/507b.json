@@ -1,29 +1,32 @@
 [
   {
-    "username": "venlamaxim3",
+    "username": "venlamaxim4",
     "password": "ggggg",
     "anarchy": 507,
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "5"
   },
   {
-    "username": "su1c1deb3",
+    "username": "su1c1deb4",
     "password": "ggggg",
     "anarchy": 507,
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "5"
   },
   {
-    "username": "zavtran1cheg3",
+    "username": "zavtran1cheg4",
     "password": "ggggg",
     "anarchy": 507,
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "5"
   }
 ]
