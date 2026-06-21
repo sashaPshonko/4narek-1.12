@@ -5,7 +5,8 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "8"
   },
   {
     "username": "howtofuckgorb",
@@ -14,7 +15,8 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "8"
   },
   {
     "username": "bolshedeneg",
@@ -23,6 +25,7 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
-    "clanBalanceLimit": 10
+    "clanBalanceLimit": 10,
+    "ip": "8"
   }
 ]

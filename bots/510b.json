@@ -6,7 +6,8 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
-    "clanBalanceLimit": 30
+    "clanBalanceLimit": 30,
+    "ip": "10"
   },
   {
     "username": "NAHNENYT3",
@@ -15,7 +16,8 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
-    "clanBalanceLimit": 20
+    "clanBalanceLimit": 20,
+    "ip": "10"
   },
   {
     "username": "bolnao4en3",
@@ -24,6 +26,7 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
-    "clanBalanceLimit": 20
+    "clanBalanceLimit": 20,
+    "ip": "10"
   }
 ]
