@@ -6,6 +6,7 @@
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
+    "role": "buyer",
     "clanBalanceLimit": 10,
     "ip": "2"
   },
@@ -16,6 +17,7 @@
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "2"
   },
@@ -26,6 +28,7 @@
     "type": "4NAREK",
     "item": "netherite boots",
     "goType": "netherite_boots-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "2"
   }

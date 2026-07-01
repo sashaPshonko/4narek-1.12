@@ -6,6 +6,7 @@
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
+    "role": "buyer",
     "clanBalanceLimit": 10,
     "ip": "5"
   },
@@ -16,6 +17,7 @@
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "5"
   },
@@ -26,6 +28,7 @@
     "type": "4NAREK",
     "item": "netherite sword",
     "goType": "netherite_sword-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "5"
   }

@@ -6,6 +6,7 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
+    "role": "buyer",
     "clanBalanceLimit": 30,
     "ip": "8"
   },
@@ -16,6 +17,7 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
+    "role": "seller",
     "clanBalanceLimit": 20,
     "ip": "8"
   },
@@ -26,6 +28,7 @@
     "type": "4NAREK",
     "item": "netherite armour",
     "goType": "позорная-броня-1.21",
+    "role": "seller",
     "clanBalanceLimit": 20,
     "ip": "8"
   }

@@ -6,6 +6,7 @@
     "type": "4NAREK",
     "item": "netherite helmet",
     "goType": "netherite_helmet-1.21",
+    "role": "buyer",
     "clanBalanceLimit": 10,
     "ip": "3"
   },
@@ -16,16 +17,18 @@
     "type": "4NAREK",
     "item": "netherite helmet",
     "goType": "netherite_helmet-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "3"
   },
   {
-    "username": "yalubludashupzdc",
+    "username": "yalubludashupzd1",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4NAREK",
     "item": "netherite helmet",
     "goType": "netherite_helmet-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "3"
   }

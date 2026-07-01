@@ -30,6 +30,7 @@ process.on('unhandledRejection', err => {
 
 
 const STORAGE_AH_SLOTS = 5;
+const CLAN_STORAGE_TARGET = 10;
 
 const firstAHSlot = 0;
 const lastAHSlot = 17;
@@ -90,6 +91,7 @@ function quickToHotbarSlot(quick) {
 
 const analysisAH = 'Анализ аукциона';
 const myItems = 'Хранилище';
+const clan = 'Клан';
 const rtp = 'RTP';
 const accept = 'подтверждение покупки';
 
@@ -175,6 +177,7 @@ const config = {
     needAdd: false,
     timeActive: Date.now(),
     ip: workerData.ip,
+    role: workerData.role,
 };
 
 var bot = null;
@@ -307,6 +310,61 @@ function findStorageSlotToUnlist() {
 
     if (priceOrFullSlot !== null) {
         return { slot: priceOrFullSlot, reason: priceOrFullReason };
+    }
+    return null;
+}
+
+/** Слот 1–45 в окне клана: первый предмет из каталога go-типа. */
+function findClanWindowConfigSlot() {
+    const slots = bot.currentWindow?.slots;
+    if (!slots?.length) return null;
+    const last = Math.min(45, slots.length - 1);
+    for (let i = 1; i <= last; i++) {
+        const slotData = slots[i];
+        if (!slotData) continue;
+        const itemCfg = findMatchingConfigItem(
+            slotData,
+            config.catalogAll,
+            config.goType,
+        );
+        if (itemCfg?.id) return i;
+    }
+    return null;
+}
+
+/** Слоты 1–45: сколько стаков предметов из каталога в клан-хранилище. */
+function countClanStorageConfigItems() {
+    const slots = bot.currentWindow?.slots;
+    if (!slots?.length) return 0;
+    let count = 0;
+    const last = Math.min(45, slots.length - 1);
+    for (let i = 1; i <= last; i++) {
+        const slotData = slots[i];
+        if (!slotData) continue;
+        const itemCfg = findMatchingConfigItem(
+            slotData,
+            config.catalogAll,
+            config.goType,
+        );
+        if (itemCfg?.id) count++;
+    }
+    return count;
+}
+
+/** Слот 54–81 в окне клана: первый предмет из каталога (инвентарь бота). */
+function findClanDepositSourceSlot() {
+    const slots = bot.currentWindow?.slots;
+    if (!slots?.length) return null;
+    const last = Math.min(81, slots.length - 1);
+    for (let i = 54; i <= last; i++) {
+        const slotData = slots[i];
+        if (!slotData) continue;
+        const itemCfg = findMatchingConfigItem(
+            slotData,
+            config.catalogAll,
+            config.goType,
+        );
+        if (itemCfg?.id) return i;
     }
     return null;
 }
@@ -474,7 +532,6 @@ async function handleChatMessage(text) {
     if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
         config.needAdd = true;
         if (!config.hasDangerousTrash) await sellItems();
-        await safeAH();
         return;
     }
     if (isLobbyBroadcastMessage(text)) {
@@ -533,7 +590,7 @@ async function main() {
         password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        version: '1.21.4',
+        version: '1.21.8',
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
@@ -603,14 +660,12 @@ async function main() {
         bot.chat(`/l ${config.password}`);
         config.timeJoinAnarchy = 0;
         await sellItems();
-        await safeAH();
     });
 
     bot.on('physicTick', async () => {
         if (Date.now() - config.timeActive > 60000) {
             config.timeActive = Date.now();
             await sellItems();
-            await safeAH();
         }
     })
 
@@ -625,7 +680,9 @@ async function main() {
         const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
         const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
 
-        if (windowJSON.includes('хранилище')) {
+        if (windowJSON.includes('клан')) {
+            config.menu = clan;
+        } else if (windowJSON.includes('хранилище')) {
             config.menu = myItems;
         } else if (windowJSON.includes('телепортации')) {
             config.menu = rtp;
@@ -744,7 +801,6 @@ async function main() {
                 if (config.needSell && hasBotItem()) {
                     logInfo('хранилище → sellItems');
                     await sellItems();
-                    await safeAH();
                 } else {
                     logInfo('хранилище → назад в АХ');
                     config.menu = analysisAH;
@@ -758,14 +814,59 @@ async function main() {
                 config.hasDangerousTrash = false;
                 config.lastWarpTime = Date.now();
                 await sellItems();
-                await safeAH();
                 break;
               
             case accept:
                 logInfo('окно → подтверждение покупки (клик glass)');
                 await safeClickBuy(bot, slotGlass, delayMs({ min: 400, max: 1000 }), key);
                 break;
-        }
+        
+            case clan:
+                logInfo('окно → клан');
+                switch (config.role) {
+                    case 'seller':
+                        if (!config.enoughItems) {
+                            const clanSlot = findClanWindowConfigSlot();
+                            if (clanSlot !== null) {
+                                logInfo(`клан → забрать предмет из слота ${clanSlot} (shift)`);
+                                await safeClickBuy(bot, clanSlot, delayMs({ min: 1500, max: 3500 }), key);
+                                await rnd('BASE_DELAY');
+                                await bot.closeWindow(bot.currentWindow);
+                                await sellItems();
+                            } else {
+                                logInfo('клан → в хранилище нечего забирать → safeAH');
+                                await rnd('BASE_DELAY');
+                                await bot.closeWindow(bot.currentWindow);
+                                await safeAH();
+                            }
+                        }
+                        break;
+                    case 'buyer': {
+                        while (config.menu === clan && bot.currentWindow && config.key === key) {
+                            const stored = countClanStorageConfigItems();
+                            if (stored >= CLAN_STORAGE_TARGET) {
+                                logInfo(`клан → хранилище полное (${stored}/${CLAN_STORAGE_TARGET})`);
+                                break;
+                            }
+                            const depositSlot = findClanDepositSourceSlot();
+                            if (depositSlot === null) {
+                                logInfo(`клан → нечего класть (${stored}/${CLAN_STORAGE_TARGET})`);
+                                config.enoughItems = false;
+                                break;
+                            }
+                            logInfo(`клан → положить предмет из слота ${depositSlot} (${stored}/${CLAN_STORAGE_TARGET})`);
+                            await safeClickBuy(bot, depositSlot, delayMs({ min: 1500, max: 3500 }), key);
+                            if (config.key !== key) break;
+                            await rnd('POLL');
+                        }
+                        await rnd('BASE_DELAY');
+                        await bot.closeWindow(bot.currentWindow);
+                        await safeAH();
+                        break;
+                    }
+                }
+                break;
+            }
         await rnd('WINDOW_DELAY');
         if (key === config.key) {
             logInfo('windowOpen → конец (key не изменился)');
@@ -942,6 +1043,39 @@ async function sellItems() {
         await waitWarpTeleport();
         logOk('продажа → конец');
     }
+
+    const shouldOpenClanStorage =
+        config.role !== 'seller' || !config.enoughItems;
+    if (!shouldOpenClanStorage) {
+        logInfo('sellItems → clan storage пропуск (seller, enoughItems)');
+        await safeAH();
+        return;
+    }
+
+    if (!bot) return;
+    if (bot.currentWindow) {
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
+    }
+    await joinAnarchy();
+    await rnd('BASE_DELAY');
+
+    config.botUpdateWindow = true;
+    const key = config.key;
+    let attempt = 0;
+    while (key === config.key) {
+        attempt++;
+        if (config.afk) logAfk('режим AFK (clan storage)');
+        logInfo(`sellItems → /clan storage #${attempt}`);
+        await antiAfkIfNeeded();
+        if (config.afk) {
+            await rnd('AH_CMD');
+            continue;
+        }
+        bot.chat('/clan storage');
+        await rnd('AH_CMD');
+    }
+    logOk(`sellItems → clan storage открыто (${attempt} попыт.)`);
 }
 
 async function moveToHotBar() {

@@ -6,6 +6,7 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
+    "role": "buyer",
     "clanBalanceLimit": 10,
     "ip": "4"
   },
@@ -16,6 +17,7 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "4"
   },
@@ -26,6 +28,7 @@
     "type": "4NAREK",
     "item": "netherite pickaxe",
     "goType": "netherite_pickaxe-1.21",
+    "role": "seller",
     "clanBalanceLimit": 10,
     "ip": "4"
   }

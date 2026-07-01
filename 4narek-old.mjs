@@ -1,1540 +1,1237 @@
-import fs from 'fs/promises';
+import fs from 'fs'
 import mineflayer from 'mineflayer';
-import { createLogger, transports, format } from 'winston';
 import { workerData, parentPort } from 'worker_threads';
-import { loader as autoEat } from 'mineflayer-auto-eat'
-import { writeFile, rename } from 'fs/promises';
-import { join } from 'path';
+import { rnd } from './delay/delay.mjs';
 import net from 'net';
-import { generateKey } from 'crypto';
-import protodef from 'protodef';
-import zlib from 'zlib';
+import { SocksClient } from 'socks';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
-// ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
-/** Go-тип из bots.json: меч / сфера / талисман — оркестратор шлёт только свой каталог */
-const botGoType = workerData.goType || null;
-let itemPrices = workerData.itemPrices;
-let itemsBuying = [];
-let needReset = false;
-let mu = false
-let netakbistro = true
-let enoughItems = false
-let isKrush = false
-let needSendAH = true
-let typeSell = ""
+import {
+    getSlotInfo,
+    getItemUUID,
+    getPriceFromAhItem,
+    findMatchingConfigItem,
+    getDurabilityPercent,
+} from './items/slotInfo.mjs';
+import {
+    isUuidBlockedByOther,
+    mergeBuyingClaim,
+} from './items-buying-coord.mjs';
 
-let sellNeedRestart = false
-let currentSellItem = null; // временный предмет для продажи
-
-// Глобальные переменные для состояния бота
-let botStartTime = Date.now() - 55000
-let botAhFull = false
-let botTimeReset = Date.now()
-let botLogin = true
-let botTimeActive = Date.now()
-let botTimeLogin = Date.now()
-let botPrices = []
-let botCount = 0
-let botAh = []
-let botNeedSell = false
-let botStartClickTime = null
-let botUpdateWindow = false
-let botMenu = 'Выбор скупки ресурсов'
-let botKey = null
-let botType = ""
-let botTypeSell = null
-
-parentPort.on('message', (data) => {
-    if (data.type === 'price') {
-        needReset = true;
-        itemPrices = data.data;
-    }
-    if (data.type === 'items_buying') {
-        itemsBuying = data.data;
-    }
+process.on('uncaughtException', err => {
+    console.error('UNCAUGHT EXCEPTION');
+    console.error(err);
 });
 
-// ─── Задержки (менять здесь) ───────────────────────────────────────────────
-const TIMING = {
-    SPAWN_LOGIN: { min: 0, max: 10_000 },
-    CHAT: { min: 1500, max: 2500 },
-    CLICK: { min: 500, max: 700 },
-    SHOP_AFTER_AN_MS: 15_000,
-    SECTION_OPEN: { min: 1000, max: 2500 },
-    SECTION_CLOSE: { min: 4000, max: 6000 },
-    WINDOW: { min: 1500, max: 4500 },
-    GLASS: { min: 700, max: 1000 },
-    BUY_SLOT: { min: 500, max: 700 },
-    UNLIST: { min: 1500, max: 3500 },
-    SELL: { min: 1000, max: 2500 },
-    SELL_CONFIRM: { min: 1000, max: 2500 },
-    SELL_HOTBAR: { min: 500, max: 1500 },
-    SELL_INV_MOVE: { min: 100, max: 300 },
-    SELL_MOVE: { min: 700, max: 1500 },
-    SELL_TOSS: { min: 1000, max: 3000 },
-    SELL_AFTER_LOGIN_MS: 13_000,
-    WARP_WAIT: { min: 7100, max: 7200 },
-    MOVE_BURST_MS: 4_000,
-    MOVE_KEY_HOLD_MS: 900,
-    MOVE_KEY_PAUSE_MS: 100,
-    AH_CMD: { min: 2000, max: 3500 },
-    IDLE_SOFT_MS: 30_000,
-    IDLE_HARD_MS: 120_000,
-    STORAGE_AH_SLOTS: 8,
-    CLAN_CLICK: { min: 500, max: 700 },
-    RTP_WAIT: { min: 7100, max: 7300 },
-    LOBBY_AFTER_AN: { min: 2500, max: 3500 },
-    AFTER_ANARCHY_CMD: { min: 1500, max: 3500 },
-    LOGIN_COOLDOWN_AFTER_WALK_MS: 10_000,
-    LOBBY_ANARCHY_READY_MS: 11_000,
-    POLL_MS: 100,
+process.on('unhandledRejection', err => {
+    console.error('UNHANDLED REJECTION');
+    console.error(err);
+});
+
+
+const STORAGE_AH_SLOTS = 5;
+
+const firstAHSlot = 0;
+const lastAHSlot = 17;
+const slotToReloadAH = 49;
+const slotToStorage = 46;
+const leftMouseButton = 0;
+const shiftClick = 1;
+const slotGlass = 31;
+
+/** mineflayer bot.inventory.slots: 0–4 крафт, 5–8 броня, 9–35 рюкзак, 36–44 хотбар, 45 offhand */
+const firstInventorySlot = 9;
+const lastInventorySlot = 35;
+const firstHotbarSlot = 36;
+const lastHotbarSlot = 44;
+const offhandSlot = 45;
+const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
+
+function isStorageSlot(slot) {
+    return slot >= firstInventorySlot && slot <= lastInventorySlot;
+}
+
+function isHotbarSlot(slot) {
+    return slot >= firstHotbarSlot && slot <= lastHotbarSlot;
+}
+
+/** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
+const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
+/** Доля полного круга (~0.15 ≈ 54°, ~90 шагов, ~4–5 с). */
+const LOOK_SPIN_TURNS = 0.15;
+/** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
+const LOOK_SPIN_AVG_YAW_UNITS = 4;
+/** Длительность осмотра (мс): случайно от 3 до 4 с на каждый вызов. */
+const LOOK_SPIN_TIMEOUT_MIN_MS = 3000;
+const LOOK_SPIN_TIMEOUT_MAX_MS = 4000;
+
+function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
+    const totalTurn = Math.PI * 2 * turns;
+    return Math.ceil(totalTurn / (LOOK_SPIN_AVG_YAW_UNITS * LOOK_GCD_STEP));
+}
+
+/** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
+function hotbarSlotToQuick(slot) {
+    if (!isHotbarSlot(slot)) {
+        reportError('hotbarSlotToQuick', `слот ${slot} не хотбар (36–44)`);
+        return 0;
+    }
+    return slot - firstHotbarSlot;
+}
+
+/** quickBar (0–8) → слот инвентаря (36–44). 9 → 45 (offhand) — запрещено */
+function quickToHotbarSlot(quick) {
+    if (quick < 0 || quick > 8) {
+        reportError('quickToHotbarSlot', `quick=${quick} вне 0–8`);
+        return firstHotbarSlot;
+    }
+    return firstHotbarSlot + quick;
+}
+
+const analysisAH = 'Анализ аукциона';
+const myItems = 'Хранилище';
+const rtp = 'RTP';
+const accept = 'подтверждение покупки';
+
+const LOBBY_IGNORE_MS = 60_000;
+const LOBBY_BROADCAST_MARKERS = [
+    '⚡ Наша группа ВК vk.com/funtime',
+    '⚡ Наш Телеграм t.me/funtime',
+    '⚡ Наш Дискорд dd.FunTime.su',
+    '⚡ Наш Сайт FunTime.su',
+    '⚡ Наши сообщества и соц. сети /links',
+    '⚡ Вы играете на FunTime! play.funtime.su',
+];
+
+const ANSI = {
+    reset: '\x1b[0m',
+    dim: '\x1b[2m',
+    bold: '\x1b[1m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
 };
+
+let botWorkerStartTime = Date.now();
+
+function logTag() {
+    return `${ANSI.cyan}[${config.username}]${ANSI.reset}`;
+}
+
+function logChat(raw) {
+    console.log(`${ANSI.dim}${logTag()} 💬 ${raw}${ANSI.reset}`);
+}
+
+function logInfo(msg) {
+    console.log(`${logTag()} ${ANSI.bold}ℹ${ANSI.reset} ${msg}`);
+}
+
+function logOk(msg) {
+    console.log(`${logTag()} ${ANSI.green}✓${ANSI.reset} ${msg}`);
+}
+
+function logWarn(msg) {
+    console.log(`${logTag()} ${ANSI.yellow}⚡${ANSI.reset} ${msg}`);
+}
+
+function logAfk(msg) {
+    console.log(`${logTag()} ${ANSI.red}${ANSI.bold}AFK${ANSI.reset} ${ANSI.red}${msg}${ANSI.reset}`);
+}
+
+function isLobbyBroadcastMessage(text) {
+    return LOBBY_BROADCAST_MARKERS.some((marker) => text.includes(marker));
+}
+
+const config = {
+    username: workerData.username,
+    password: workerData.password,
+    anarchy: workerData.anarchy,
+    type: workerData.type,
+    item: workerData.item,
+    goType: workerData.goType,
+    timeJoinAnarchy: 0,
+    lastWarpTime: 0,
+    enoughItems: false,
+    items: workerData.itemPrices ?? [],
+    catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
+    needSell: false,
+    walkTime: 0,
+    BuyingItem: { id: '', price: 0 },
+    needPrice: 0,
+    key: '',
+    menu: analysisAH,
+    lastResetTime: Date.now(),
+    botUpdateWindow: false,
+    botStartClickTime: 0,
+    afk: false,
+    needRTP: false,
+    hasDangerousTrash: false,
+    needReloadAH: false,
+    balance: null,
+    needSendAH: true,
+    needAdd: false,
+    timeActive: Date.now(),
+    ip: workerData.ip,
+    role: workerData.role,
+};
+
+var bot = null;
+/** UUID лотов в очереди: { uuid, username } */
+let itemsBuying = [];
+
+/**
+ * Покупка на АХ: таймер с startedAt переживает авто-обновление окна (без нашего клика).
+ * @type {{ slot: number, startedAt: number, totalDelay: number, rechecked: boolean } | null}
+ */
+let ahBuySession = null;
+
+function claimAhLotUuid(uuid) {
+    if (!uuid) return;
+    const claim = { uuid, username: config.username };
+    itemsBuying = mergeBuyingClaim(itemsBuying, claim);
+    parentPort.postMessage({ name: 'buying', data: claim, username: config.username });
+}
+
+function ahBuyDelayMs(slot) {
+    return delayMs({ min: 500, max: 700 }) * (slot + 2);
+}
+
+function clearAhBuySession() {
+    ahBuySession = null;
+}
+
+function markAnarchyJoined() {
+    config.timeJoinAnarchy = Date.now();
+    logOk(`анархия ${config.anarchy} — вход`);
+    parentPort.postMessage({ name: 'success', username: config.username });
+    logOk(`на анархии an${config.anarchy} → success`);
+}
+
+function reportError(where, err) {
+    const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    const text = `${config.username} — ${where}: ${detail}`;
+    console.error(`${logTag()} ${ANSI.red}✖${ANSI.reset} ${ANSI.red}${where}${ANSI.reset}: ${detail}`);
+    parentPort.postMessage(text);
+}
+
+/** Новый ключ сессии кликов по АХ (если окно обновилось — старые клики не выполняются) */
+function generateKey() {
+    config.key = Math.random().toString(36).substring(2, 15);
+    return config.key;
+}
 
 function delayMs(range) {
     if (typeof range === 'number') return range;
     return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
 }
 
-async function rnd(range) {
-    await delay(delayMs(range));
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Двойной /ah sell как в рабочем — с нормальной паузой между командами */
-async function ahSellTwice(bot, price) {
-    bot.chat(`/ah sell ${price}`);
-    await rnd(TIMING.SELL_CONFIRM);
-    bot.chat(`/ah sell ${price}`);
-    await rnd(TIMING.SELL_CONFIRM);
+async function safeClickBuy(bot, slot, time, key) {
+    let timeDelay = time;xa
+    if (config.botUpdateWindow) {
+        config.botUpdateWindow = false;
+        config.botStartClickTime = Date.now();
+    } else {
+        timeDelay = time - (Date.now() - config.botStartClickTime);
+        if (timeDelay <= 0) timeDelay = 0;
+    }
+
+    await sleep(timeDelay);
+    if (config.key !== key) {
+        logWarn(`клик слот ${slot} отменён (новое окно)`);
+        return;
+    }
+
+    config.botUpdateWindow = true;
+    if (bot.currentWindow) {
+        logInfo(`клик слот ${slot}`);
+        await bot.clickWindow(slot, leftMouseButton, shiftClick);
+    } else {
+        logWarn(`клик слот ${slot} — окна нет`);
+    }
 }
 
-const WARPS = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
-const MOVE_KEYS = ['forward', 'back', 'left', 'right'];
-
-const chooseBuying = 'Выбор скупки ресурсов';
-const setSectionFarmer = 'Установка секции "фермер"';
-const sectionFarmer = 'Секция "фермер"';
-const setSectionFood = 'Установка секции "еда"';
-const sectionFood = 'Секция "еда"';
-const setSectionResources = 'Установка секции "ценные ресурсы"';
-const sectionResources = 'Секция "ценные ресурсы"';
-const setSectionLoot = 'Установка секции "добыча"';
-const sectionLoot = 'Секция "добыча"';
-const analysisAH = 'Анализ аукциона';
-const buy = 'Покупка';
-const myItems = 'Хранилище';
-const setAH = 'Установка аукциона';
-
-const slotToChooseBuying = 13;
-const slotToSetSectionFarmer = 13;
-const slotToLeaveSection = 3;
-const slotToSetSectionFood = 21;
-const slotToSetSectionResources = 23;
-const slotToSetSectionLoot = 31;
-const slotToTuneAH = 52;
-const slotToReloadAH = 49;
-const slotToTryBuying = 0;
-
-const ahCommand = `/ah search ${workerData.item}`;
-
-let type = "";
-
-// ========== ЗАПРЕЩЁННЫЕ ЧАРЫ ПО ТИПАМ ПРЕДМЕТОВ ==========
-const forbiddenEnchantsByType = {
-    // Мечи — тяжелый, нестабильный, отдача
-    "netherite_sword": [
-        "heavy",
-        "unstable",
-    ],
-
-    "diamond_sword": [
-        "heavy",
-        "unstable",
-    ],
-
-    // Броня (шлем, нагрудник, штаны, ботинки) — только шипы
-    "netherite_helmet": [
-        "minecraft:thorns"
-    ],
-    "netherite_chestplate": [
-        "minecraft:thorns"
-    ],
-    "netherite_leggings": [
-        "minecraft:thorns"
-    ],
-    "netherite_boots": [
-        "minecraft:thorns"
-    ],
-
-    // Кирки — свои запреты (если нужны)
-    "netherite_pickaxe": [
-        "heavy",
-        "unstable",
-    ],
-
-    // Элитры
-    "elytra": [
-    ]
-};
-
-function hasForbiddenEnchant(itemType, allEnchants, configEffects = []) {
-    const forbiddenList = forbiddenEnchantsByType[itemType];
-    if (!forbiddenList || forbiddenList.length === 0) return false;
-
-    const allowedByConfig = new Set(
-        (configEffects || []).map((e) => e?.name).filter(Boolean)
-    );
-
-    return allEnchants.some((enchant) => {
-        if (!enchant?.name) return false;
-        if (allowedByConfig.has(enchant.name)) return false;
-        return forbiddenList.includes(enchant.name);
-    });
+function getSlotInfoSafe(item, slotIndex) {
+    try {
+        return getSlotInfo(item, config.catalogAll, config.goType);
+    } catch (err) {
+        reportError(`getSlotInfo slot=${slotIndex}`, err);
+        return null;
+    }
 }
 
-/** Сколько миллионов оставлять на боте (bots.json clanBalanceLimit, по умолчанию 10) */
-const clanBalanceLimitM = workerData.clanBalanceLimit ?? 10;
-const minBalance = clanBalanceLimitM * 1_000_000;
+/**
+ * Слот 0–4 в «Хранилище»: снять мусор, несовпадение цены или лот при переполнении.
+ * @returns {{ slot: number, reason: string } | null}
+ */
+function findStorageSlotToUnlist() {
+    let priceOrFullSlot = null;
+    let priceOrFullReason = '';
 
-const leftMouseButton = 0;
-const noShift = 0;
-const firstInventorySlot = 9;
-const lastInventorySlot = 44;
-const firstAHSlot = 0;
-const lastAHSlot = 44;
-const firstSellSlot = 36;
+    for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
+        const currentSlot = bot.currentWindow?.slots[i];
+        if (!currentSlot) continue;
 
-const anarchyCommand = `/an${workerData.anarchy}`;
+        const info = getSlotInfoSafe(currentSlot, i);
 
-const logger = createLogger({
-    level: 'info',
-    format: format.combine(
-        format.colorize(),
-        format.timestamp(),
-        format.printf(({ timestamp, level, message }) => {
-            return `${timestamp} ${level}: ${message}`;
-        })
-    ),
-    transports: [new transports.Console()]
+        if (!info || info.isTrash) {
+            return { slot: i, reason: 'мусор (нет в каталоге)' };
+        }
+
+        let priceOnAH;
+        try {
+            priceOnAH = getPriceFromAhItem(currentSlot);
+        } catch (err) {
+            reportError(`хранилище слот ${i} цена`, err);
+            return { slot: i, reason: 'мусор (не читается цена)' };
+        }
+
+        if (info.sellPrice !== priceOnAH) {
+            if (priceOrFullSlot === null) {
+                priceOrFullSlot = i;
+                priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
+            }
+            continue;
+        }
+
+        if (config.enoughItems && priceOrFullSlot === null) {
+            priceOrFullSlot = i;
+            priceOrFullReason = 'переполнение хранилища';
+        }
+    }
+
+    if (priceOrFullSlot !== null) {
+        return { slot: priceOrFullSlot, reason: priceOrFullReason };
+    }
+    return null;
+}
+
+const TRY_SELL_MARKER = 'выставлен на продажу за';
+
+/** Любые разделители (., запятые, $) — в строке остаются только цифры. */
+function digitsToInt(text) {
+    const digits = String(text).replace(/\D/g, '');
+    if (!digits) return NaN;
+    return parseInt(digits, 10);
+}
+
+function parseChatPrice(text) {
+    return digitsToInt(text);
+}
+
+/** Цена только из хвоста после «выставлен на продажу за» (для % 100 → тип предмета). */
+function parseTrySellPrice(text) {
+    const i = text.indexOf(TRY_SELL_MARKER);
+    if (i < 0) return NaN;
+    return digitsToInt(text.slice(i + TRY_SELL_MARKER.length));
+}
+
+function getIdBySellPrice(price) {
+    if (!Number.isFinite(price)) return '';
+    const found = config.items.find((item) => item.priceSell % 100 === price % 100);
+    return found?.id ?? '';
+}
+
+/** Сумма 5× самого дорогого предмета из каталога бота (priceSell, goType). */
+function getSaveSum() {
+    if (!Array.isArray(config.items) || !config.items.length) return null;
+
+    let bestPrice = 0;
+    for (const entry of config.items) {
+        if (!entry?.id?.endsWith('1.21')) continue;
+        if (config.goType && entry.type !== config.goType) continue;
+
+        const unitPrice = entry.priceSell;
+        if (typeof unitPrice !== 'number' || !Number.isFinite(unitPrice) || unitPrice <= 0) continue;
+
+        if (unitPrice > bestPrice) bestPrice = unitPrice;
+    }
+
+    if (!bestPrice) return null;
+    return bestPrice * 5;
+}
+
+function getHeldItemInfo() {
+    if (!bot) return null;
+    const slot = quickToHotbarSlot(bot.quickBarSlot);
+    return getSlotInfoSafe(bot.inventory.slots[slot], slot);
+}
+
+async function handleChatMessage(text) {
+    if (text.includes('[✔] Предметы успешно перевыставлены!')) {
+        config.lastResetTime = Date.now();
+        return;
+    }
+    if (text.includes('[☃] Вы успешно купили')) {
+        const price = parseChatPrice(text);
+        const id = config.BuyingItem.id;
+        parentPort.postMessage({ name: 'buy', id, price });
+        config.needSell = true;
+        return;
+    }
+
+    if (text.includes('[☃] У Вас купили')) {
+        const price = parseChatPrice(text);
+        parentPort.postMessage({ name: 'sell', id: getIdBySellPrice(price), price });
+        config.needSell = true;
+        return;
+    }
+
+    if (text.includes(TRY_SELL_MARKER)) {
+        const price = parseTrySellPrice(text);
+        if (!Number.isFinite(price)) return;
+        const id = getIdBySellPrice(price) || config.goType;
+        if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        return;
+    }
+
+    if (text.includes('[☃] Не удалось выставить') ||
+        text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+        config.enoughItems = true;
+        return;
+    }
+    if (text.includes('Данная команда недоступна в режиме AFK')) {
+        config.afk = true;
+        logAfk('сервер: команда недоступна в режиме AFK');
+        return;
+    }
+    if (text.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
+        config.hasDangerousTrash = true;
+        config.needRTP = true;
+        return;
+    }
+
+    if (text.includes('[☃] Максимальная цена')) {
+        const balance = parseChatPrice(text);
+        const info = getHeldItemInfo();
+        if (!info?.id || !info.sellPrice) {
+            reportError('maxPrice', 'нет предмета в руке или sellPrice');
+            return;
+        }
+        const basePrice = Math.floor(balance / 10000) * 10000;
+        const marker = info.sellPrice % 100;
+        let finalPrice = basePrice + marker;
+        if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
+        config.needPrice = finalPrice;
+        const heldItem = bot.inventory.slots[quickToHotbarSlot(bot.quickBarSlot)];
+        const durabilityPercent = getDurabilityPercent(heldItem);
+        if (durabilityPercent < 0.9) {
+            logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — в оркестратор не шлём`);
+            return;
+        }
+        parentPort.postMessage({ name: 'set_max_price', type: info.id, price: finalPrice });
+        return;
+    }
+
+    if (text.includes('[☃] Минимальная цена')) {
+        const balance = parseChatPrice(text);
+        const info = getHeldItemInfo();
+        if (!info?.id || !info.sellPrice) return;
+
+        const basePrice = Math.ceil(balance / 10000) * 10000;
+        const marker = info.sellPrice % 100;
+        const finalPrice = basePrice + marker + (info.nacenka ?? 0);
+        config.needPrice = finalPrice;
+
+        if (text.includes('круш')) {
+            return;
+        }
+
+        parentPort.postMessage({ name: 'set_min_price', type: info.id, price: finalPrice });
+        return;
+    }
+
+    if (text.includes('BotFilter >> Введите номер с картинки в чат')) {
+        parentPort.postMessage(`${workerData.username} - ввести капчу`);
+        return;
+    }
+
+    if (text.toLowerCase().includes('вы забанены')) {
+        parentPort.postMessage(`${workerData.username} - забанен`);
+        return;
+    }
+    if (text.toLowerCase().includes('чтобы двигаться')) {
+        parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
+        return;
+    }
+    if (text.includes('Отключите VPN и Proxy и повторите попытку входа')) {
+        parentPort.postMessage(`${workerData.username} - vpn спалили`);
+        return;
+    }
+    if (text.includes('Не так быстро..') || text.includes('[✘] Ошибка! Этот товар уже Купили!')) {
+        config.needReloadAH = true;
+        return;
+    }
+    if (text.includes('[$] Ваш баланс:')) {
+        config.balance = parseChatPrice(text);
+        return;
+    }
+    if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
+        config.needAdd = true;
+        if (!config.hasDangerousTrash) await sellItems();
+        await safeAH();
+        return;
+    }
+    if (isLobbyBroadcastMessage(text)) {
+        if (Date.now() - botWorkerStartTime < LOBBY_IGNORE_MS) return;
+        const preview = text.trim().length > 50 ? `${text.trim().slice(0, 50)}…` : text.trim();
+        logWarn(`лобби «${preview}» → sellItems`);
+        config.timeJoinAnarchy = 0;
+        await sellItems();
+        return;
+    }
+}
+
+parentPort.on('message', (data) => {
+    if (data.type === 'price') {
+        config.items = data.data;
+        if (Array.isArray(data.catalogAll) && data.catalogAll.length) {
+            config.catalogAll = data.catalogAll;
+        }
+    }
+    if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-function getDurabilityPercent(item) {
-    if (!item.maxDurability) return 1;
-    const damageComp = item.components?.find(c => c.type === 'damage');
-    const damage = damageComp?.data || 0;
-    return (item.maxDurability - damage) / item.maxDurability;
+function parseProxy(str) {
+    // socks5://user:pass@ip:port
+    const url = new URL(str);
+
+    return {
+        host: url.hostname,
+        port: Number(url.port),
+        username: url.username,
+        password: url.password,
+    };
 }
 
-function getSellPriceWithDurability(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    if (!config) return 0;
+async function main() {
+    const raw = fs.readFileSync('./ip.json', 'utf-8');
+    const ipJSON = JSON.parse(raw);
+    const proxyString = ipJSON[config.ip];
 
-    const durabilityPercent = getDurabilityPercent(item);
+    const url = new URL(proxyString);
+    const proxyHost = url.hostname;
+    const proxyPort = Number(url.port);
+    const proxyUsername = url.username || undefined;
+    const proxyPassword = url.password || undefined;
 
-    // Минимальный порог прочности 20%
-    if (durabilityPercent < 0.5) return 0;
+    const agent = new SocksProxyAgent({
+        protocol: 'socks5:',
+        host: proxyHost,
+        port: proxyPort,
+        username: proxyUsername,
+        password: proxyPassword,
+    });
 
-    // Базовая цена с учётом прочности
-    let price = Math.floor(config.priceSell * durabilityPercent);
-
-    // Сохраняем последние 2 цифры от оригинальной цены
-    const marker = config.priceSell % 100;
-    price = Math.floor(price / 100) * 100 + marker;
-
-    return price;
-}
-
-function getMaxBuyPriceWithDurability(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    if (!config) return 0;
-
-    const durabilityPercent = getDurabilityPercent(item);
-
-    // Минимальный порог прочности 20%
-    if (durabilityPercent < 0.5) return 0;
-
-    // Цена покупки с учётом прочности (без наценки)
-    let price = Math.floor(config.priceSell * durabilityPercent);
-
-    // Сохраняем последние 2 цифры
-    const marker = config.priceSell % 100;
-    price = Math.floor(price / 100) * 100 + marker;
-
-    return price;
-}
-
-async function launchBookBuyer(name, password, anarchy) {
-
-    await rnd(TIMING.SPAWN_LOGIN);
-
-    const bot = mineflayer.createBot({
+    bot = mineflayer.createBot({
+        username: config.username,
+        password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        username: name,
-        password: password,
         version: '1.21.4',
-        chatLengthLimit: 256,
-    });
-
-    const loginCommand = `/l ${name}`;
-    const shopCommand = '/shop';
-
-    console.warn = () => { };
-
-    bot.once('login', async () => {
-        bot.loadPlugin(autoEat);
-        botStartTime = Date.now() - 55000;
-        botAhFull = false;
-        botTimeReset = Date.now();
-        botLogin = true;
-        botTimeActive = Date.now();
-        botTimeLogin = Date.now();
-        botPrices = [];
-        botCount = 0;
-        botAh = [];
-        botNeedSell = false;
-        botStartClickTime = null;
-        botUpdateWindow = false;
-
-        logger.info(`${name} успешно проник на сервер.`);
-        await rnd(TIMING.CHAT);
-        bot.chat(loginCommand);
-        await rnd(TIMING.CHAT);
-        bot.chat(anarchyCommand);
-        await delay(TIMING.SHOP_AFTER_AN_MS);
-        bot.chat(shopCommand);
-    });
-
-    bot.on("resourcePack", (u, h) => {
-        console.log(u, h)
-        if (bot._client) {
-            bot._client.write('resource_pack_receive', {
-                uuid: h.ascii,
-                result: 0
+        agent: agent,
+        connect: (client) => {
+            SocksClient.createConnection({
+                proxy: {
+                    host: proxyHost,
+                    port: proxyPort,
+                    type: 5,
+                    userId: proxyUsername,
+                    password: proxyPassword,
+                },
+                command: 'connect',
+                destination: {
+                    host: 'mc.funtime.su',
+                    port: 25565,
+                },
+            }, (err, info) => {
+                if (err) {
+                    console.error(`❌ ${config.username} ошибка прокси:`, err.message);
+                    process.exit(1);
+                }
+                client.setSocket(info.socket);
+                client.emit('connect');
             });
-            console.log('✅ Отправлено подтверждение загрузки ресурспака');
-        }
-    })
+        },
+    });
 
-    bot.on('end', (reason) => {
-        console.log(`⚠️ Соединение закрыто: ${reason || 'без причины'}`)
-        process.exit(1);
+    // .
+    bot.on('scoreboardCreated', (scoreboard) => {
+        if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
+            markAnarchyJoined();
+        }
+    });
+    bot.on('message', async (message) => {
+        const text = message.toString();
+        logChat(text);
+        if (text.includes('[⚝] Телепортация!')) {
+            config.lastWarpTime = Date.now();
+            logInfo('телепортация варпа');
+            return;
+        }
+        await handleChatMessage(text);
+    });
+
+    bot.on('resourcePack', (_url, hash) => {
+        if (bot._client) {
+            bot._client.write('resource_pack_receive', { uuid: hash.ascii, result: 0 });
+        }
     });
 
     bot.on('kicked', (reason) => {
-        console.log(JSON.stringify(`kicked - ${JSON.stringify(reason)}`));
+        console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${JSON.stringify(reason)}`);
         process.exit(1);
     });
-
+    bot.on('end', (reason) => {
+        console.log(reason)
+        process.exit(1);
+    });
     bot.on('error', (err) => {
-        console.log(err);
+        console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
         process.exit(1);
     });
 
-    bot.on('physicsTick', async () => {
-        if (Date.now() - botTimeActive > TIMING.IDLE_HARD_MS) {
-            botTimeActive = Date.now();
-            botMenu = analysisAH;
-            mu = false;
-            const endTime = Date.now() + TIMING.MOVE_BURST_MS;
-            while (Date.now() < endTime) {
-                const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
-                bot.setControlState(randomMove, true);
-                await delay(TIMING.MOVE_KEY_HOLD_MS);
-                bot.setControlState(randomMove, false);
-                await delay(TIMING.MOVE_KEY_PAUSE_MS);
-            }
-            MOVE_KEYS.forEach(move => bot.setControlState(move, false));
-            botTimeLogin = Date.now();
-            bot.chat(anarchyCommand)
-            await rnd(TIMING.AFTER_ANARCHY_CMD);
-            await safeAH(bot);
-        } else if (Date.now() - botTimeActive > TIMING.IDLE_SOFT_MS) {
-            botTimeActive = Date.now();
-            botMenu = analysisAH;
-            mu = false;
-            await safeAH(bot);
-        }
+    bot.once('spawn', async () => {
+        botWorkerStartTime = Date.now();
+        logOk('spawn → /l → sellItems → safeAH');
+        await rnd('BASE_DELAY');
+        bot.chat(`/l ${config.password}`);
+        config.timeJoinAnarchy = 0;
+        await sellItems();
+        await safeAH();
     });
 
-    botMenu = chooseBuying;
-    let slotToBuy = undefined;
-    botStartTime = Date.now() - 240000;
+    bot.on('physicTick', async () => {
+        if (Date.now() - config.timeActive > 60000) {
+            config.timeActive = Date.now();
+            await sellItems();
+            await safeAH();
+        }
+    })
 
     bot.on('windowOpen', async () => {
-        let key = "";
-        switch (botMenu) {
-            case chooseBuying:
-                // saveToJsonFile('666.json', bot.inventory.slots)
-                parentPort.postMessage({ name: 'success', username: workerData.username });
-                await rnd(TIMING.SECTION_OPEN);
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = setSectionFarmer;
-                await safeClick(bot, slotToChooseBuying, delayMs(TIMING.CLICK));
-                break;
+        config.timeActive = Date.now();
+        // if (bot.currentWindow) {
+        //     const { slots, ...winWithoutSlots } = bot.currentWindow;
+        //     console.log(JSON.stringify({ ...winWithoutSlots, slotsCount: slots?.length ?? 0 }));
+        // }
+        const key = generateKey();
+        logInfo(`windowOpen → key …${String(key).slice(-6)}`);
+        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
+        const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
 
-            case setSectionFarmer:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = sectionFarmer;
-                await safeClick(bot, slotToSetSectionFarmer, delayMs(TIMING.CLICK));
-                break;
+        if (windowJSON.includes('хранилище')) {
+            config.menu = myItems;
+        } else if (windowJSON.includes('телепортации')) {
+            config.menu = rtp;
+        } else if (windowJSON.includes('подозрительная цена') ||
+            windowJSON.includes('подтверждение покупки')) {
+            config.menu = accept;
+        } else {
+            config.menu = analysisAH;
+        }
+        logInfo(`окно: ${config.menu}`);
 
-            case sectionFarmer:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = setSectionFood;
-                await safeClick(bot, slotToLeaveSection, delayMs(TIMING.CLICK));
-                break;
-
-            case setSectionFood:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = sectionFood;
-                await safeClick(bot, slotToSetSectionFood, delayMs(TIMING.CLICK));
-                break;
-
-            case sectionFood:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = setSectionResources;
-                await safeClick(bot, slotToLeaveSection, delayMs(TIMING.CLICK));
-                break;
-
-            case setSectionResources:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = sectionResources;
-                await rnd(TIMING.SECTION_OPEN);
-                await safeClick(bot, slotToSetSectionResources, delayMs(TIMING.CLICK));
-                break;
-
-            case sectionResources:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = setSectionLoot;
-                await rnd(TIMING.SECTION_OPEN);
-                await safeClick(bot, slotToLeaveSection, delayMs(TIMING.CLICK));
-                break;
-
-            case setSectionLoot:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = sectionLoot;
-                await rnd(TIMING.SECTION_OPEN);
-                await safeClick(bot, slotToSetSectionLoot, delayMs(TIMING.CLICK));
-                break;
-
-            case sectionLoot:
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = analysisAH;
-                await rnd(TIMING.SECTION_CLOSE);
-                bot.closeWindow(bot.currentWindow);
-                await rnd(TIMING.CHAT);
-                while (Date.now() - botTimeLogin < TIMING.SELL_AFTER_LOGIN_MS) await delay(1000);
-                await safeAH(bot);
-                break;
-
+        switch (config.menu) {
             case analysisAH:
-                logger.info(`${name} - ${botMenu}`);
-                botTimeActive = Date.now();
-                generateRandomKey(bot);
-                key = botKey;
-                const resetime = Math.floor((Date.now() - botTimeReset) / 1000);
-
-                const uptime = Math.floor((Date.now() - botStartTime) / 1000);
-                if (uptime > 55 || botNeedSell) {
-                    logger.info(`${name} - продажа`);
-                    await sellItems(bot, itemPrices);
+                if (config.walkTime < Date.now() - 55000 ||
+                    (config.needSell && !config.enoughItems && hasBotItem())) {
+                    logInfo('АХ → sellItems (осмотр/needSell)');
+                    await sellItems();
+                    if (!config.hasDangerousTrash) await safeAH();
                     break;
                 }
 
-                if (resetime > 60 || needReset || enoughItems) {
-                    logger.info(`${name} - ресет`);
-                    botMenu = myItems;
-                    await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
+                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
+                    logInfo('АХ → хранилище (reset/enoughItems)');
+                    config.menu = myItems;
+                    await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                     break;
                 }
 
-
-
-                let count = 0;
-                for (let i = firstInventorySlot; i <= lastInventorySlot; i++) {
-                    if (bot.inventory.slots[i]) count++;
-                }
-
-                if (count >= 36 - botCount) {
-                    logger.error('Инвентарь заполнен');
-                    await sellItems(bot, itemPrices);
+                if (ahBuySession) {
+                    logInfo(`АХ → продолжить покупку (слот ${ahBuySession.slot}, сессия)`);
+                    await runAhBuySession(key);
                     break;
                 }
 
-                if (bot.currentWindow.slots[0] && bot.currentWindow.slots[0].name?.includes('stained_glass')) {
-                    await safeClickBuy(bot, 31, delayMs(TIMING.GLASS), key)
-                    break
+                const slotToBuy = await getBestAHSlot();
+                if (slotToBuy === null || config.needReloadAH) {
+                    clearAhBuySession();
+                    if (config.needReloadAH) config.needReloadAH = false;
+                    logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                } else if (slotToBuy < 9) {
+                    logInfo(`АХ → купить слот ${slotToBuy}`);
+                    ahBuySession = {
+                        slot: slotToBuy,
+                        startedAt: Date.now(),
+                        totalDelay: ahBuyDelayMs(slotToBuy),
+                        rechecked: false,
+                        running: false,
+                    };
+                    await runAhBuySession(key);
+                } else {
+                    clearAhBuySession();
+                    logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
+                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
 
-                logger.info(`${name} - поиск лучшего предмета`);
-                let slotToBuy = await getBestAHSlot(bot, itemPrices);
-
-                switch (slotToBuy) {
-                    case null:
-                        botMenu = analysisAH;
-                        await safeClickBuy(bot, slotToReloadAH, delayMs(TIMING.WINDOW), key);
-                        break;
-                    default:
-                        if (netakbistro) {
-                            netakbistro = false;
-                            await safeClickBuy(bot, slotToBuy, 2355, key);
-                        } else if (slotToBuy < 9) {
-                            await safeClickBuy(bot, slotToBuy, delayMs(TIMING.BUY_SLOT) * (slotToBuy + 2), key);
-                        } else {
-                            await safeClickBuy(bot, slotToReloadAH, delayMs(TIMING.WINDOW), key);
-                        }
-                        break;
-                }
                 break;
 
             case myItems:
-                generateRandomKey(bot);
-
-                if (needSendAH) {
-                    botAh = []
-                    for (let i = 0; i < TIMING.STORAGE_AH_SLOTS; i++) {
+                if (!bot.currentWindow?.slots[0]) {
+                    config.enoughItems = false;
+                }
+                if (config.needSendAH) {
+                    const botAh = [];
+                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
                         const currentSlot = bot.currentWindow?.slots[i];
                         if (currentSlot) {
-                            botCount++;
-                            const id = getIDByEnchantments(currentSlot, itemPrices);
-                            botAh.push(id);
+                            const itemCfg = findMatchingConfigItem(
+                                currentSlot,
+                                config.catalogAll,
+                                config.goType,
+                            );
+                            if (itemCfg?.id) botAh.push(itemCfg.id);
                         } else break;
                     }
 
-                    parentPort.postMessage({ name: 'items', username: bot.username, items: botAh });
-                    needSendAH = false
+                    parentPort.postMessage({ name: 'items', username: config.username, items: botAh });
+                    config.needSendAH = false;
 
-                    const inv = []
+                    const inv = [];
                     for (let i = 0; i <= lastInventorySlot; i++) {
                         const slotData = bot.inventory.slots[i];
                         if (!slotData) continue;
 
-                        const config = findMatchingConfigItem(slotData, itemPrices);
-                        if (config) {
-                            inv.push(config.id);
-                        }
+                        const itemCfg = findMatchingConfigItem(
+                            slotData,
+                            config.catalogAll,
+                            config.goType,
+                        );
+                        if (itemCfg?.id) inv.push(itemCfg.id);
                     }
-                    const msg = { name: "inventory", data: inv, username: bot.username }
-                    parentPort.postMessage(msg)
+                    parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
-
-                if (!bot.currentWindow?.slots[0]) enoughItems = false
-                key = botKey;
-                if (bot.currentWindow.slots[27]) {
-                    logger.error('суки обновили аукцион');
-                    break;
-                }
-                needReset = false;
-                logger.info(`${name} - ${botMenu}`);
-
-                botCount = 0;
-                botAh = [];
-                let slot = null;
-
-                 if (Math.floor((Date.now() - botTimeReset) / 1000) > 60) {
-                    botTimeReset = Date.now();
+                if (config.lastResetTime < Date.now() - 60000) {
                     if (bot.currentWindow?.slots[0]) {
-                        await safeClickBuy(bot, 52, delayMs(TIMING.WINDOW), key);
-                        break
+                        logInfo('хранилище → сброс (клик 52)');
+                        config.menu = myItems;
+                        await safeClickBuy(bot, 52, delayMs({ min: 1500, max: 4500 }), key);
+                        while (config.lastResetTime < Date.now() - 60000) await rnd('POLL');
+                    } else {
+                        config.lastResetTime = Date.now();
                     }
                 }
 
-                // Проверка цен (оставляем)
-                for (let i = TIMING.STORAGE_AH_SLOTS - 1; i >= 0; i--) {
-                    const currentSlot = bot.currentWindow?.slots[i];
-                    if (!currentSlot) continue;
+                const unlist = findStorageSlotToUnlist();
 
-                    const priceOnAH = getPriceFromItem(currentSlot);
-                    const priceSell = getSellPriceWithDurability(currentSlot, itemPrices);
-
-                    if (priceSell !== priceOnAH || enoughItems) {
-                        logger.error(`chnge ${priceSell} ${priceOnAH}`);
-                        botAhFull = false;
-                        slot = i;
-                        break;
-                    }
-                }
-
-                if (slot !== null) {
-                    botAhFull = false;
-                    botNeedSell = true;
-                    botMenu = myItems;
-                    await safeClickBuy(bot, slot, delayMs(TIMING.UNLIST) * (slot + 1), key);
+                if (unlist !== null) {
+                    logInfo(`хранилище → снять слот ${unlist.slot} (${unlist.reason})`);
+                    const unlistSlot = unlist.slot;
+                    config.needSell = true;
+                    config.menu = myItems;
+                    await safeClickBuy(bot, unlistSlot, delayMs({ min: 1500, max: 3500 }), key);
                     break;
                 }
 
-                // ← ВОТ ЭТУ ЧАСТЬ ВЕРНУТЬ
-
-                botMenu = analysisAH;
-                await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-
-                break;
-            case setAH:
-                generateRandomKey(bot);
-                key = botKey;
-                logger.info(`${name} - ${botMenu}`);
-                botMenu = analysisAH;
-                await safeClickBuy(bot, 46, delayMs(TIMING.WINDOW), key);
-                break;
-
-            case "clan":
-                logger.info(`${bot.username} ${botMenu}`);
-                generateRandomKey(bot);
-
-                let countItems = countTotalItemsInWindow(bot, itemPrices);
-                if (botAhFull && countItems === 0) {
-                    const slot = findFirstMatchingSlotInInventory(bot, itemPrices);
-                    if (slot) {
-                        logger.info(`${bot.username} добавил`);
-                        await safeClickBuy(bot, slot, 500, botKey);
-                    }
-                } else if (!botAhFull && countItems > 0) {
-                    const slot = findFirstMatchingSlotInWindow(bot, itemPrices);
-                    if (slot) {
-                        logger.info(`${bot.username} забрал`);
-                        botNeedSell = true;
-                        await safeClickBuy(bot, slot, 500, botKey);
-                    }
-                }
-                logger.info(`${bot.username} никуда не кликнул`);
-                await delay(300);
-                if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-
-                break;
-
-            case "rtp":
-                await safeClick(bot, 0, 300);
-                await delay(8000); // ждём телепорт
-
-                // Очищаем инвентарь от мусора
-                for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-                    if (sellNeedRestart) {
-                        sellNeedRestart = false;
-                        logger.info(`${bot.username} - очистка прервана`);
-                        break;
-                    }
-                    const slotData = bot.inventory.slots[i];
-                    if (!slotData) continue;
-                    if (!isItemMatchingConfig(slotData, itemPrices)) {
-                        await bot.tossStack(slotData);
-                        await delay(300);
-                    }
-                }
-
-                // Запускаем продажу заново
-                logger.info(`${bot.username} - перезапуск продажи после телепорта`);
-                await sellItems(bot, itemPrices);
-                break;
-        }
-    });
-
-    bot.on('message', async (message) => {
-        const messageText = message.toString();
-        console.log(messageText);
-
-        if (messageText.includes('[☃] Вы успешно купили')) {
-            botNeedSell = true;
-            let balanceStr = messageText;
-            balanceStr = balanceStr.replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-            parentPort.postMessage({ name: 'buy', id: botType, price: balance });
-            return;
-        } //
-        if (messageText.includes('[❌] Вы не можете выкидывать этот предмет в этом месте!')) {
-            sellNeedRestart = true;
-            botMenu = 'rtp'
-            bot.chat('/rtp')
-            return;
-        }
-
-        if (messageText.includes('BotFilter >> Введите номер с картинки в чат')) {
-            parentPort.postMessage(`${workerData.username} - ввести капчу`);
-            return;
-        }
-//
-        if (messageText.toLowerCase().includes('вы забанены')) {
-            parentPort.postMessage({ name: 'banned' });
-            return;
-        }
-        if (messageText.toLowerCase().includes('Отключите VPN и Proxy и повторите попытку входа')) {
-            parentPort.postMessage(`${workerData.username} - vpn спалили`);
-            return;
-        }
-
-        if (messageText.includes('[✘] Ошибка! По такой цене')) {
-            console.log('[✘] Ошибка! По такой цене ', workerData.itemID);
-            return;
-        }
-
-        if (messageText.includes('[✘] Ошибка! Этот товар уже Купили!')) {
-            await safeClick(bot, slotToReloadAH, delayMs(TIMING.WINDOW));
-            return;
-        }
-
-        if (messageText.includes('Сервер заполнен')) {
-            mu = false;
-            botStartTime = Date.now() - 240000;
-            botAhFull = false;
-            botTimeReset = Date.now() - 60000;
-            botLogin = true;
-            botTimeActive = Date.now();
-            botTimeLogin = Date.now();
-            botPrices = [];
-            botCount = 0;
-            netakbistro = true;
-            await rnd(TIMING.CHAT);
-            bot.chat(anarchyCommand);
-            return;
-        }
-
-        if (messageText.includes('⚡ Наша группа ВК vk.com/funtime')) {
-            if (mu) return;
-            bot.chat(anarchyCommand);
-            await rnd(TIMING.LOBBY_AFTER_AN);
-            await sellItems(bot, itemPrices);
-        }
-
-        if (messageText.includes('[☃] У Вас купили')) {
-
-            botAhFull = false;
-            let balanceStr = messageText;
-            balanceStr = balanceStr.replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-            const id = getIdBySellPrice(itemPrices, balance);
-            parentPort.postMessage({ name: 'sell', id: id, price: balance });
-            botNeedSell = true;
-            return;
-        }
-
-        if (messageText.includes('[☃]') && messageText.includes('выставлен на продажу!')) {
-            if (botTypeSell) {
-                parentPort.postMessage({ name: 'try-sell', id: botTypeSell });
-            }
-            botCount++;
-            return;
-        }
-
-        if (messageText.includes('Не так быстро..') ||
-            messageText.includes('Данная команда недоступна в режиме AFK') ||
-            messageText.includes('[☃] После входа на режим необходимо немного подождать')) {
-
-            await rnd(TIMING.CHAT);
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(TIMING.CHAT);
-
-            if (messageText.includes('После входа')) {
-                await walk(bot);
-                await delay(TIMING.LOGIN_COOLDOWN_AFTER_WALK_MS);
-            } else {
-                await walk(bot);
-            }
-
-            botMenu = analysisAH;
-            await safeAH(bot);
-            return;
-        }
-
-        if (messageText.includes('[☃] Не удалось выставить') ||
-            messageText.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
-            enoughItems = true
-            botAhFull = true;
-            return;
-        }
-
-        if (messageText.includes('[⚠] Здесь нет команд!')) {
-            await walk(bot)
-            await delay(300)
-            botTimeLogin = Date.now()
-            botTimeActive = Date.now()
-            bot.chat(anarchyCommand)
-            await delay(300)
-            await safeAH(bot)
-        }
-
-
-
-        if (messageText.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
-            await rnd(TIMING.CHAT);
-            if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
-            await rnd(TIMING.CHAT);
-            bot.chat('/clan withdraw 3000000');
-            await rnd(TIMING.CHAT);
-            botMenu = analysisAH;
-            await safeAH(bot);
-            return;
-        }
-
-        if (messageText.includes('[⚠] Данной команды не существует!')) {
-            bot.chat(anarchyCommand);
-            await delay(TIMING.LOBBY_ANARCHY_READY_MS);
-            await safeAH(bot);
-            return;
-        }
-
-        if (messageText.includes('[$] Ваш баланс:')) {
-            let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
-            balanceStr = balanceStr.replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-            if (isNaN(balance)) {
-                logger.error('баланс NAN');
-                return;
-            }
-            if (balance - minBalance >= 10000000) {
-                await delay(500);
-                bot.chat(`/clan invest ${balance - minBalance}`);
-            }
-            return;
-        }
-
-        if (messageText.includes('[☃] Максимальная цена')) {
-            let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
-            balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-
-            const slotHotBar = bot.quickBarSlot;
-            const slot = transform(slotHotBar);
-            const currentPrice = getPriceByEnchantments(bot.inventory.slots[slot], itemPrices);
-            const id = getIDByEnchantments(bot.inventory.slots[slot], itemPrices);
-
-            const basePrice = Math.floor(balance / 10000) * 10000;
-            const marker = currentPrice % 100;
-            let finalPrice = basePrice + marker;
-            if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
-
-            parentPort.postMessage({ name: "set_max_price", type: id, price: finalPrice });
-            return;
-        }
-
-        if (messageText.includes('[☃] Минимальная цена')) {
-            let balanceStr = messageText;
-            if (messageText.includes('.')) balanceStr = balanceStr.slice(0, -3);
-            balanceStr = messageText.replace(/\./g, '').replace(/\D/g, '');
-            const balance = parseInt(balanceStr);
-
-            const slotHotBar = bot.quickBarSlot;
-            const slot = transform(slotHotBar);
-            const item = bot.inventory.slots[slot];
-            if (!item) return;
-
-            const currentPrice = getPriceByEnchantments(item, itemPrices);
-            const id = getIDByEnchantments(item, itemPrices);
-            const nacenka = getNacenkaByEnchantments(item, itemPrices);
-
-            // Проверяем прочность предмета
-            const durabilityPercent = getDurabilityPercent(item);
-            const isDamaged = durabilityPercent < 0.8; // сломан более чем на 20%
-
-            const basePrice = Math.ceil(balance / 10000) * 10000;
-            const marker = currentPrice % 100;
-            let finalPrice = basePrice + marker + nacenka;
-
-            // Если предмет сильно сломан — не обновляем конфиг, а просто выставляем по цене сервера
-            if (isDamaged) {
-                logger.info(`${bot.username} - сломанный предмет (${Math.floor(durabilityPercent * 100)}%), выставляем по цене ${balance}`);
-                await ahSellTwice(bot, balance);
-                return;
-            }
-
-            if (messageText.toLowerCase().includes('круш')) {
-                isKrush = true;
-                await ahSellTwice(bot, finalPrice);
-                isKrush = false;
-                return;
-            }
-
-            parentPort.postMessage({ name: "set_min_price", type: id, price: finalPrice });
-            return;
-        }
-    });
-}
-
-// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
-function getIdBySellPrice(itemPrices, val) {
-    const foundItem = itemPrices.find(item => item.priceSell % 100 === val % 100);
-    return foundItem ? foundItem.id : "";
-}
-
-function countTotalItemsInWindow(bot, itemPrices) {
-    if (!bot.currentWindow || !bot.currentWindow.slots) return 0;
-    let totalCount = 0;
-    for (let slot = 0; slot <= 45; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-        if (isItemMatchingConfig(slotData, itemPrices)) totalCount++;
-    }
-    return totalCount;
-}
-
-async function sellItems(bot, itemPrices) {
-    botNeedSell = false;
-    needSendAH = true
-    if (mu) {
-        await rnd(TIMING.SELL_MOVE);
-        await safeAH(bot);
-        return;
-    }
-    mu = true;
-    bot.chat(anarchyCommand);
-    await rnd(TIMING.CHAT);
-
-    const warp = getRandomElement(WARPS);
-    bot.chat(`/warp ${warp}`);
-    const endSellTime = Date.now() + TIMING.WARP_WAIT.max;
-
-    const endTime = Date.now() + TIMING.MOVE_BURST_MS;
-
-    while (Date.now() < endTime) {
-        await rnd(TIMING.SELL_MOVE);
-        const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
-        bot.setControlState(randomMove, true);
-        await rnd(TIMING.SELL_MOVE);
-        bot.setControlState(randomMove, false);
-    }
-
-    MOVE_KEYS.forEach(move => bot.setControlState(move, false));
-
-    logger.info(`${bot.username} - прогулка завершена`);
-
-    try {
-        while (Date.now() - botTimeLogin < TIMING.SELL_AFTER_LOGIN_MS) await delay(1000);
-        botTimeActive = Date.now();
-        if (bot.currentWindow) {
-            await rnd(TIMING.SELL);
-            bot.closeWindow(bot.currentWindow);
-        }
-
-        while (!botAhFull) {
-            if (sellNeedRestart) {
-                sellNeedRestart = false;
-                logger.info(`${bot.username} - телепорт, прерываем продажу`);
-                mu = false;
-                return;  // просто выходим
-            }
-            while (isKrush) await delay(100)
-            let soldAnything = false;
-
-            for (let quickSlot = 0; quickSlot < 9; quickSlot++) {
-                if (botAhFull) break;
-                while (isKrush) await delay(100)
-                const slotIndex = firstSellSlot + quickSlot;
-                const item = bot.inventory.slots[slotIndex];
-                if (!item) continue;
-
-                const price = getBestSellPrice(bot, item, itemPrices);
-                if (price > 0) {
-                    typeSell = getIDByEnchantments(item, itemPrices)
-                    if (bot.quickBarSlot !== quickSlot) {
-                        await rnd(TIMING.SELL_HOTBAR);
-                        await bot.setQuickBarSlot(quickSlot);
-                    }
-                    await ahSellTwice(bot, price);
-                    soldAnything = true;
+                if (config.needSell && hasBotItem()) {
+                    logInfo('хранилище → sellItems');
+                    await sellItems();
+                    await safeAH();
                 } else {
-                    await rnd(TIMING.SELL_TOSS);
-                    await bot.tossStack(item);
+                    logInfo('хранилище → назад в АХ');
+                    config.menu = analysisAH;
+                    await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                 }
-            }
-
-            if (!botAhFull) {
-                let freeSlot = null;
-                for (let i = 0; i < 9; i++) {
-                    if (!bot.inventory.slots[i + firstSellSlot]) {
-                        freeSlot = i;
-                        break;
-                    }
-                }
-
-                if (freeSlot !== null) {
-                    for (let invSlot = 0; invSlot < 27; invSlot++) {
-                        while (isKrush) await delay(100)
-                        if (botAhFull) break;
-                        const item = bot.inventory.slots[invSlot];
-                        if (!item) continue;
-
-                        const price = getBestSellPrice(bot, item, itemPrices);
-                        if (price > 0) {
-                            typeSell = getIDByEnchantments(item, itemPrices)
-                            await rnd(TIMING.SELL_INV_MOVE);
-                            await bot.setQuickBarSlot(freeSlot);
-                            await rnd(TIMING.SELL_INV_MOVE);
-                            await bot.moveSlotItem(invSlot, firstSellSlot + freeSlot);
-                            await ahSellTwice(bot, price);
-                            soldAnything = true;
-                        } else {
-                            await rnd(TIMING.SELL_TOSS);
-                            await bot.tossStack(item);
-                        }
-                    }
-                }
-            }
-
-            if (!soldAnything) break;
-        }
-    } catch (error) {
-        parentPort.postMessage(`ошибка продажи ${error}`)
-        logger.error(`${bot.username} - Ошибка в sellItems: ${error.stack || error}`);
-    } finally {
-        logger.info(`${bot.username} - продажа завершена`);
-        await delay(300);
-
-        for (let i = firstAHSlot; i < lastInventorySlot; i++) {
-            if (sellNeedRestart) {
-                sellNeedRestart = false;
-                logger.info(`${bot.username} - очистка в finally прервана`);
                 break;
+
+            case rtp:
+                await safeClickBuy(bot, 0, delayMs({ min: 1000, max: 3000 }), key);
+                config.needRTP = false;
+                config.hasDangerousTrash = false;
+                config.lastWarpTime = Date.now();
+                await sellItems();
+                await safeAH();
+                break;
+              
+            case accept:
+                logInfo('окно → подтверждение покупки (клик glass)');
+                await safeClickBuy(bot, slotGlass, delayMs({ min: 400, max: 1000 }), key);
+                break;
+        }
+        await rnd('WINDOW_DELAY');
+        if (key === config.key) {
+            logInfo('windowOpen → конец (key не изменился)');
+            if (config.menu === analysisAH) {
+                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
             }
-            const slotData = bot.inventory.slots[i];
-            if (!slotData) continue;
-            if (!isItemMatchingConfig(slotData, itemPrices)) {
-                await rnd(TIMING.SELL_TOSS);
-                await bot.tossStack(slotData);
-            }
+            return;
         }
+        logInfo(`windowOpen → конец (${config.menu})`);
+    });
+}
 
-        bot.chat('/balance');
-        await rnd(TIMING.CHAT);
-        botStartTime = Date.now();
-        mu = false;
-        logger.info(`${bot.username} - мьютекс снят`);
-        await rnd(TIMING.SELL);
-        while (Date.now() < endSellTime) await delay(TIMING.POLL_MS);
+main();
 
-        if (sellNeedRestart) {
-            sellNeedRestart = false;
-            logger.info(`${bot.username} - выход, перезапуск будет в rtp`);
-            return;  // не вызываем safeAH, не меняем botMenu
+async function joinAnarchy() {
+    if (!config.timeJoinAnarchy) {
+        while (!config.timeJoinAnarchy) {
+            await rnd('BASE_DELAY');
+            logInfo(`/an${config.anarchy}… (жду входа)`);
+            bot.chat(`/an${config.anarchy}`);
+            await rnd('ANARCHY_DELAY');
         }
-
-        botMenu = analysisAH;
-        await safeAH(bot);
+    }
+    const waitUntil = config.timeJoinAnarchy + 11000;
+    if (Date.now() < waitUntil) {
+        logInfo(`joinAnarchy → пауза ${Math.ceil((waitUntil - Date.now()) / 1000)}с`);
+        while (Date.now() < waitUntil) await rnd('POLL');
     }
 }
 
-function transform(num) {
-    if (num < 0 || num > 8) return num;
-    return 44 - (8 - num);
+async function waitWarpTeleport() {
+    while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
-function getBestSellPrice(bot, item, itemPrices) {
-    return getSellPriceWithDurability(item, itemPrices);
-}
+/** Выброс мусора в слоте. true = ушли на RTP (нужно прервать sellItems). */
+async function tossTrashAtSlot(slot) {
+    while (true) {
+        const item = bot.inventory.slots[slot];
+        const info = getSlotInfoSafe(item, slot);
+        if (!info?.isTrash || !item) return false;
 
-function getID(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.id : 0;
-}
-
-function generateRandomKey(bot) {
-    botKey = Math.random().toString(36).substring(2, 15);
-}
-
-async function delay(time) {
-    return new Promise(resolve => setTimeout(resolve, time));
-}
-
-async function safeClick(bot, slot, time) {
-    await delay(time);
-    if (bot.currentWindow) {
-        botTimeActive = Date.now();
-        await bot.clickWindow(slot, leftMouseButton, noShift);
-    }
-}
-
-async function safeAH(bot) {
-    if (mu) return;
-    netakbistro = true;
-    let key = botKey;
-    botTimeActive = Date.now();
-    botMenu = analysisAH;
-    botUpdateWindow = true;
-    while (key === botKey) {
-        const endTime = Date.now() + 3000;
-
-        while (Date.now() < endTime) {
-            const randomMove = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
-            bot.setControlState(randomMove, true);
-            await delay(900);
-            bot.setControlState(randomMove, false);
-            await delay(100);
+        if (config.needRTP) {
+            config.needRTP = false;
+            await rnd('BASE_DELAY');
+            await waitWarpTeleport();
+            config.menu = rtp;
+            bot.chat('/rtp');
+            return true;
         }
-        ['forward', 'back', 'left', 'right'].forEach(move => bot.setControlState(move, false));
-        await rnd(TIMING.AH_CMD);
-        bot.chat(ahCommand);
-        await rnd(TIMING.AH_CMD);
-    }
-}
-
-async function getAHSlotsIDs(bot, itemPrices) {
-    if (!bot.currentWindow?.slots) return [];
-    const ids = [];
-    for (let i = 0; i < 8; i++) {
-        if (bot.currentWindow?.slots[i]) {
-            ids.push(getID(bot.currentWindow?.slots[i]), itemPrices);
-        }
-    }
-    return ids;
-}
-
-async function getBestAHSlot(bot, itemPrices) {
-    // await saveToJsonFile('pizdec.json', bot.currentWindow.slots)
-    // return
-    if (!bot.currentWindow?.slots) return null;
-
-    for (let slot = firstAHSlot; slot <= 17; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-
-        const currentUUID = getItemUUID(slotData);
-        console.log(`uuid - ${currentUUID}`)
-
-        if (currentUUID && itemsBuying?.includes(currentUUID)) {
-            console.log(`⏭️ Пропускаем лот ${currentUUID}, уже в очереди на покупку`);
-            continue;
-        }
-
-        const config = findMatchingConfigItem(slotData, itemPrices, {
-            checkDurability: true,
-            checkMissingEnchants: true
-        });
-
-        if (!config || !isConfigForBot(config)) continue;
 
         try {
-            const price = getPriceFromItem(slotData);
-            console.log(`цена - ${price}`)
-            if (!price) continue;
-
-            const maxBuyPrice = getMaxBuyPriceWithDurability(slotData, itemPrices);
-            if (maxBuyPrice === 0) continue;
-
-            if (price >= maxBuyPrice - config.nacenka) continue;
-            if (!config.priceSell) continue;
-
-            botType = config.id;
-            if (!botType) logger.error('id undefined');
-
-            parentPort.postMessage({ name: 'buying', data: currentUUID });
-            return slotData.slot;
-        } catch (error) {
-            console.error(error);
-            continue;
+            await rnd('BASE_DELAY');
+            await bot.tossStack(item);
+            await rnd('POLL');
+        } catch (err) {
+            reportError(`tossTrashAtSlot slot=${slot}`, err);
         }
     }
-    return null;
 }
 
-function getItemUUID(item) {
+async function sellItems() {
+    config.timeActive = Date.now();
+    logOk('продажа → старт');
     try {
-        const customDataComp = item.components?.find(c => c.type === 'custom_data');
-        if (!customDataComp) return null;
+        config.needSell = false;
+        config.needSendAH = true;
+        await joinAnarchy();
+        let canSell = true;
 
-        const pubBukkit = customDataComp.data?.value?.PublicBukkitValues?.value;
-        if (!pubBukkit) return null;
+        if (!bot) {
+            reportError('sellItems', 'bot не создан');
+            canSell = false;
+        } else if (!Array.isArray(config.items)) {
+            reportError('sellItems', 'config.items не массив');
+            canSell = false;
+        } else if (!config.items.length) {
+            reportError('sellItems', 'каталог пуст — жди price от оркестратора');
+            canSell = false;
+        }
 
-        const uuidArray = pubBukkit['auctions:if-uuid']?.value;
-        if (!Array.isArray(uuidArray)) return null;
+        if (!canSell) logWarn('продажа → пропуск (нет бота или каталога)');
 
-        return uuidArray.join(',');
-    } catch (e) {
-        parentPort.postMessage(`ошибка получаения юайди ${JSON.stringify(item)}`)
-        console.log('Ошибка при получении UUID:', e.message);
-        return null;
-    }
-}
+        if (bot) {
+            if (bot.currentWindow) {
+                await rnd('BASE_DELAY');
+                await bot.closeWindow(bot.currentWindow);
+            }
+            if (config.lastWarpTime < Date.now() - 120000) {
+                const warp = warps[Math.floor(Math.random() * warps.length)];
+                await rnd('BASE_DELAY');
+                bot.chat(`/warp ${warp}`);
+            }
 
-function findFirstMatchingSlotInWindow(bot, itemPrices) {
-    if (!bot.currentWindow?.slots) return null;
-    for (let slot = 0; slot <= 45; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-        if (isItemMatchingConfig(slotData, itemPrices)) return slot;
-    }
-    return null;
-}
+            if (canSell) {
+                await lookAroundSpin();
+                await dropTrash();
+            }
 
-function findFirstMatchingSlotInInventory(bot, itemPrices) {
-    if (!bot.currentWindow?.slots) return null;
-    for (let slot = 63; slot <= 89; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-        if (isItemMatchingConfig(slotData, itemPrices)) return slot;
-    }
-    return null;
-}
+        }
 
-function getPriceByEnchantments(slotData, itemPrices) {
-    return getSellPrice(slotData, itemPrices);
-}
+        if (canSell) {
+            await moveToHotBar();
 
-function getIDByEnchantments(slotData, itemPrices) {
-    return getItemId(slotData, itemPrices);
-}
+            let currentSlot = firstHotbarSlot;
+            while (hasBotItem() && !config.enoughItems && currentSlot <= lastHotbarSlot && !config.hasDangerousTrash) {
+                if (currentSlot > lastHotbarSlot) {
+                    currentSlot = firstHotbarSlot;
+                    continue;
+                }
 
-function getNacenkaByEnchantments(slotData, itemPrices) {
-    return getItemNacenka(slotData, itemPrices);
-}
+                const item = bot.inventory.slots[currentSlot];
+                const info = getSlotInfoSafe(item, currentSlot);
 
-function romanToArabic(roman) {
-    const map = {
-        'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5,
-        'VI': 6, 'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10
-    };
-    return map[roman] || 1;
-}
+                if (info?.isTrash && item) {
+                    if (await tossTrashAtSlot(currentSlot)) {
+                        return;
+                    }
+                    continue;
+                }
 
-function extractCustomEnchantsFromItem(item) {
-    const result = [];
+                if (!info || !item) {
+                    currentSlot++;
+                    continue;
+                }
 
-    try {
-        const customDataComp = item.components?.find(c => c.type === 'custom_data');
-        const enchantsArray = customDataComp?.data?.value?.PublicBukkitValues?.value?.['minecraft:custom-enchantments']?.value?.value;
+                if (!info.sellPrice) {
+                    reportError(`sellItems slot=${currentSlot}`, 'нет sellPrice');
+                    currentSlot++;
+                    continue;
+                }
 
-        if (Array.isArray(enchantsArray) && enchantsArray.length > 0) {
-
-            for (const ench of enchantsArray) {
-                const name = ench['minecraft:type']?.value;
-                const lvl = ench['minecraft:level']?.value;
-
-                if (name && typeof lvl === 'number') {
-                    result.push({ name, lvl });
+                try {
+                    const quick = hotbarSlotToQuick(currentSlot);
+                    if (bot.quickBarSlot !== quick) {
+                        await rnd('HOTBAR_DELAY');
+                        await bot.setQuickBarSlot(quick);
+                    }
+                    await antiAfkIfNeeded();
+                    await rnd('BASE_DELAY');
+                    if (config.needPrice) {
+                        bot.chat(`/ah sell ${config.needPrice}`);
+                        config.needPrice = 0;
+                    } else {
+                        bot.chat(`/ah sell ${info.sellPrice}`);
+                    }
+                    await rnd('POLL');
+                } catch (err) {
+                    reportError(`sellItems ah sell slot=${currentSlot}`, err);
+                    currentSlot++;
                 }
             }
-
-            return result;
-        }
-    } catch (e) {
-    }
-
-
-    const jsonStr = JSON.stringify(item);
-    const valueRegex = /"value":"([^"]*)"/g;
-    const matches = [];
-    let match;
-    while ((match = valueRegex.exec(jsonStr)) !== null) {
-        matches.push(match[1]);
-    }
-
-
-    const textStrings = matches.filter(s => {
-        if (!s || typeof s !== 'string') return false;
-        const trimmed = s.trim();
-        if (!trimmed) return false;
-        if (/^#/.test(trimmed)) return false;
-        return /[a-zA-Zа-яА-Я]/.test(trimmed);
-    });
-
-
-    const romanRegex = /^(I|II|III|IV|V|VI|VII|VIII|IX|X)$/;
-
-    for (const str of textStrings) {
-        const trimmed = str.trim();
-
-        const lastSpaceIndex = trimmed.lastIndexOf(' ');
-        if (lastSpaceIndex !== -1) {
-            const possibleRoman = trimmed.substring(lastSpaceIndex + 1);
-            if (romanRegex.test(possibleRoman)) {
-                const name = trimmed.substring(0, lastSpaceIndex).trim();
-                const lvl = romanToArabic(possibleRoman);
-                result.push({ name, lvl });
-                continue;
-            }
-        }
-
-        result.push({ name: trimmed, lvl: 1 });
-    }
-
-    return result;
-}
-
-function getPriceFromItem(item) {
-    const loreComp = item.components?.find(c => c.type === 'lore');
-    if (!loreComp || !Array.isArray(loreComp.data)) {
-        parentPort.postMessage(`нет лора для предмета ${item.name}: ${JSON.stringify(item)}`);
-        return null;
-    }
-
-    for (const loreEntry of loreComp.data) {
-        const strings = [];
-        extractStrings(loreEntry, strings);
-
-        const hasPriceMarker = strings.some(s => typeof s === 'string' && s.includes('Цен'));
-        if (!hasPriceMarker) continue;
-
-        for (const s of strings) {
-            if (typeof s !== 'string') continue;
-            const trimmed = s.trim();
-            if (trimmed === '') continue;
-
-            const withoutCommas = trimmed.replace(/,/g, '');
-            if (/^\d*\.?\d+$/.test(withoutCommas)) {
-                const num = parseFloat(withoutCommas);
-                if (!isNaN(num)) {
-                    if (num > 20000) {
-                        return num; // нормальная цена
-                    } else {
-                        parentPort.postMessage(`подозрительная цена ${num} для ${item.name}: ${JSON.stringify(item)}`);
-                        return null;
+            if (!config.hasDangerousTrash) {
+                await safeBalance();
+                const saveSum = getSaveSum();
+                if (saveSum != null && config.balance != null && config.balance > saveSum) {
+                    const investSum = config.balance - saveSum;
+                    if (investSum > 5_000_000) {
+                        await rnd('AH_CMD');
+                        bot.chat(`/clan invest ${investSum}`);
                     }
                 }
-            }
-        }
-    }
-
-    // Цена не найдена ни в одной строке с маркером
-    parentPort.postMessage(`не удалось извлечь цену для ${item.name} (нет подходящей строки с числом): ${JSON.stringify(item)}`);
-    return null;
-}
-
-function extractStrings(node, out) {
-    if (node === null || node === undefined) return;
-
-    if (Array.isArray(node)) {
-        for (const item of node) {
-            extractStrings(item, out);
-        }
-    } else if (typeof node === 'object') {
-        if (node.type === 'string' && node.hasOwnProperty('value')) {
-            const val = node.value;
-            if (typeof val === 'string') {
-                out.push(val);
-            } else {
-                extractStrings(val, out);
-            }
-        } else {
-            for (const val of Object.values(node)) {
-                extractStrings(val, out);
-            }
-        }
-    } else if (typeof node === 'string') {
-        out.push(node);
-    }
-}
-
-function getConfigLoreMatch(config) {
-    return config?.lore_match || config?.loreMatch || '';
-}
-
-function getItemLoreJson(item) {
-    const loreComp = item?.components?.find((c) => c?.type === 'lore');
-    if (!loreComp?.data) return '';
-    return JSON.stringify(loreComp.data);
-}
-
-function loreMatchesConfig(item, config) {
-    const needle = getConfigLoreMatch(config);
-    if (!needle) return true;
-    return getItemLoreJson(item).includes(needle);
-}
-
-function isConfigForBot(config) {
-    if (!config) return false;
-    if (!botGoType) return true;
-    return config.type === botGoType;
-}
-
-function findMatchingConfigItem(item, itemPrices, options = { checkDurability: true, checkMissingEnchants: true }) {
-    if (!item || !itemPrices?.length) return null;
-
-    let filteredConfig = itemPrices.filter(config => config.id.endsWith('1.21'));
-    if (botGoType) {
-        filteredConfig = filteredConfig.filter((config) => config.type === botGoType);
-    }
-    if (filteredConfig.length === 0) return null;
-
-    const sortedConfig = [...filteredConfig].sort((a, b) => b.num - a.num);
-
-    const numericToName = {
-        33: 'minecraft:sharpness',
-        10: 'minecraft:fire_aspect',
-        40: 'minecraft:unbreaking',
-        36: 'minecraft:sweeping',
-        17: 'minecraft:knockback',
-        18: 'minecraft:looting',
-        28: "minecraft:protection",
-        27: "minecraft:projectile_protection",
-        23: "minecraft:mending",
-        39: "minecraft:thorns",
-        11: "minecraft:fire_protection",
-        1: "minecraft:aqua_affinity",
-        31: "minecraft:respiration",
-        7: "minecraft:depth_strider",
-        9: "minecraft:feather_falling",
-        13: "minecraft:fortune",
-        8: "minecraft:efficiency",
-    };
-
-    const customNameMap = {
-        'Яд': 'poison',
-        'Вампиризм': 'vampirism',
-        'Детекция': 'detection',
-        'Тяжелый': 'heavy',
-        'Нестабильный': 'unstable',
-        'Бульдозер': 'buldozing',
-        'Магнит': 'magnet',
-        'Паутина': 'web',
-        'Авто-плавка': 'smelting',
-    };
-
-    const vanillaEnchants = [];
-    if (item.components && Array.isArray(item.components)) {
-        const enchComponent = item.components.find(c => c && c.type === 'enchantments');
-        if (enchComponent?.data?.enchantments && Array.isArray(enchComponent.data.enchantments)) {
-            vanillaEnchants.push(...enchComponent.data.enchantments.map(e => {
-                if (!e) return null;
-
-                let name = e.id;
-                if (typeof name === 'number') {
-                    name = numericToName[name] || `enchantment.${name}`; // fallback
+                if (saveSum != null && config.balance != null && config.balance < saveSum/2) {
+                    bot.chat(`/clan withdraw ${Math.floor(saveSum/2 - config.balance)}`);
+                    config.needAdd = false;
                 }
+            }
+        }
 
-                let lvl = e.level;
-                if (lvl === undefined || lvl === null) {
-                    lvl = 1;
+    } catch (err) {
+        reportError('sellItems', err);
+        await waitWarpTeleport();
+    } finally {
+        config.needSell = false;
+        await waitWarpTeleport();
+        logOk('продажа → конец');
+    }
+}
+
+async function moveToHotBar() {
+    if (config.hasDangerousTrash) return;
+    try {
+        for (let slot = firstHotbarSlot; slot <= lastHotbarSlot; slot++) {
+            const stack = bot.inventory.slots[slot];
+            const info = getSlotInfoSafe(stack, slot);
+
+            if (info?.isTrash && stack) {
+                if (await tossTrashAtSlot(slot)) return;
+                continue;
+            }
+
+            if (info && !info.isTrash) continue;
+
+            for (let src = firstInventorySlot; src <= lastInventorySlot; src++) {
+                const invStack = bot.inventory.slots[src];
+                const invInfo = getSlotInfoSafe(invStack, src);
+                if (invInfo && !invInfo.isTrash) {
+                    if (!isStorageSlot(src) || !isHotbarSlot(slot)) {
+                        reportError('moveToHotBar', `недопустимый перенос ${src}→${slot}`);
+                        break;
+                    }
+                    try {
+                        await rnd('BASE_DELAY');
+                        await bot.moveSlotItem(src, slot);
+                    } catch (err) {
+                        reportError(`moveToHotBar move ${src}->${slot}`, err);
+                    }
+                    break;
                 }
-
-                return { name, lvl };
-            }).filter(e => e !== null));
+            }
         }
+    } catch (err) {
+        reportError('moveToHotBar', err);
     }
+}
 
-    const rawCustomEnchants = extractCustomEnchantsFromItem(item);
-
-    const customEnchants = rawCustomEnchants.map(ench => {
-        const englishName = customNameMap[ench.name];
-        if (englishName) {
-            return { name: englishName, lvl: ench.lvl };
-        } else {
-            return ench;
+function hasBotItem() {
+    try {
+        for (let i = firstInventorySlot; i <= lastHotbarSlot; i++) {
+            const info = getSlotInfoSafe(bot.inventory.slots[i], i);
+            if (info && !info.isTrash) return true;
         }
-    });
+        return false;
+    } catch (err) {
+        reportError('hasBotItem', err);
+        return false;
+    }
+}
 
-    const allEnchants = [...vanillaEnchants, ...customEnchants];
+/** Осмотр: от текущего yaw/pitch сервера, мелкие GCD-шаги, фикс. число итераций. */
+async function lookAroundSpin() {
+    if (!bot?.entity) return;
 
-    for (const configItem of sortedConfig) {
-        if (item.name !== configItem.name) continue;
-        if (!loreMatchesConfig(item, configItem)) continue;
+    const startedAt = Date.now();
+    const startPitch = bot.entity.pitch;
+    const maxPitch = (Math.PI / 2) * 0.22;
+    const turnDir = Math.random() < 0.5 ? -1 : 1;
+    const steps = lookAroundSpinStepCount();
+    const plannedDeg = LOOK_SPIN_TURNS * 360;
+    const timeoutMs =
+        LOOK_SPIN_TIMEOUT_MIN_MS +
+        Math.floor(Math.random() * (LOOK_SPIN_TIMEOUT_MAX_MS - LOOK_SPIN_TIMEOUT_MIN_MS + 1));
+    const deadline = startedAt + timeoutMs;
+    let doneSteps = 0;
 
-        const requiredEffects = configItem.effects || [];
-        const areEnchantsValid = requiredEffects.every(required => {
-            const foundEnchant = allEnchants.find(e => e && e.name === required.name);
-            return foundEnchant && foundEnchant.lvl >= required.lvl;
-        });
+    for (let i = 0; i < steps; i++) {
+        if (Date.now() >= deadline) break;
 
-        if (!areEnchantsValid) continue;
+        const yawUnits = 2 + Math.floor(Math.random() * 5);
+        const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
 
-        if (hasForbiddenEnchant(item.name, allEnchants, requiredEffects)) {
-            continue
+        let pitch = bot.entity.pitch;
+        if (Math.random() < 0.15) {
+            const pitchUnits = 1 + Math.floor(Math.random() * 2);
+            pitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
+            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
         }
 
-        // if (item.name === 'netherite_pickaxe' &&
-        //     allEnchants.some(en => en && en.name === 'minecraft:silk_touch') &&
-        //     !allEnchants.some(en => en && en.name === 'smelting')) {
-        //     continue;
-        // }
-
-        // if (options.checkDurability && item.maxDurability) {
-        //     let coefficient = 0.9;
-        //     if (allEnchants.some(en => en && en.name === 'minecraft:mending')) coefficient = 0.75;
-        //     const damageComp = item.components?.find(c => c.type === 'damage');
-        //     const damage = damageComp?.data || 0;
-        //     const durabilityLeft = item.maxDurability - damage;
-        //     if (durabilityLeft < item.maxDurability * coefficient) continue;
-        // }
-
-        return configItem;
+        await bot.look(yaw, pitch, false);
+        doneSteps++;
     }
 
-    return null;
+    const elapsedSec = (Date.now() - startedAt) / 1000;
+    const timedOut = doneSteps < steps;
+    logOk(
+        `ОСМОТР ${doneSteps}/${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с` +
+        (timedOut ? ` (таймаут ${(timeoutMs / 1000).toFixed(1)}с)` : '') +
+        ` pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
+    );
+    config.walkTime = Date.now();
 }
 
-function getSellPrice(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.priceSell : 0;
-}
+/** Сход с AFK — крутим головой. */
+async function antiAfkIfNeeded() {
+    if (!config.afk) return;
 
-function getItemId(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.id : "";
-}
+    logAfk('сходу с AFK → осмотр');
 
-function getItemNacenka(item, itemPrices) {
-    const config = findMatchingConfigItem(item, itemPrices);
-    return config ? config.nacenka : 0;
-}
-
-function isItemMatchingConfig(item, itemPrices) {
-    return findMatchingConfigItem(item, itemPrices) !== null;
-}
-
-if (workerData) {
-    launchBookBuyer(workerData.username, workerData.password, workerData.anarchy);
-}
-
-function getRandomElement(array) {
-    if (!Array.isArray(array) || array.length === 0) {
-        throw new Error("Input must be a non-empty array");
-    }
-    return array[Math.floor(Math.random() * array.length)];
-}
-
-
-async function walk(bot) {
-    await rnd(TIMING.CHAT);
-
-    const warp = getRandomElement(WARPS);
-    bot.chat(`/warp ${warp}`);
-    await rnd(TIMING.RTP_WAIT);
-
-    const endTime = Date.now() + TIMING.MOVE_BURST_MS;
-
-    while (Date.now() < endTime) {
-        const randomMove = MOVE_KEYS[Math.floor(Math.random() * MOVE_KEYS.length)];
-        await rnd(TIMING.CHAT);
-        bot.setControlState(randomMove, true);
-        await rnd(TIMING.SELL_MOVE);
-        bot.setControlState(randomMove, false);
+    if (bot.currentWindow) {
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
     }
 
-    MOVE_KEYS.forEach(move => bot.setControlState(move, false));
-
-
-    bot.autoEat.disableAuto();
+    await lookAroundSpin();
+    config.afk = false;
+    logOk('AFK снят');
 }
 
-async function safeClickBuy(bot, slot, time, key) {
-    let timeDelay = time;
-    if (botUpdateWindow) {
-        botUpdateWindow = false;
-        botStartClickTime = Date.now();
-    } else {
-        timeDelay = time - (Date.now() - botStartClickTime);
-        if (timeDelay <= 0) timeDelay = 0;
+/** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
+async function safeAH() {
+    logOk('safeAH → старт');
+    if (!bot) return;
+    if (bot.currentWindow) {
+        logInfo('safeAH → закрываю окно');
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
+    }
+    await joinAnarchy();
+    await rnd('BASE_DELAY');
+
+    config.needReloadAH = true;
+    config.menu = analysisAH;
+    config.botUpdateWindow = true;
+    const key = config.key;
+
+    let searchCount = 0;
+    while (key === config.key) {
+        if (config.afk) logAfk('режим AFK (safeAH)');
+        searchCount++;
+        logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
+        await antiAfkIfNeeded();
+        if (config.afk) {
+            await rnd('AH_CMD');
+            continue;
+        }
+        await rnd('AH_CMD');
+        config.menu = analysisAH;
+        bot.chat(`/ah search ${config.item}`);
+        await rnd('AH_CMD');
+    }
+    logOk(`safeAH → выход после ${searchCount} search (открылось окно)`);
+}
+async function safeBalance() {
+    if (!bot) return;
+    config.balance = null;
+    if (bot.currentWindow) {
+        await rnd('BASE_DELAY');
+        await bot.closeWindow(bot.currentWindow);
+    }
+    await joinAnarchy();
+    await rnd('BASE_DELAY');
+
+    config.botUpdateWindow = true;
+
+    while (config.balance === null) {
+        await antiAfkIfNeeded();
+        await rnd('AH_CMD');
+        config.menu = analysisAH;
+        bot.chat(`/balance`);
+        await rnd('POLL');
+    }
+}
+
+
+/**
+ * Покупка с одним startedAt: авто-обновление окна → новый windowOpen продолжает, не ждёт с нуля.
+ */
+async function runAhBuySession(key) {
+    if (!ahBuySession) return;
+    if (ahBuySession.running) return;
+    ahBuySession.running = true;
+
+    const halfAt = ahBuySession.startedAt + Math.floor(ahBuySession.totalDelay / 2);
+    const now = Date.now();
+    if (now < halfAt) {
+        await sleep(halfAt - now);
     }
 
-    await delay(timeDelay);
-    if (botKey != key) {
-        console.log('твари ах обновили и теперь так');
+    if (config.key !== key) {
+        logInfo('АХ покупка: новое окно → сессия сохранена, ждём остаток задержки');
+        ahBuySession.running = false;
         return;
     }
-    botUpdateWindow = true;
-    if (bot.currentWindow) {
-        botTimeActive = Date.now();
-        await bot.clickWindow(slot, leftMouseButton, 1);
+
+    if (!ahBuySession.rechecked) {
+        ahBuySession.rechecked = true;
+        const slotData = bot?.currentWindow?.slots?.[ahBuySession.slot];
+        let currentUUID = null;
+        if (slotData) {
+            try {
+                currentUUID = getItemUUID(slotData);
+            } catch (err) {
+                reportError(`recheck getItemUUID slot=${ahBuySession.slot}`, err);
+            }
+        }
+        if (currentUUID && isUuidBlockedByOther(itemsBuying, currentUUID, config.username)) {
+            logInfo('АХ recheck: UUID занят другим ботом → повторный выбор');
+            const newSlot = await getBestAHSlot();
+            if (newSlot === null || newSlot >= 9) {
+                clearAhBuySession();
+                logInfo('АХ → reload 49 (после recheck нет лота)');
+                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                return;
+            }
+            ahBuySession.slot = newSlot;
+            ahBuySession.totalDelay = ahBuyDelayMs(newSlot);
+        }
+    }
+
+    if (config.key !== key) {
+        logInfo('АХ покупка: новое окно после recheck → сессия сохранена');
+        ahBuySession.running = false;
+        return;
+    }
+
+    const startedAt = ahBuySession.startedAt;
+    const remaining = Math.max(0, ahBuySession.totalDelay - (Date.now() - startedAt));
+    const slot = ahBuySession.slot;
+    clearAhBuySession();
+
+    config.botStartClickTime = startedAt;
+    config.botUpdateWindow = false;
+    await safeClickBuy(bot, slot, remaining, key);
+}
+
+/**
+ * Лучший слот на аукционе для покупки (0–17).
+ * Ставит config.BuyingItem, шлёт buying с UUID, возвращает номер слота или null.
+ */
+async function getBestAHSlot() {
+    try {
+        if (!bot?.currentWindow?.slots) return null;
+
+        for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
+            const slotData = bot.currentWindow.slots[slot];
+            if (!slotData) continue;
+
+            let currentUUID = null;
+            try {
+                currentUUID = getItemUUID(slotData);
+            } catch (err) {
+                reportError(`getItemUUID slot=${slot}`, err);
+                continue;
+            }
+
+            if (currentUUID && isUuidBlockedByOther(itemsBuying, currentUUID, config.username)) {
+                continue;
+            }
+
+            const info = getSlotInfoSafe(slotData, slot);
+            if (!info || info.isTrash || !info.id || !info.buyPrice) continue;
+
+            let ahPrice;
+            try {
+                ahPrice = getPriceFromAhItem(slotData);
+            } catch (err) {
+                reportError(`getPriceFromAh slot=${slot}`, err);
+                continue;
+            }
+
+            if (ahPrice >= info.buyPrice) continue;
+
+            config.BuyingItem.id = info.id;
+            config.BuyingItem.price = ahPrice;
+
+            if (currentUUID) claimAhLotUuid(currentUUID);
+
+            return slot;
+        }
+
+        return null;
+    } catch (err) {
+        reportError('getBestAHSlot', err);
+        return null;
     }
 }
 
-async function saveToJsonFile(filePath, data) {
-    const tempPath = `${filePath}.tmp`;
+async function dropTrash() {
     try {
-        const jsonString = JSON.stringify(data, null, 2);
-        await writeFile(tempPath, jsonString, 'utf8');
-        await rename(tempPath, filePath);
-        console.log('✅ Данные успешно сохранены:', filePath);
-    } catch (error) {
-        console.error('❌ Ошибка при сохранении:', error);
-        try { await fs.unlink(tempPath); } catch { }
+        for (let i = firstInventorySlot; i <= lastHotbarSlot; i++) {
+            const item = bot.inventory.slots[i];
+            const info = getSlotInfoSafe(item, i);
+            if (!info?.isTrash || !item) continue;
+            if (await tossTrashAtSlot(i)) return;
+        }
+    } catch (err) {
+        reportError('dropTrash', err);
     }
 }
