@@ -27,6 +27,7 @@ import {
     buyingUuidForGo,
     applyGoJsonUpdate,
     runOrchestratorUpdate,
+    resolveGoWebSocketUrl,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -42,7 +43,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
-const LOCAL_MODE = false;
+const LOCAL_MODE = true;
 const SKIP_TELEGRAM = LOCAL_MODE;
 if (LOCAL_MODE) {
     process.env.TELEGRAM_PROXY = 'off';
@@ -53,7 +54,7 @@ if (LOCAL_MODE) {
 const botsPath = join(__dirname, './bots/503b.json');
 const token = '8293242577:AAFMFGvnZE4vGnu9ukszz19tgjtuQOpiyRA';
 const alertChatID = -1003827870631;
-const WEBSOCKET_URL = 'ws://85.198.86.42:8080/ws';
+const WEBSOCKET_URL = resolveGoWebSocketUrl(LOCAL_MODE);
 
 // ========== ГЛОБАЛЬНЫЕ СОСТОЯНИЯ ==========
 let catalog = [];

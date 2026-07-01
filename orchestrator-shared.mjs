@@ -22,6 +22,18 @@ export const MARKET_FLOOR_CHECK_MS = 30 * 1000;
 /** Допуск на джиттер таймеров (воркер / оркестратор / сеть) */
 export const MARKET_FLOOR_WINDOW_SLACK_MS = 5000;
 
+export const GO_WS_URL_REMOTE = 'ws://85.198.86.42:8080/ws';
+export const GO_WS_URL_LOCAL = 'ws://127.0.0.1:8080/ws';
+
+/** Go WebSocket: GO_WS_URL env > LOCAL_MODE > VPS по умолчанию */
+export function resolveGoWebSocketUrl(localMode = false) {
+    if (process.env.GO_WS_URL) return process.env.GO_WS_URL;
+    if (localMode || process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true') {
+        return GO_WS_URL_LOCAL;
+    }
+    return GO_WS_URL_REMOTE;
+}
+
 export function sendMarketFloorsToGo(socket, isOpen, floors, meta) {
     if (!socket || !isOpen || !floors || Object.keys(floors).length === 0) return false;
     if (!meta?.window_start_ms || !meta?.window_end_ms) return false;
