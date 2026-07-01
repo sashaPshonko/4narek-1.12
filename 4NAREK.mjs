@@ -590,7 +590,7 @@ async function main() {
         password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        version: '1.21.8',
+        version: '1.21.11',
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
