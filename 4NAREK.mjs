@@ -18,15 +18,28 @@ import {
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
 
-process.on('uncaughtException', err => {
+process.on('uncaughtException', (err) => {
+    if (isIgnorableProtocolNoise(err)) return;
     console.error('UNCAUGHT EXCEPTION');
     console.error(err);
 });
 
-process.on('unhandledRejection', err => {
+process.on('unhandledRejection', (err) => {
+    if (isIgnorableProtocolNoise(err)) return;
     console.error('UNHANDLED REJECTION');
     console.error(err);
 });
+
+/** Funtime шлёт кастомные particle-пакеты — protodef не парсит, бот при этом жив. */
+function isIgnorableProtocolNoise(err) {
+    if (!err) return false;
+    const name = err.name ?? '';
+    const stack = String(err.stack ?? '');
+    const msg = String(err.message ?? err);
+    if (name === 'PartialReadError' || msg.includes('PartialReadError')) return true;
+    if (stack.includes('packet_world_particles')) return true;
+    return false;
+}
 
 
 const STORAGE_AH_SLOTS = 5;
@@ -232,6 +245,19 @@ function delayMs(range) {
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Окно могло закрыться сервером за время rnd — не передаём null в closeWindow. */
+async function safeCloseWindow() {
+    if (!bot?.currentWindow) return;
+    await rnd('BASE_DELAY');
+    const win = bot.currentWindow;
+    if (!win) return;
+    try {
+        await bot.closeWindow(win);
+    } catch (err) {
+        reportError('safeCloseWindow', err);
+    }
 }
 
 async function safeClickBuy(bot, slot, time, key) {
@@ -649,7 +675,14 @@ async function main() {
         process.exit(1);
     });
     bot.on('error', (err) => {
+        if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
+        process.exit(1);
+    });
+
+    bot._client?.on('error', (err) => {
+        if (isIgnorableProtocolNoise(err)) return;
+        console.error(`${logTag()} ${ANSI.red}⛔ client error${ANSI.reset}: ${err}`);
         process.exit(1);
     });
 
@@ -830,13 +863,11 @@ async function main() {
                             if (clanSlot !== null) {
                                 logInfo(`клан → забрать предмет из слота ${clanSlot} (shift)`);
                                 await safeClickBuy(bot, clanSlot, delayMs({ min: 1500, max: 3500 }), key);
-                                await rnd('BASE_DELAY');
-                                await bot.closeWindow(bot.currentWindow);
+                                await safeCloseWindow();
                                 await sellItems();
                             } else {
                                 logInfo('клан → в хранилище нечего забирать → safeAH');
-                                await rnd('BASE_DELAY');
-                                await bot.closeWindow(bot.currentWindow);
+                                await safeCloseWindow();
                                 await safeAH();
                             }
                         }
@@ -859,8 +890,7 @@ async function main() {
                             if (config.key !== key) break;
                             await rnd('POLL');
                         }
-                        await rnd('BASE_DELAY');
-                        await bot.closeWindow(bot.currentWindow);
+                        await safeCloseWindow();
                         await safeAH();
                         break;
                     }
@@ -950,10 +980,7 @@ async function sellItems() {
         if (!canSell) logWarn('продажа → пропуск (нет бота или каталога)');
 
         if (bot) {
-            if (bot.currentWindow) {
-                await rnd('BASE_DELAY');
-                await bot.closeWindow(bot.currentWindow);
-            }
+            await safeCloseWindow();
             if (config.lastWarpTime < Date.now() - 120000) {
                 const warp = warps[Math.floor(Math.random() * warps.length)];
                 await rnd('BASE_DELAY');
@@ -1053,10 +1080,7 @@ async function sellItems() {
     }
 
     if (!bot) return;
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await safeCloseWindow();
     await joinAnarchy();
     await rnd('BASE_DELAY');
 
@@ -1177,10 +1201,7 @@ async function antiAfkIfNeeded() {
 
     logAfk('сходу с AFK → осмотр');
 
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await safeCloseWindow();
 
     await lookAroundSpin();
     config.afk = false;
@@ -1191,11 +1212,7 @@ async function antiAfkIfNeeded() {
 async function safeAH() {
     logOk('safeAH → старт');
     if (!bot) return;
-    if (bot.currentWindow) {
-        logInfo('safeAH → закрываю окно');
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await safeCloseWindow();
     await joinAnarchy();
     await rnd('BASE_DELAY');
 
@@ -1224,10 +1241,7 @@ async function safeAH() {
 async function safeBalance() {
     if (!bot) return;
     config.balance = null;
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await safeCloseWindow();
     await joinAnarchy();
     await rnd('BASE_DELAY');
 
