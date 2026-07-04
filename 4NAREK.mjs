@@ -50,30 +50,83 @@ const CONFIG_BLOCKED_PACKETS = new Set([
     'held_item_slot', 'set_creative_slot',
 ]);
 
-/** Funtime/Bungee transfer: не слать gameplay-пакеты + принять resource pack (ACCEPTED + LOADED). */
+/** Funtime/Bungee transfer: не слать gameplay-пакеты + ответы на configuration. */
+let configTransferStartedAt = 0;
+
 function setupConfigurationTransferFix(bot) {
     const client = bot._client;
     if (!client) return;
+
+    const PACK_ACCEPTED = 3;
+    const PACK_LOADED = 0;
+    let blockSelectKnownPacksWrite = false;
 
     const origWrite = client.write.bind(client);
     client.write = (name, params) => {
         if (client.state === 'configuration' && CONFIG_BLOCKED_PACKETS.has(name)) {
             return;
         }
+        if (blockSelectKnownPacksWrite && name === 'select_known_packs') {
+            return;
+        }
         return origWrite(name, params);
     };
 
     client.on('start_configuration', () => {
-        logInfo('transfer → configuration phase');
+        configTransferStartedAt = Date.now();
+        blockSelectKnownPacksWrite = false;
+        logInfo('transfer → configuration phase (жду finish_configuration)');
     });
 
     client.on('finish_configuration', () => {
+        configTransferStartedAt = 0;
+        blockSelectKnownPacksWrite = false;
         logOk('transfer → configuration завершён');
     });
 
+    client.on('cookie_request', (data) => {
+        if (client.state !== 'configuration') return;
+        logInfo(`config → cookie_request: ${data.cookie}`);
+        origWrite('cookie_response', { key: data.cookie });
+    });
+
+    client.prependListener('add_resource_pack', (data) => {
+        if (client.state !== 'configuration') return;
+        logInfo('config → add_resource_pack, принимаю');
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_ACCEPTED });
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_LOADED });
+    });
+
+    client.prependListener('select_known_packs', (data) => {
+        if (client.state !== 'configuration') return;
+        const packs = (data.packs ?? []).map((p) => ({
+            namespace: p.namespace,
+            id: p.id,
+            version: p.version,
+        }));
+        logInfo(`config → select_known_packs (${packs.length})`);
+        origWrite('select_known_packs', { packs });
+        blockSelectKnownPacksWrite = true;
+    });
+
+    client.on('disconnect', (data) => {
+        if (client.state !== 'configuration') return;
+        logWarn(`config → disconnect: ${JSON.stringify(data.reason ?? data)}`);
+    });
+
     bot.on('resourcePack', () => {
+        if (client.state === 'configuration') return;
         bot.acceptResourcePack();
     });
+}
+
+function isInConfigurationTransfer() {
+    return bot?._client?.state === 'configuration';
+}
+
+function configurationTransferAgeMs() {
+    if (!configTransferStartedAt) return 0;
+    return Date.now() - configTransferStartedAt;
 }
 
 
@@ -947,6 +1000,16 @@ main();
 async function joinAnarchy() {
     if (!config.timeJoinAnarchy) {
         while (!config.timeJoinAnarchy) {
+            if (isInConfigurationTransfer()) {
+                const ageSec = Math.ceil(configurationTransferAgeMs() / 1000);
+                logInfo(`transfer → в configuration ${ageSec}с, жду…`);
+                if (configurationTransferAgeMs() > 45_000) {
+                    logWarn('transfer → configuration timeout 45с');
+                    process.exit(1);
+                }
+                await rnd('ANARCHY_DELAY');
+                continue;
+            }
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
             bot.chat(`/an${config.anarchy}`);
