@@ -87,6 +87,27 @@ function chatTextFromRaw(data) {
     );
 }
 
+function formatWindowTitle(win) {
+    if (!win) return '?';
+    const raw = win.title;
+    if (raw == null || raw === '') return '(пусто)';
+    try {
+        if (typeof raw === 'string') {
+            return chatTextFromFormatted(raw) || raw;
+        }
+        if (typeof raw.toString === 'function') {
+            const text = raw.toString();
+            if (text && text !== '[object Object]') return text;
+        }
+        if (typeof raw === 'object') {
+            return chatTextFromFormatted(raw) || flattenChatFallback(raw) || JSON.stringify(raw);
+        }
+    } catch {
+        return String(raw);
+    }
+    return String(raw);
+}
+
 /** Funtime: chat_type в registry битый — не используем ChatMessage.fromNetwork. */
 function setupChatSafeGuard(bot) {
     const client = bot._client;
@@ -898,7 +919,12 @@ async function main() {
         // }
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
-        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
+        const win = bot.currentWindow;
+        logInfo(
+            `окно title: «${formatWindowTitle(win)}» ` +
+            `type=${win?.type ?? '?'} id=${win?.id ?? '?'} slots=${win?.slots?.length ?? '?'}`,
+        );
+        const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
         const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
 
         if (windowJSON.includes('клан')) {
