@@ -140,7 +140,51 @@ function serializeWindowNoSlots(win) {
 
 function logWindowDebug(win) {
     if (!win) return;
+    const font = getWindowTitleFont(win.title);
+    logInfo(`окно font: ${font ?? '(нет)'}`);
     logInfo(`окно FULL (no slots): ${jsonFull(serializeWindowNoSlots(win))}`);
+}
+
+/** Funtime: title в NBT, тип окна в поле font (minecraft:rtp, …). */
+function nbtLeafString(node) {
+    if (node == null) return null;
+    if (typeof node === 'string') return node;
+    if (node.type === 'string' && node.value != null) return String(node.value);
+    if (typeof node.value === 'string') return node.value;
+    return null;
+}
+
+function getWindowTitleFont(title) {
+    if (title == null) return null;
+    let raw = title;
+    if (typeof title.toJSON === 'function') {
+        try {
+            raw = title.toJSON();
+        } catch { /* raw title */ }
+    }
+    if (raw?.type === 'compound' && raw.value) {
+        raw = raw.value;
+    }
+    const fontNode = raw?.font;
+    if (fontNode == null) return null;
+    return nbtLeafString(fontNode);
+}
+
+function resolveWindowMenu(win) {
+    const font = getWindowTitleFont(win?.title);
+    if (font?.includes('rtp')) return rtp;
+
+    const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
+    const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
+
+    if (windowJSON.includes('клан')) return clan;
+    if (windowJSON.includes('хранилище')) return myItems;
+    if (windowJSON.includes('телепорт') || windowJSON.includes('телепортации')) return rtp;
+    if (windowJSON.includes('подозрительная цена') ||
+        windowJSON.includes('подтверждение покупки')) {
+        return accept;
+    }
+    return analysisAH;
 }
 
 function setupWindowDebugLog(bot) {
@@ -962,36 +1006,17 @@ async function main() {
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
         logWindowDebug(bot.currentWindow);
-        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
-        const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
-
-        if (windowJSON.includes('клан')) {
-            config.menu = clan;
-        } else if (windowJSON.includes('хранилище')) {
-            config.menu = myItems;
-        } else if (windowJSON.includes('телепортации')) {
-            config.menu = rtp;
-        } else if (windowJSON.includes('подозрительная цена') ||
-            windowJSON.includes('подтверждение покупки')) {
-            config.menu = accept;
-        } else {
-            config.menu = analysisAH;
-        }
+        config.menu = resolveWindowMenu(bot.currentWindow);
         logInfo(`окно: ${config.menu}`);
 
         if (config.trashRtpPending && config.menu !== rtp) {
-            logWarn(`RTP pending → закрываю «${config.menu}»`);
+            logInfo(`RTP pending → фоновое «${config.menu}», закрываю`);
             await safeCloseWindow();
             return;
         }
 
         switch (config.menu) {
             case analysisAH:
-                if (config.trashRtpPending) {
-                    logWarn('АХ → игнор (ждём RTP)');
-                    await safeCloseWindow();
-                    break;
-                }
                 if (config.walkTime < Date.now() - 55000 ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
                     logInfo('АХ → sellItems (осмотр/needSell)');
