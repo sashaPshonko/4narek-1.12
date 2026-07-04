@@ -108,6 +108,80 @@ function formatWindowTitle(win) {
     return String(raw);
 }
 
+function titleToDebugLines(title) {
+    if (title == null) return ['title: null'];
+    const lines = [];
+    if (typeof title === 'string') {
+        lines.push(`title.str: ${title.slice(0, 600)}`);
+        try {
+            lines.push(`title.json: ${JSON.stringify(JSON.parse(title))}`);
+        } catch { /* plain string */ }
+        return lines;
+    }
+    if (typeof title.toJSON === 'function') {
+        try {
+            lines.push(`title.toJSON: ${JSON.stringify(title.toJSON())}`);
+        } catch (err) {
+            lines.push(`title.toJSON err: ${err.message}`);
+        }
+    }
+    if (typeof title.toString === 'function') {
+        lines.push(`title.toString: «${title.toString()}»`);
+    }
+    try {
+        const flat = flattenChatFallback(title);
+        if (flat) lines.push(`title.flatten: «${flat}»`);
+    } catch { /* ignore */ }
+    try {
+        if (title.translate) lines.push(`title.translate: ${title.translate}`);
+    } catch { /* ignore */ }
+    return lines.length ? lines : [`title.type: ${typeof title}`];
+}
+
+function logWindowDebug(win) {
+    if (!win) return;
+    logInfo(
+        `окно meta: type=${win.type ?? '?'} id=${win.id ?? '?'} slots=${win.slots?.length ?? '?'}`,
+    );
+    for (const line of titleToDebugLines(win.title)) {
+        logInfo(`окно ${line}`);
+    }
+    const items = [];
+    for (let i = 0; i < Math.min(54, win.slots?.length ?? 0); i++) {
+        const s = win.slots[i];
+        if (!s) continue;
+        let part = `${i}:${s.name ?? '?'}`;
+        if (s.count > 1) part += `×${s.count}`;
+        if (s.customName) {
+            part += ` cn=${typeof s.customName === 'object' ? flattenChatFallback(s.customName) : s.customName}`;
+        }
+        if (s.displayName?.toString) {
+            const dn = s.displayName.toString();
+            if (dn && dn !== s.name) part += ` dn=«${dn}»`;
+        }
+        items.push(part);
+        if (items.length >= 10) break;
+    }
+    if (items.length) logInfo(`окно items: ${items.join(' | ')}`);
+}
+
+function setupWindowDebugLog(bot) {
+    bot._client.prependListener('open_window', (packet) => {
+        const raw = packet.windowTitle ?? packet.title;
+        let rawStr;
+        try {
+            rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
+        } catch {
+            rawStr = String(raw);
+        }
+        logInfo(`open_window raw: ${rawStr.slice(0, 700)}`);
+        logInfo(
+            `open_window pkt: type=${packet.inventoryType ?? packet.containerId ?? '?'} ` +
+            `slots=${packet.slotCount ?? '?'}`,
+        );
+    });
+}
+
 /** Funtime: chat_type в registry битый — не используем ChatMessage.fromNetwork. */
 function setupChatSafeGuard(bot) {
     const client = bot._client;
@@ -859,6 +933,7 @@ async function main() {
     });
 
     setupConfigurationTransferFix(bot);
+    setupWindowDebugLog(bot);
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
@@ -919,12 +994,8 @@ async function main() {
         // }
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
-        const win = bot.currentWindow;
-        logInfo(
-            `окно title: «${formatWindowTitle(win)}» ` +
-            `type=${win?.type ?? '?'} id=${win?.id ?? '?'} slots=${win?.slots?.length ?? '?'}`,
-        );
-        const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
+        logWindowDebug(bot.currentWindow);
+        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
         const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
 
         if (windowJSON.includes('клан')) {
