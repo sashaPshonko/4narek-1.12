@@ -1454,7 +1454,6 @@ async function sellItems() {
                     }
                     if (ack === 'ok') {
                         logOk(`sellItems slot=${currentSlot} → выставлен`);
-                        await rnd('SELL_ACK');
                     } else if (ack === 'empty' || ack === 'skip') {
                         logInfo(`sellItems slot=${currentSlot} → ${ack === 'empty' ? 'пусто (Воздух)' : 'пропуск'}`);
                     } else if (ack === 'full') {
