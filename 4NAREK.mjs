@@ -1256,6 +1256,8 @@ async function sellItems() {
                     config.needAdd = false;
                 }
             }
+        } else {
+            reportError('sellItems', 'нельзя продавать предметы');
         }
 
     } catch (err) {
