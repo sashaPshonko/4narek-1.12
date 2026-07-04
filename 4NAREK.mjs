@@ -616,7 +616,8 @@ async function main() {
         password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        version: '1.21.11',
+        version: '1.21.4',
+        physicsEnabled: false,
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
@@ -684,6 +685,10 @@ async function main() {
         if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ client error${ANSI.reset}: ${err}`);
         process.exit(1);
+    });
+
+    bot.on('spawn', () => {
+        bot.physicsEnabled = true;
     });
 
     bot.once('spawn', async () => {
@@ -916,6 +921,7 @@ async function joinAnarchy() {
         while (!config.timeJoinAnarchy) {
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
+            bot.physicsEnabled = false;
             bot.chat(`/an${config.anarchy}`);
             await rnd('ANARCHY_DELAY');
         }
