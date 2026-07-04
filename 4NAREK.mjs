@@ -108,41 +108,10 @@ function formatWindowTitle(win) {
     return String(raw);
 }
 
-function jsonFull(value) {
-    try {
-        return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
-    } catch (err) {
-        return `[json err: ${err.message}] ${String(value)}`;
-    }
-}
-
-function serializeWindowNoSlots(win) {
-    if (!win) return null;
-    let title = win.title;
-    if (title && typeof title.toJSON === 'function') {
-        try {
-            title = title.toJSON();
-        } catch { /* raw title */ }
-    }
-    return {
-        id: win.id,
-        type: win.type,
-        title,
-        slotsCount: win.slots?.length ?? 0,
-        inventoryStart: win.inventoryStart,
-        inventoryEnd: win.inventoryEnd,
-        hotbarStart: win.hotbarStart,
-        craftingResultSlot: win.craftingResultSlot,
-        requiresConfirmation: win.requiresConfirmation,
-        selectedItem: win.selectedItem,
-    };
-}
-
 function logWindowDebug(win) {
     if (!win) return;
     const font = getWindowTitleFont(win.title);
-    logInfo(`окно font: ${font ?? '(нет)'}`);
-    logInfo(`окно FULL (no slots): ${jsonFull(serializeWindowNoSlots(win))}`);
+    logInfo(`окно id=${win.id} type=${win.type ?? '?'} slots=${win.slots?.length ?? 0} font=${font ?? '(нет)'}`);
 }
 
 /** Funtime: title в NBT, тип окна в поле font (minecraft:rtp, …). */
@@ -185,12 +154,6 @@ function resolveWindowMenu(win) {
         return accept;
     }
     return analysisAH;
-}
-
-function setupWindowDebugLog(bot) {
-    bot._client.prependListener('open_window', (packet) => {
-        logInfo(`open_window FULL (no slots): ${jsonFull(packet)}`);
-    });
 }
 
 /** Funtime: chat_type в registry битый — не используем ChatMessage.fromNetwork. */
@@ -521,6 +484,19 @@ function reportError(where, err) {
 function generateKey() {
     config.key = Math.random().toString(36).substring(2, 15);
     return config.key;
+}
+
+let safeAHRunning = false;
+let safeAHPending = false;
+
+/** safeAH из windowOpen — не await, чтобы не закрыть окно во время safeClickBuy. */
+function scheduleSafeAH(reason) {
+    if (safeAHRunning) {
+        safeAHPending = true;
+        logInfo(`safeAH → отложен (${reason})`);
+        return;
+    }
+    void safeAH(reason);
 }
 
 function delayMs(range) {
@@ -990,7 +966,6 @@ async function main() {
     });
 
     setupConfigurationTransferFix(bot);
-    setupWindowDebugLog(bot);
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
@@ -1062,24 +1037,28 @@ async function main() {
         }
 
         switch (config.menu) {
-            case analysisAH:
+            case analysisAH: {
+                let windowActionTaken = false;
                 if (config.walkTime < Date.now() - 55000 ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
                     logInfo('АХ → sellItems (осмотр/needSell)');
+                    windowActionTaken = true;
                     await sellItems();
-                    if (!config.hasDangerousTrash) await safeAH();
+                    if (!config.hasDangerousTrash) scheduleSafeAH('АХ sellItems');
                     break;
                 }
 
                 if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
                     logInfo('АХ → хранилище (reset/enoughItems)');
                     config.menu = myItems;
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                     break;
                 }
 
                 if (ahBuySession) {
                     logInfo(`АХ → продолжить покупку (слот ${ahBuySession.slot}, сессия)`);
+                    windowActionTaken = true;
                     await runAhBuySession(key);
                     break;
                 }
@@ -1089,9 +1068,11 @@ async function main() {
                     clearAhBuySession();
                     if (config.needReloadAH) config.needReloadAH = false;
                     logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 } else if (slotToBuy < 9) {
                     logInfo(`АХ → купить слот ${slotToBuy}`);
+                    windowActionTaken = true;
                     ahBuySession = {
                         slot: slotToBuy,
                         startedAt: Date.now(),
@@ -1103,10 +1084,21 @@ async function main() {
                 } else {
                     clearAhBuySession();
                     logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
 
-                break;
+                await rnd('WINDOW_DELAY');
+                if (key === config.key) {
+                    logInfo('windowOpen → конец (key не изменился)');
+                    if (config.menu === analysisAH && !windowActionTaken) {
+                        await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                    }
+                    return;
+                }
+                logInfo(`windowOpen → конец (${config.menu})`);
+                return;
+            }
 
             case myItems:
                 if (!bot.currentWindow?.slots[0]) {
@@ -1208,7 +1200,7 @@ async function main() {
                             } else {
                                 logInfo('клан → в хранилище нечего забирать → safeAH');
                                 await safeCloseWindow();
-                                await safeAH();
+                                scheduleSafeAH('клан seller');
                             }
                         }
                         break;
@@ -1231,7 +1223,7 @@ async function main() {
                             await rnd('POLL');
                         }
                         await safeCloseWindow();
-                        await safeAH();
+                        scheduleSafeAH('клан buyer');
                         break;
                     }
                 }
@@ -1240,9 +1232,6 @@ async function main() {
         await rnd('WINDOW_DELAY');
         if (key === config.key) {
             logInfo('windowOpen → конец (key не изменился)');
-            if (config.menu === analysisAH) {
-                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-            }
             return;
         }
         logInfo(`windowOpen → конец (${config.menu})`);
@@ -1676,36 +1665,58 @@ async function antiAfkIfNeeded() {
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
-async function safeAH() {
-    logOk('safeAH → старт');
-    if (!bot) return;
-    await safeCloseWindow();
-    await joinAnarchy();
-    await rnd('BASE_DELAY');
-
-    config.needReloadAH = true;
-    config.menu = analysisAH;
-    config.botUpdateWindow = true;
-    const key = config.key;
-
-    let searchCount = 0;
-    while (key === config.key) {
-        if (config.afk) logAfk('режим AFK (safeAH)');
-        searchCount++;
-        if (bot.currentWindow) break
-        logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
-        await antiAfkIfNeeded();
-        if (bot.currentWindow) break
-        if (config.afk) {
-            await rnd('AH_CMD');
-            continue;
-        }
-        await rnd('AH_CMD');
-        config.menu = analysisAH;
-        bot.chat(`/ah search ${config.item}`);
-        await rnd('AH_CMD');
+async function safeAH(reason = '') {
+    if (safeAHRunning) {
+        safeAHPending = true;
+        logInfo(`safeAH → пропуск, уже идёт${reason ? ` (${reason})` : ''}`);
+        return;
     }
-    logOk(`safeAH → выход после ${searchCount} search (открылось окно)`);
+    safeAHRunning = true;
+    try {
+        logOk(`safeAH → старт${reason ? ` (${reason})` : ''}`);
+        if (!bot) return;
+
+        const openMenu = bot.currentWindow ? resolveWindowMenu(bot.currentWindow) : null;
+        if (openMenu === analysisAH) {
+            logOk('safeAH → пропуск, анализ АХ уже открыт');
+            return;
+        }
+
+        generateKey();
+        await safeCloseWindow();
+        await joinAnarchy();
+        await rnd('BASE_DELAY');
+
+        config.needReloadAH = true;
+        config.menu = analysisAH;
+        config.botUpdateWindow = true;
+        const key = config.key;
+
+        let searchCount = 0;
+        while (key === config.key) {
+            if (config.afk) logAfk('режим AFK (safeAH)');
+            searchCount++;
+            if (bot.currentWindow) break;
+            logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
+            await antiAfkIfNeeded();
+            if (bot.currentWindow) break;
+            if (config.afk) {
+                await rnd('AH_CMD');
+                continue;
+            }
+            await rnd('AH_CMD');
+            config.menu = analysisAH;
+            bot.chat(`/ah search ${config.item}`);
+            await rnd('AH_CMD');
+        }
+        logOk(`safeAH → выход после ${searchCount} search (открылось окно)`);
+    } finally {
+        safeAHRunning = false;
+        if (safeAHPending) {
+            safeAHPending = false;
+            void safeAH('pending');
+        }
+    }
 }
 async function safeBalance() {
     if (!bot) return;
