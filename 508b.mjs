@@ -28,6 +28,9 @@ import {
     applyGoJsonUpdate,
     runOrchestratorUpdate,
     resolveGoWebSocketUrl,
+    ackWorkerReady,
+    isWorkerReady,
+    WORKER_READY_TIMEOUT_MS,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -110,6 +113,10 @@ async function loadBotsConfig() {
             process.exit(1);
         }
         
+        const prevSuccess = new Map();
+        for (const [name, b] of bots) {
+            if (b.success) prevSuccess.set(name, true);
+        }
         bots.clear();
         for (const bot of loadedBots) {
             const goType = resolveGoType(bot);
@@ -123,7 +130,7 @@ async function loadBotsConfig() {
                 msgID: 0,
                 msgTime: null,
                 isManualStop: false,
-                success: false
+                success: prevSuccess.get(bot.username) ?? false,
             });
         }
         
@@ -185,20 +192,18 @@ async function runWorker(bot) {
             bot.isManualStop = false;
             
             const timeoutId = setTimeout(() => {
-                if (!bot.success) {
-                    console.warn(`⏱ ${username} не ответил за 30 сек`);
+                if (!isWorkerReady(bots, username)) {
+                    console.warn(`⏱ ${username} не ответил за ${WORKER_READY_TIMEOUT_MS / 1000} сек`);
                     try { worker.terminate(); } catch (e) {}
                 }
-            }, 30000);
+            }, WORKER_READY_TIMEOUT_MS);
             
             workers.set(username, { worker, timeoutId });
 
             worker.on('message', async (message) => {
                 try {
                     if (message.name === 'success') {
-                        const botToUpdate = bots.get(username);
-                        if (botToUpdate) {
-                            botToUpdate.success = true;
+                        if (ackWorkerReady(bots, workers, username)) {
                             console.log(`✅ ${username} запущен`);
                             pushPresenceToGo();
                         }
@@ -527,7 +532,7 @@ setInterval(() => {
     } catch (error) {
         console.error('Presence error:', error.message);
     }
-}, 30000);
+}, 120000);
 
 // Очистка лога раз в 5 часов
 setInterval(async () => {

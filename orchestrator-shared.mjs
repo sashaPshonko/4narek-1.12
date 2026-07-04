@@ -479,6 +479,26 @@ export function applyGoJsonUpdate(itemsBuying, goData) {
     return mergeGoJsonUpdate(itemsBuying, goData);
 }
 
+/** Сколько ждать success от воркера после старта */
+export const WORKER_READY_TIMEOUT_MS = 120_000;
+
+export function isWorkerReady(bots, username) {
+    return !!bots.get(username)?.success;
+}
+
+/** Воркер вошёл на анархию — снимаем startup-таймаут */
+export function ackWorkerReady(bots, workers, username) {
+    const bot = bots.get(username);
+    if (!bot) return false;
+    bot.success = true;
+    const w = workers.get(username);
+    if (w?.timeoutId) {
+        clearTimeout(w.timeoutId);
+        w.timeoutId = null;
+    }
+    return true;
+}
+
 /** git pull без локальных правок в tracked-файлах (xray.local.env перезаписывается из vless.url). */
 export async function gitPullOriginMain(repoDir, branch = 'main') {
     await execFileAsync('git', ['fetch', 'origin'], { cwd: repoDir });
