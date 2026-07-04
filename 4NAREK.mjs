@@ -1666,8 +1666,10 @@ async function safeAH() {
     while (key === config.key) {
         if (config.afk) logAfk('режим AFK (safeAH)');
         searchCount++;
+        if (bot.currentWindow) break
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
         await antiAfkIfNeeded();
+        if (bot.currentWindow) break
         if (config.afk) {
             await rnd('AH_CMD');
             continue;
