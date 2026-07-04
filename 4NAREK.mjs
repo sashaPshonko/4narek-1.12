@@ -38,6 +38,7 @@ function isIgnorableProtocolNoise(err) {
     const msg = String(err.message ?? err);
     if (name === 'PartialReadError' || msg.includes('PartialReadError')) return true;
     if (stack.includes('packet_world_particles')) return true;
+    if (stack.includes('loadDimensionCodec') || stack.includes('prismarine-nbt/nbt.js')) return true;
     return false;
 }
 
@@ -56,6 +57,16 @@ let configTransferStartedAt = 0;
 function setupConfigurationTransferFix(bot) {
     const client = bot._client;
     if (!client) return;
+
+    const origLoadDimensionCodec = bot.registry.loadDimensionCodec.bind(bot.registry);
+    bot.registry.loadDimensionCodec = (codec) => {
+        try {
+            origLoadDimensionCodec(codec);
+        } catch (err) {
+            const id = codec?.id ?? '?';
+            logWarn(`registry_data skip (${id}): ${err.message}`);
+        }
+    };
 
     const PACK_ACCEPTED = 3;
     const PACK_LOADED = 0;
