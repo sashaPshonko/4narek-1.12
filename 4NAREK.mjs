@@ -687,10 +687,6 @@ async function main() {
         process.exit(1);
     });
 
-    bot.on('spawn', () => {
-        bot.physicsEnabled = true;
-    });
-
     bot.once('spawn', async () => {
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
@@ -700,12 +696,12 @@ async function main() {
         await sellItems();
     });
 
-    bot.on('physicTick', async () => {
+    setInterval(async () => {
         if (Date.now() - config.timeActive > 60000) {
             config.timeActive = Date.now();
             await sellItems();
         }
-    })
+    }, 10_000);
 
     bot.on('windowOpen', async () => {
         config.timeActive = Date.now();
@@ -921,7 +917,6 @@ async function joinAnarchy() {
         while (!config.timeJoinAnarchy) {
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
-            bot.physicsEnabled = false;
             bot.chat(`/an${config.anarchy}`);
             await rnd('ANARCHY_DELAY');
         }
