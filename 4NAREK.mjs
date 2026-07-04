@@ -47,6 +47,7 @@ function isIgnorableProtocolNoise(err) {
     if (msg.includes('Cannot convert undefined or null to object')) return true;
     if (msg.includes('uncompressed length') || msg.includes('problem inflating chunk')) return true;
     if (msg.includes('client timed out')) return true;
+    if (msg.includes("reading 'translate'")) return true;
     return false;
 }
 
@@ -96,12 +97,12 @@ function setupChatSafeGuard(bot) {
 
     client.on('playerChat', (data) => {
         const text = chatTextFromRaw(data);
-        if (text) bot.emit('messagestr', text, 'chat', null);
+        if (text) void onBotChatText(text);
     });
 
     client.on('systemChat', (data) => {
         const text = chatTextFromRaw(data);
-        if (text) bot.emit('messagestr', text, 'system', null);
+        if (text) void onBotChatText(text);
     });
 }
 
@@ -847,9 +848,6 @@ async function main() {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
         }
-    });
-    bot.on('messagestr', async (text) => {
-        await onBotChatText(text);
     });
 
     bot.on('kicked', (reason) => {
