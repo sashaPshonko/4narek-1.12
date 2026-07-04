@@ -12,5 +12,6 @@
   "BUY_SLOT": { "min": 500, "max": 700 },
   "UNLIST": { "min": 1500, "max": 3500 },
   "AH_CMD": { "min": 2000, "max": 3500 },
+  "RTP": { "min": 7100, "max": 7300 },
   "CHECK_WINDOW": 5000
 }

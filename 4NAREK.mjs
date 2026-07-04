@@ -361,6 +361,7 @@ const config = {
     afk: false,
     needRTP: false,
     hasDangerousTrash: false,
+    trashRtpPending: false,
     needReloadAH: false,
     balance: null,
     needSendAH: true,
@@ -914,8 +915,19 @@ async function main() {
         }
         logInfo(`окно: ${config.menu}`);
 
+        if (config.trashRtpPending && config.menu !== rtp) {
+            logWarn(`RTP pending → закрываю «${config.menu}»`);
+            await safeCloseWindow();
+            return;
+        }
+
         switch (config.menu) {
             case analysisAH:
+                if (config.trashRtpPending) {
+                    logWarn('АХ → игнор (ждём RTP)');
+                    await safeCloseWindow();
+                    break;
+                }
                 if (config.walkTime < Date.now() - 55000 ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
                     logInfo('АХ → sellItems (осмотр/needSell)');
@@ -1029,11 +1041,15 @@ async function main() {
                 break;
 
             case rtp:
-                logOk('RTP → окно телепортации, клик слот 0');
-                await safeClickBuy(bot, 0, delayMs({ min: 1000, max: 3000 }), key);
+                logOk('RTP → окно, клик слот 0');
+                await safeClickBuy(bot, 0, delayMs({ min: 1500, max: 3000 }), key);
+                await rnd('RTP');
                 config.needRTP = false;
                 config.hasDangerousTrash = false;
+                config.trashRtpPending = false;
+                rtpInProgress = false;
                 config.lastWarpTime = Date.now();
+                await dropTrashAllAfterRtp();
                 logOk('RTP → телепорт OK, sellItems');
                 await sellItems();
                 break;
@@ -1131,81 +1147,85 @@ async function waitWarpTeleport() {
     while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
-/** /rtp когда мусор нельзя выкинуть на месте. */
+/** /rtp — один раз, прерываем sellItems; дальше windowOpen case rtp. */
 async function goRtpTrash(reason) {
     if (!bot) {
         logWarn(`RTP → пропуск (${reason}): bot=null`);
         return false;
     }
-    if (!config.needRTP) {
+    if (!config.needRTP && !config.hasDangerousTrash) {
         logInfo(`RTP → пропуск (${reason}): needRTP=false`);
         return false;
     }
-    if (rtpInProgress) {
-        logInfo(`RTP → уже в процессе (${reason})`);
-        return false;
+    if (config.trashRtpPending || rtpInProgress) {
+        logInfo(`RTP → уже ждём окно (${reason})`);
+        return true;
     }
 
     rtpInProgress = true;
+    config.trashRtpPending = true;
+    config.menu = rtp;
     logWarn(`RTP → старт (${reason})`);
     try {
-        config.needRTP = false;
         await safeCloseWindow();
         await joinAnarchy();
         await waitWarpTeleport();
         await antiAfkIfNeeded();
         if (config.afk) {
             logAfk('RTP → AFK, откладываю /rtp');
-            config.needRTP = true;
+            config.trashRtpPending = false;
+            rtpInProgress = false;
             return false;
         }
-        config.menu = rtp;
         logOk('RTP → /rtp');
         bot.chat('/rtp');
         return true;
     } catch (err) {
         reportError('goRtpTrash', err);
+        config.trashRtpPending = false;
+        rtpInProgress = false;
         config.needRTP = true;
         return false;
-    } finally {
-        rtpInProgress = false;
     }
 }
 
-/** Выброс мусора в слоте. true = ушли на RTP (нужно прервать sellItems). */
+/** Выброс мусора в слоте. true = прервать sellItems (RTP). */
 async function tossTrashAtSlot(slot) {
-    let attempts = 0;
-    while (true) {
-        attempts++;
-        const item = bot.inventory.slots[slot];
-        const info = getSlotInfoSafe(item, slot);
-        if (!info?.isTrash || !item) {
-            logInfo(`tossTrash slot=${slot} → пусто/не мусор`);
-            return false;
-        }
+    if (config.trashRtpPending || rtpInProgress) {
+        logInfo(`tossTrash slot=${slot} → RTP pending`);
+        return true;
+    }
+    if (config.hasDangerousTrash || config.needRTP) {
+        return await goRtpTrash(`tossTrash slot=${slot}`);
+    }
 
-        if (config.needRTP) {
-            logInfo(`tossTrash slot=${slot} → needRTP (попытка ${attempts})`);
-            if (await goRtpTrash(`tossTrash slot=${slot}`)) return true;
-            await rnd('POLL');
-            continue;
-        }
+    const item = bot.inventory.slots[slot];
+    const info = getSlotInfoSafe(item, slot);
+    if (!info?.isTrash || !item) return false;
 
+    try {
+        logInfo(`tossTrash slot=${slot} → tossStack`);
+        await rnd('BASE_DELAY');
+        await bot.tossStack(item);
+        await rnd('POLL');
+    } catch (err) {
+        reportError(`tossTrashAtSlot slot=${slot}`, err);
+    }
+    return false;
+}
+
+async function dropTrashAllAfterRtp() {
+    for (let i = firstInventorySlot; i <= lastHotbarSlot; i++) {
+        const item = bot.inventory.slots[i];
+        const info = getSlotInfoSafe(item, i);
+        if (!info?.isTrash || !item) continue;
         try {
-            logInfo(`tossTrash slot=${slot} → tossStack (попытка ${attempts})`);
+            logInfo(`RTP → toss slot ${i}`);
             await rnd('BASE_DELAY');
             await bot.tossStack(item);
             await rnd('POLL');
         } catch (err) {
-            reportError(`tossTrashAtSlot slot=${slot}`, err);
-        }
-
-        if (attempts >= 12) {
-            logWarn(`tossTrash slot=${slot} → сдаюсь после ${attempts} попыток, needRTP=${config.needRTP}`);
-            if (config.needRTP) {
-                if (await goRtpTrash(`tossTrash slot=${slot} timeout`)) return true;
-            }
-            return false;
+            reportError(`dropTrashAllAfterRtp slot=${i}`, err);
         }
     }
 }
@@ -1218,9 +1238,9 @@ async function sellItems() {
         config.needSendAH = true;
         await joinAnarchy();
 
-        if (config.needRTP) {
-            logInfo('sellItems → needRTP в начале');
-            if (await goRtpTrash('sellItems: старт')) return;
+        if (config.needRTP || config.trashRtpPending) {
+            logInfo('sellItems → RTP pending, выход');
+            return;
         }
 
         let canSell = true;
@@ -1248,7 +1268,7 @@ async function sellItems() {
 
             if (canSell) {
                 await lookAroundSpin();
-                await dropTrash();
+                if (await dropTrash()) return;
             }
 
         }
@@ -1320,11 +1340,6 @@ async function sellItems() {
                 }
             } else {
                 logInfo('sellItems → hasDangerousTrash, safeBalance пропуск');
-            }
-
-            if (config.needRTP) {
-                logInfo('sellItems → needRTP в конце');
-                await goRtpTrash('sellItems: конец');
             }
         } else {
             reportError('sellItems', 'нельзя продавать предметы');
@@ -1645,6 +1660,15 @@ async function getBestAHSlot() {
 
 async function dropTrash() {
     try {
+        if (config.trashRtpPending || rtpInProgress) {
+            logInfo('dropTrash → RTP pending');
+            return true;
+        }
+        if (config.hasDangerousTrash || config.needRTP) {
+            logInfo('dropTrash → hasDangerousTrash, /rtp');
+            return await goRtpTrash('dropTrash');
+        }
+
         let slots = 0;
         for (let i = firstInventorySlot; i <= lastHotbarSlot; i++) {
             const item = bot.inventory.slots[i];
@@ -1652,10 +1676,12 @@ async function dropTrash() {
             if (!info?.isTrash || !item) continue;
             slots++;
             logInfo(`dropTrash → слот ${i}`);
-            if (await tossTrashAtSlot(i)) return;
+            if (await tossTrashAtSlot(i)) return true;
         }
         if (!slots) logInfo('dropTrash → мусора нет');
+        return false;
     } catch (err) {
         reportError('dropTrash', err);
+        return false;
     }
 }
