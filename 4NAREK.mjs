@@ -39,7 +39,18 @@ function isIgnorableProtocolNoise(err) {
     if (name === 'PartialReadError' || msg.includes('PartialReadError')) return true;
     if (stack.includes('packet_world_particles')) return true;
     if (stack.includes('loadDimensionCodec') || stack.includes('prismarine-nbt/nbt.js')) return true;
+    if (stack.includes('handleRespawnPacketData')) return true;
     return false;
+}
+
+/** Funtime: registry_data кривой — без dimensionsArray падает login/respawn. */
+function ensureRegistryDimensionStub(bot) {
+    if (Array.isArray(bot.registry.dimensionsArray) && bot.registry.dimensionsArray.length > 0) {
+        return;
+    }
+    const fallback = { name: 'minecraft:overworld', minY: -64, height: 384 };
+    bot.registry.dimensionsArray = Array.from({ length: 16 }, () => fallback);
+    bot.registry.dimensionsByName ??= { overworld: fallback };
 }
 
 /** Play-пакеты, которые нельзя слать в configuration phase (transfer /anXXX). */
@@ -65,8 +76,12 @@ function setupConfigurationTransferFix(bot) {
         } catch (err) {
             const id = codec?.id ?? '?';
             logWarn(`registry_data skip (${id}): ${err.message}`);
+            ensureRegistryDimensionStub(bot);
         }
     };
+
+    client.prependListener('login', () => ensureRegistryDimensionStub(bot));
+    client.prependListener('respawn', () => ensureRegistryDimensionStub(bot));
 
     const PACK_ACCEPTED = 3;
     const PACK_LOADED = 0;
