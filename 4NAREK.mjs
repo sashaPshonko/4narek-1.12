@@ -1450,6 +1450,7 @@ async function safeBalance() {
         await antiAfkIfNeeded();
         await rnd('AH_CMD');
         config.menu = analysisAH;
+        logInfo('safeBalance → /balance');
         bot.chat(`/balance`);
         await rnd('POLL');
     }
