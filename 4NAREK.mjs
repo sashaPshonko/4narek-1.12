@@ -1,7 +1,7 @@
 import fs from 'fs'
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
-import { rnd } from './delay/delay.mjs';
+import { rnd, rndPoll } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -686,6 +686,13 @@ const SELL_LIST_ACK_TIMEOUT_MS = 300;
 
 /** Ожидание чата после /ah sell — ok | empty | full | timeout */
 let sellListAckResolve = null;
+
+function sellSlotIsEmpty(slotIndex) {
+    const item = bot?.inventory?.slots?.[slotIndex];
+    if (!item) return true;
+    const info = getSlotInfoSafe(item, slotIndex);
+    return !info || !!info.isTrash;
+}
 
 function waitSellListAck() {
     return new Promise((resolve) => {
@@ -1434,12 +1441,31 @@ async function sellItems() {
 
                 try {
                     const quick = hotbarSlotToQuick(currentSlot);
+                    const slotGone = () => sellSlotIsEmpty(currentSlot);
                     if (bot.quickBarSlot !== quick) {
-                        await rnd('HOTBAR_DELAY');
+                        if (!await rndPoll('HOTBAR_DELAY', 100, slotGone)) {
+                            logInfo(`sellItems slot=${currentSlot} → слот пуст до hotbar`);
+                            currentSlot++;
+                            continue;
+                        }
                         await bot.setQuickBarSlot(quick);
                     }
                     await antiAfkIfNeeded();
-                    await rnd('BASE_DELAY');
+                    if (slotGone()) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст после AFK`);
+                        currentSlot++;
+                        continue;
+                    }
+                    if (!await rndPoll('BASE_DELAY', 100, slotGone)) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст до sell`);
+                        currentSlot++;
+                        continue;
+                    }
+                    if (slotGone()) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст, sell пропущен`);
+                        currentSlot++;
+                        continue;
+                    }
                     const sellPrice = config.needPrice || info.sellPrice;
                     if (config.needPrice) config.needPrice = 0;
                     bot.chat(`/ah sell ${sellPrice}`);
