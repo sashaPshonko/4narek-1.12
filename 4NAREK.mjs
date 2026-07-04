@@ -681,6 +681,30 @@ function findClanDepositSourceSlot() {
 }
 
 const TRY_SELL_MARKER = 'выставлен на продажу за';
+const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
+const SELL_LIST_ACK_TIMEOUT_MS = 300;
+
+/** Ожидание чата после /ah sell — ok | empty | full | timeout */
+let sellListAckResolve = null;
+
+function waitSellListAck() {
+    return new Promise((resolve) => {
+        if (sellListAckResolve) sellListAckResolve('superseded');
+        sellListAckResolve = resolve;
+        setTimeout(() => {
+            if (sellListAckResolve !== resolve) return;
+            sellListAckResolve = null;
+            resolve('timeout');
+        }, SELL_LIST_ACK_TIMEOUT_MS);
+    });
+}
+
+function finishSellListAck(result) {
+    if (!sellListAckResolve) return;
+    const resolve = sellListAckResolve;
+    sellListAckResolve = null;
+    resolve(result);
+}
 
 /** Любые разделители (., запятые, $) — в строке остаются только цифры. */
 function digitsToInt(text) {
@@ -763,15 +787,23 @@ async function handleChatMessage(text) {
 
     if (text.includes(TRY_SELL_MARKER)) {
         const price = parseTrySellPrice(text);
-        if (!Number.isFinite(price)) return;
-        const id = getIdBySellPrice(price) || config.goType;
-        if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        if (Number.isFinite(price)) {
+            const id = getIdBySellPrice(price) || config.goType;
+            if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        }
+        finishSellListAck('ok');
+        return;
+    }
+
+    if (text.includes(SELL_EMPTY_MARKER)) {
+        finishSellListAck('empty');
         return;
     }
 
     if (text.includes('[☃] Не удалось выставить') ||
         text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
         config.enoughItems = true;
+        finishSellListAck('full');
         return;
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
@@ -791,7 +823,7 @@ async function handleChatMessage(text) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
         if (!info?.id || !info.sellPrice) {
-            reportError('maxPrice', 'нет предмета в руке или sellPrice');
+            finishSellListAck('skip');
             return;
         }
         const basePrice = Math.floor(balance / 10000) * 10000;
@@ -803,16 +835,21 @@ async function handleChatMessage(text) {
         const durabilityPercent = getDurabilityPercent(heldItem);
         if (durabilityPercent < 0.9) {
             logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — в оркестратор не шлём`);
+            finishSellListAck('skip');
             return;
         }
         parentPort.postMessage({ name: 'set_max_price', type: info.id, price: finalPrice });
+        finishSellListAck('retry');
         return;
     }
 
     if (text.includes('[☃] Минимальная цена')) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
-        if (!info?.id || !info.sellPrice) return;
+        if (!info?.id || !info.sellPrice) {
+            finishSellListAck('skip');
+            return;
+        }
 
         const basePrice = Math.ceil(balance / 10000) * 10000;
         const marker = info.sellPrice % 100;
@@ -820,10 +857,12 @@ async function handleChatMessage(text) {
         config.needPrice = finalPrice;
 
         if (text.includes('круш')) {
+            finishSellListAck('retry');
             return;
         }
 
         parentPort.postMessage({ name: 'set_min_price', type: info.id, price: finalPrice });
+        finishSellListAck('retry');
         return;
     }
 
@@ -1401,15 +1440,32 @@ async function sellItems() {
                     }
                     await antiAfkIfNeeded();
                     await rnd('BASE_DELAY');
-                    if (config.needPrice) {
-                        bot.chat(`/ah sell ${config.needPrice}`);
-                        config.needPrice = 0;
-                    } else {
-                        bot.chat(`/ah sell ${info.sellPrice}`);
+                    const sellPrice = config.needPrice || info.sellPrice;
+                    if (config.needPrice) config.needPrice = 0;
+                    bot.chat(`/ah sell ${sellPrice}`);
+                    let ack = await waitSellListAck();
+                    if (ack === 'timeout') {
+                        if (config.needPrice) ack = 'retry';
+                        else if (config.enoughItems) ack = 'full';
                     }
-                    await rnd('POLL');
+                    if (ack === 'retry') {
+                        logInfo(`sellItems slot=${currentSlot} → min/max цена, повтор`);
+                        continue;
+                    }
+                    if (ack === 'ok') {
+                        logOk(`sellItems slot=${currentSlot} → выставлен`);
+                        await rnd('SELL_ACK');
+                    } else if (ack === 'empty' || ack === 'skip') {
+                        logInfo(`sellItems slot=${currentSlot} → ${ack === 'empty' ? 'пусто (Воздух)' : 'пропуск'}`);
+                    } else if (ack === 'full') {
+                        logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито`);
+                    } else {
+                        logInfo(`sellItems slot=${currentSlot} → ack ${ack}`);
+                    }
+                    currentSlot++;
                 } catch (err) {
                     reportError(`sellItems ah sell slot=${currentSlot}`, err);
+                    finishSellListAck('error');
                     currentSlot++;
                 }
             }
