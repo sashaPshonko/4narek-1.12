@@ -41,6 +41,41 @@ function isIgnorableProtocolNoise(err) {
     return false;
 }
 
+/** Play-пакеты, которые нельзя слать в configuration phase (transfer /anXXX). */
+const CONFIG_BLOCKED_PACKETS = new Set([
+    'position', 'look', 'position_look', 'flying',
+    'chat', 'chat_command', 'chat_command_signed', 'chat_message',
+    'window_click', 'close_window',
+    'arm_animation', 'entity_action',
+    'held_item_slot', 'set_creative_slot',
+]);
+
+/** Funtime/Bungee transfer: не слать gameplay-пакеты + принять resource pack (ACCEPTED + LOADED). */
+function setupConfigurationTransferFix(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    const origWrite = client.write.bind(client);
+    client.write = (name, params) => {
+        if (client.state === 'configuration' && CONFIG_BLOCKED_PACKETS.has(name)) {
+            return;
+        }
+        return origWrite(name, params);
+    };
+
+    client.on('start_configuration', () => {
+        logInfo('transfer → configuration phase');
+    });
+
+    client.on('finish_configuration', () => {
+        logOk('transfer → configuration завершён');
+    });
+
+    bot.on('resourcePack', () => {
+        bot.acceptResourcePack();
+    });
+}
+
 
 const STORAGE_AH_SLOTS = 5;
 const CLAN_STORAGE_TARGET = 10;
@@ -618,6 +653,7 @@ async function main() {
         port: 25565,
         version: '1.21.4',
         physicsEnabled: false,
+        checkTimeoutInterval: 60_000,
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
@@ -644,6 +680,8 @@ async function main() {
         },
     });
 
+    setupConfigurationTransferFix(bot);
+
     // .
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
@@ -659,12 +697,6 @@ async function main() {
             return;
         }
         await handleChatMessage(text);
-    });
-
-    bot.on('resourcePack', (_url, hash) => {
-        if (bot._client) {
-            bot._client.write('resource_pack_receive', { uuid: hash.ascii, result: 0 });
-        }
     });
 
     bot.on('kicked', (reason) => {
