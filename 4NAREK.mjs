@@ -108,77 +108,31 @@ function formatWindowTitle(win) {
     return String(raw);
 }
 
-function titleToDebugLines(title) {
-    if (title == null) return ['title: null'];
-    const lines = [];
-    if (typeof title === 'string') {
-        lines.push(`title.str: ${title.slice(0, 600)}`);
-        try {
-            lines.push(`title.json: ${JSON.stringify(JSON.parse(title))}`);
-        } catch { /* plain string */ }
-        return lines;
-    }
-    if (typeof title.toJSON === 'function') {
-        try {
-            lines.push(`title.toJSON: ${JSON.stringify(title.toJSON())}`);
-        } catch (err) {
-            lines.push(`title.toJSON err: ${err.message}`);
-        }
-    }
-    if (typeof title.toString === 'function') {
-        lines.push(`title.toString: «${title.toString()}»`);
-    }
+function jsonFull(value) {
     try {
-        const flat = flattenChatFallback(title);
-        if (flat) lines.push(`title.flatten: «${flat}»`);
-    } catch { /* ignore */ }
-    try {
-        if (title.translate) lines.push(`title.translate: ${title.translate}`);
-    } catch { /* ignore */ }
-    return lines.length ? lines : [`title.type: ${typeof title}`];
+        return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
+    } catch (err) {
+        return `[json err: ${err.message}] ${String(value)}`;
+    }
 }
 
 function logWindowDebug(win) {
     if (!win) return;
-    logInfo(
-        `окно meta: type=${win.type ?? '?'} id=${win.id ?? '?'} slots=${win.slots?.length ?? '?'}`,
-    );
-    for (const line of titleToDebugLines(win.title)) {
-        logInfo(`окно ${line}`);
-    }
-    const items = [];
-    for (let i = 0; i < Math.min(54, win.slots?.length ?? 0); i++) {
-        const s = win.slots[i];
-        if (!s) continue;
-        let part = `${i}:${s.name ?? '?'}`;
-        if (s.count > 1) part += `×${s.count}`;
-        if (s.customName) {
-            part += ` cn=${typeof s.customName === 'object' ? flattenChatFallback(s.customName) : s.customName}`;
+    logInfo(`окно FULL title: ${jsonFull(win.title)}`);
+    if (win.title && typeof win.title.toJSON === 'function') {
+        try {
+            logInfo(`окно FULL title.toJSON: ${jsonFull(win.title.toJSON())}`);
+        } catch (err) {
+            logInfo(`окно FULL title.toJSON err: ${err.message}`);
         }
-        if (s.displayName?.toString) {
-            const dn = s.displayName.toString();
-            if (dn && dn !== s.name) part += ` dn=«${dn}»`;
-        }
-        items.push(part);
-        if (items.length >= 10) break;
     }
-    if (items.length) logInfo(`окно items: ${items.join(' | ')}`);
+    const { slots, ...meta } = win;
+    logInfo(`окно FULL window: ${jsonFull({ ...meta, slotsCount: slots?.length ?? 0 })}`);
 }
 
 function setupWindowDebugLog(bot) {
     bot._client.prependListener('open_window', (packet) => {
-        const raw = packet.windowTitle ?? packet.title;
-        let rawStr;
-        try {
-            rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
-        } catch {
-            rawStr = String(raw);
-        }
-        logInfo(`open_window raw: ${rawStr.slice(0, 700)}`);
-        logInfo(
-            `open_window pkt: type=${packet.inventoryType ?? packet.containerId ?? '?'} ` +
-            `slots=${packet.slotCount ?? '?'}`,
-        );
+        logInfo(`open_window FULL packet: ${jsonFull(packet)}`);
     });
 }
 
