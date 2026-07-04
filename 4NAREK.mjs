@@ -5,6 +5,9 @@ import { rnd } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
+import prismarineChat from 'prismarine-chat';
+
+const ChatMessage = prismarineChat('1.21.4');
 
 import {
     getSlotInfo,
@@ -46,19 +49,40 @@ function isIgnorableProtocolNoise(err) {
     return false;
 }
 
-function chatTextFromRaw(data) {
-    if (data?.plainMessage) return String(data.plainMessage);
-    const raw = data?.formattedMessage ?? data?.content;
+function flattenChatFallback(raw) {
+    if (raw == null) return '';
     if (typeof raw === 'string') {
         try {
-            const j = JSON.parse(raw);
-            return j.text ?? raw;
+            return flattenChatFallback(JSON.parse(raw));
         } catch {
             return raw;
         }
     }
-    if (raw && typeof raw === 'object' && raw.text) return String(raw.text);
-    return '';
+    if (typeof raw !== 'object') return String(raw);
+    let out = raw.text ?? '';
+    if (Array.isArray(raw.extra)) {
+        for (const part of raw.extra) out += flattenChatFallback(part);
+    }
+    if (raw.translate && Array.isArray(raw.with)) {
+        for (const part of raw.with) out += flattenChatFallback(part);
+    }
+    return out;
+}
+
+function chatTextFromFormatted(raw) {
+    if (raw == null || raw === '') return '';
+    try {
+        return ChatMessage.fromNotch(raw).toString();
+    } catch {
+        return flattenChatFallback(raw);
+    }
+}
+
+function chatTextFromRaw(data) {
+    if (data?.plainMessage) return String(data.plainMessage);
+    return chatTextFromFormatted(
+        data?.formattedMessage ?? data?.content ?? data?.unsignedContent,
+    );
 }
 
 /** Funtime: chat_type в registry битый — не используем ChatMessage.fromNetwork. */
@@ -781,7 +805,6 @@ async function main() {
         physicsEnabled: false,
         hideErrors: true,
         logErrors: false,
-        checkTimeoutInterval: 60_000,
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
