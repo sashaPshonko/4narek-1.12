@@ -73,9 +73,7 @@ function setupConfigurationTransferFix(bot) {
     bot.registry.loadDimensionCodec = (codec) => {
         try {
             origLoadDimensionCodec(codec);
-        } catch (err) {
-            const id = codec?.id ?? '?';
-            logWarn(`registry_data skip (${id}): ${err.message}`);
+        } catch {
             ensureRegistryDimensionStub(bot);
         }
     };
@@ -101,12 +99,14 @@ function setupConfigurationTransferFix(bot) {
     client.on('start_configuration', () => {
         configTransferStartedAt = Date.now();
         blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = false;
         logInfo('transfer → configuration phase (жду finish_configuration)');
     });
 
     client.on('finish_configuration', () => {
         configTransferStartedAt = 0;
         blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = true;
         logOk('transfer → configuration завершён');
     });
 
@@ -761,6 +761,10 @@ async function main() {
 
     setupConfigurationTransferFix(bot);
 
+    bot.on('spawn', () => {
+        bot.physicsEnabled = true;
+    });
+
     // .
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
@@ -1038,6 +1042,7 @@ async function joinAnarchy() {
             }
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
+            bot.physicsEnabled = false;
             bot.chat(`/an${config.anarchy}`);
             await rnd('ANARCHY_DELAY');
         }
@@ -1278,6 +1283,7 @@ function hasBotItem() {
 async function lookAroundSpin() {
     if (!bot?.entity) return;
 
+    bot.physicsEnabled = true;
     const startedAt = Date.now();
     const startPitch = bot.entity.pitch;
     const maxPitch = (Math.PI / 2) * 0.22;
