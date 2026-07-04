@@ -116,23 +116,36 @@ function jsonFull(value) {
     }
 }
 
+function serializeWindowNoSlots(win) {
+    if (!win) return null;
+    let title = win.title;
+    if (title && typeof title.toJSON === 'function') {
+        try {
+            title = title.toJSON();
+        } catch { /* raw title */ }
+    }
+    return {
+        id: win.id,
+        type: win.type,
+        title,
+        slotsCount: win.slots?.length ?? 0,
+        inventoryStart: win.inventoryStart,
+        inventoryEnd: win.inventoryEnd,
+        hotbarStart: win.hotbarStart,
+        craftingResultSlot: win.craftingResultSlot,
+        requiresConfirmation: win.requiresConfirmation,
+        selectedItem: win.selectedItem,
+    };
+}
+
 function logWindowDebug(win) {
     if (!win) return;
-    logInfo(`окно FULL title: ${jsonFull(win.title)}`);
-    if (win.title && typeof win.title.toJSON === 'function') {
-        try {
-            logInfo(`окно FULL title.toJSON: ${jsonFull(win.title.toJSON())}`);
-        } catch (err) {
-            logInfo(`окно FULL title.toJSON err: ${err.message}`);
-        }
-    }
-    const { slots, ...meta } = win;
-    logInfo(`окно FULL window: ${jsonFull({ ...meta, slotsCount: slots?.length ?? 0 })}`);
+    logInfo(`окно FULL (no slots): ${jsonFull(serializeWindowNoSlots(win))}`);
 }
 
 function setupWindowDebugLog(bot) {
     bot._client.prependListener('open_window', (packet) => {
-        logInfo(`open_window FULL packet: ${jsonFull(packet)}`);
+        logInfo(`open_window FULL (no slots): ${jsonFull(packet)}`);
     });
 }
 
