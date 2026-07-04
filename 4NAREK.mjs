@@ -40,7 +40,47 @@ function isIgnorableProtocolNoise(err) {
     if (stack.includes('packet_world_particles')) return true;
     if (stack.includes('loadDimensionCodec') || stack.includes('prismarine-nbt/nbt.js')) return true;
     if (stack.includes('handleRespawnPacketData')) return true;
+    if (stack.includes('prismarine-chat') || stack.includes('ChatMessage.fromNetwork')) return true;
+    if (msg.includes('Cannot convert undefined or null to object')) return true;
+    if (msg.includes('uncompressed length') || msg.includes('problem inflating chunk')) return true;
     return false;
+}
+
+function chatTextFromRaw(data) {
+    if (data?.plainMessage) return String(data.plainMessage);
+    const raw = data?.formattedMessage ?? data?.content;
+    if (typeof raw === 'string') {
+        try {
+            const j = JSON.parse(raw);
+            return j.text ?? raw;
+        } catch {
+            return raw;
+        }
+    }
+    if (raw && typeof raw === 'object' && raw.text) return String(raw.text);
+    return '';
+}
+
+/** Funtime: chat_type в registry битый — mineflayer падает на fromNetwork. */
+function setupChatSafeGuard(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    for (const event of ['playerChat', 'systemChat']) {
+        const listeners = client.listeners(event);
+        if (!listeners.length) continue;
+        client.removeAllListeners(event);
+        for (const fn of listeners) {
+            client.on(event, (data) => {
+                try {
+                    fn(data);
+                } catch {
+                    const text = chatTextFromRaw(data);
+                    if (text) bot.emit('messagestr', text, 'system', null);
+                }
+            });
+        }
+    }
 }
 
 /** Funtime: registry_data кривой — без dimensionsArray падает login/respawn. */
@@ -560,6 +600,16 @@ function getHeldItemInfo() {
     return getSlotInfoSafe(bot.inventory.slots[slot], slot);
 }
 
+async function onBotChatText(text) {
+    logChat(text);
+    if (text.includes('[⚝] Телепортация!')) {
+        config.lastWarpTime = Date.now();
+        logInfo('телепортация варпа');
+        return;
+    }
+    await handleChatMessage(text);
+}
+
 async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
@@ -760,6 +810,7 @@ async function main() {
     });
 
     setupConfigurationTransferFix(bot);
+    setupChatSafeGuard(bot);
 
     bot.on('spawn', () => {
         bot.physicsEnabled = true;
@@ -771,15 +822,8 @@ async function main() {
             markAnarchyJoined();
         }
     });
-    bot.on('message', async (message) => {
-        const text = message.toString();
-        logChat(text);
-        if (text.includes('[⚝] Телепортация!')) {
-            config.lastWarpTime = Date.now();
-            logInfo('телепортация варпа');
-            return;
-        }
-        await handleChatMessage(text);
+    bot.on('messagestr', async (text) => {
+        await onBotChatText(text);
     });
 
     bot.on('kicked', (reason) => {
