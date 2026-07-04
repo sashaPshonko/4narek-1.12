@@ -61,26 +61,23 @@ function chatTextFromRaw(data) {
     return '';
 }
 
-/** Funtime: chat_type в registry битый — mineflayer падает на fromNetwork. */
+/** Funtime: chat_type в registry битый — не используем ChatMessage.fromNetwork. */
 function setupChatSafeGuard(bot) {
     const client = bot._client;
     if (!client) return;
 
-    for (const event of ['playerChat', 'systemChat']) {
-        const listeners = client.listeners(event);
-        if (!listeners.length) continue;
-        client.removeAllListeners(event);
-        for (const fn of listeners) {
-            client.on(event, (data) => {
-                try {
-                    fn(data);
-                } catch {
-                    const text = chatTextFromRaw(data);
-                    if (text) bot.emit('messagestr', text, 'system', null);
-                }
-            });
-        }
-    }
+    client.removeAllListeners('playerChat');
+    client.removeAllListeners('systemChat');
+
+    client.on('playerChat', (data) => {
+        const text = chatTextFromRaw(data);
+        if (text) bot.emit('messagestr', text, 'chat', null);
+    });
+
+    client.on('systemChat', (data) => {
+        const text = chatTextFromRaw(data);
+        if (text) bot.emit('messagestr', text, 'system', null);
+    });
 }
 
 /** Funtime: registry_data кривой — без dimensionsArray падает login/respawn. */
@@ -782,6 +779,8 @@ async function main() {
         port: 25565,
         version: '1.21.4',
         physicsEnabled: false,
+        hideErrors: true,
+        logErrors: false,
         checkTimeoutInterval: 60_000,
         agent: agent,
         connect: (client) => {
@@ -810,7 +809,10 @@ async function main() {
     });
 
     setupConfigurationTransferFix(bot);
-    setupChatSafeGuard(bot);
+
+    bot.once('inject_allowed', () => {
+        setupChatSafeGuard(bot);
+    });
 
     bot.on('spawn', () => {
         bot.physicsEnabled = true;
