@@ -1499,9 +1499,19 @@ async function sellItems() {
     }
 
     const shouldOpenClanStorage =
-        config.role !== 'seller' || !config.enoughItems;
+        config.role === 'seller'
+            ? !config.enoughItems
+            : config.role === 'buyer'
+              ? hasBotItem()
+              : true;
     if (!shouldOpenClanStorage) {
-        logInfo('sellItems → clan storage пропуск (seller, enoughItems)');
+        const skipReason =
+            config.role === 'seller'
+                ? 'seller, enoughItems'
+                : config.role === 'buyer'
+                  ? 'buyer, нет предметов'
+                  : 'пропуск';
+        logInfo(`sellItems → clan storage пропуск (${skipReason})`);
         await safeAH();
         return;
     }
