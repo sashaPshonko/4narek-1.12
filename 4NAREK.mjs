@@ -377,7 +377,6 @@ let itemsBuying = [];
  * @type {{ slot: number, startedAt: number, totalDelay: number, rechecked: boolean } | null}
  */
 let ahBuySession = null;
-let sellItemsRunning = false;
 
 function claimAhLotUuid(uuid) {
     if (!uuid) return;
