@@ -663,10 +663,15 @@ async function handleChatMessage(text) {
         return;
     }
 
-    if (text.includes('[☃] Не удалось выставить') ||
-        text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+    if (text.includes('[☃] Не удалось выставить')) {
         config.enoughItems = true;
         finishSellListAck('full');
+        return;
+    }
+
+    if (text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
+        config.enoughItems = false;
+        config.needSell = true;
         return;
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
