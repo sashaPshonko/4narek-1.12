@@ -1,10 +1,13 @@
 import fs from 'fs'
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
-import { rnd } from './delay/delay.mjs';
+import { rnd, rndPoll } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
+import prismarineChat from 'prismarine-chat';
+
+const ChatMessage = prismarineChat('1.21.4');
 
 import {
     getSlotInfo,
@@ -18,15 +21,238 @@ import {
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
 
-process.on('uncaughtException', err => {
+process.on('uncaughtException', (err) => {
+    if (isIgnorableProtocolNoise(err)) return;
     console.error('UNCAUGHT EXCEPTION');
     console.error(err);
 });
 
-process.on('unhandledRejection', err => {
+process.on('unhandledRejection', (err) => {
+    if (isIgnorableProtocolNoise(err)) return;
     console.error('UNHANDLED REJECTION');
     console.error(err);
 });
+
+function isIgnorableProtocolNoise(err) {
+    if (!err) return false;
+    const name = err.name ?? '';
+    const stack = String(err.stack ?? '');
+    const msg = String(err.message ?? err);
+    if (name === 'PartialReadError' || msg.includes('PartialReadError')) return true;
+    if (stack.includes('packet_world_particles')) return true;
+    if (stack.includes('loadDimensionCodec') || stack.includes('prismarine-nbt/nbt.js')) return true;
+    if (stack.includes('handleRespawnPacketData')) return true;
+    if (stack.includes('prismarine-chat') || stack.includes('ChatMessage.fromNetwork')) return true;
+    if (msg.includes('Cannot convert undefined or null to object')) return true;
+    if (msg.includes('uncompressed length') || msg.includes('problem inflating chunk')) return true;
+    if (msg.includes('client timed out')) return true;
+    if (msg.includes("reading 'translate'")) return true;
+    return false;
+}
+
+function flattenChatFallback(raw) {
+    if (raw == null) return '';
+    if (typeof raw === 'string') {
+        try {
+            return flattenChatFallback(JSON.parse(raw));
+        } catch {
+            return raw;
+        }
+    }
+    if (typeof raw !== 'object') return String(raw);
+    let out = raw.text ?? '';
+    if (Array.isArray(raw.extra)) {
+        for (const part of raw.extra) out += flattenChatFallback(part);
+    }
+    if (raw.translate && Array.isArray(raw.with)) {
+        for (const part of raw.with) out += flattenChatFallback(part);
+    }
+    return out;
+}
+
+function chatTextFromFormatted(raw) {
+    if (raw == null || raw === '') return '';
+    try {
+        return ChatMessage.fromNotch(raw).toString();
+    } catch {
+        return flattenChatFallback(raw);
+    }
+}
+
+function chatTextFromRaw(data) {
+    if (data?.plainMessage) return String(data.plainMessage);
+    return chatTextFromFormatted(
+        data?.formattedMessage ?? data?.content ?? data?.unsignedContent,
+    );
+}
+
+/** Funtime: title в NBT, тип окна в поле font (minecraft:rtp, …). */
+function nbtLeafString(node) {
+    if (node == null) return null;
+    if (typeof node === 'string') return node;
+    if (node.type === 'string' && node.value != null) return String(node.value);
+    if (typeof node.value === 'string') return node.value;
+    return null;
+}
+
+function getWindowTitleFont(title) {
+    if (title == null) return null;
+    let raw = title;
+    if (typeof title.toJSON === 'function') {
+        try {
+            raw = title.toJSON();
+        } catch { /* raw title */ }
+    }
+    if (raw?.type === 'compound' && raw.value) {
+        raw = raw.value;
+    }
+    const fontNode = raw?.font;
+    if (fontNode == null) return null;
+    return nbtLeafString(fontNode);
+}
+
+function resolveWindowMenu(win) {
+    const font = getWindowTitleFont(win?.title);
+    if (font?.includes('rtp')) return rtp;
+
+    const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
+    const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
+
+    if (windowJSON.includes('хранилище')) return myItems;
+    if (windowJSON.includes('телепорт') || windowJSON.includes('телепортации')) return rtp;
+    if (windowJSON.includes('подозрительная цена') ||
+        windowJSON.includes('подтверждение покупки')) {
+        return accept;
+    }
+    return analysisAH;
+}
+
+function setupChatSafeGuard(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    client.removeAllListeners('playerChat');
+    client.removeAllListeners('systemChat');
+
+    client.on('playerChat', (data) => {
+        const text = chatTextFromRaw(data);
+        if (text) void onBotChatText(text);
+    });
+
+    client.on('systemChat', (data) => {
+        const text = chatTextFromRaw(data);
+        if (text) void onBotChatText(text);
+    });
+}
+
+function ensureRegistryDimensionStub(bot) {
+    if (Array.isArray(bot.registry.dimensionsArray) && bot.registry.dimensionsArray.length > 0) {
+        return;
+    }
+    const fallback = { name: 'minecraft:overworld', minY: -64, height: 384 };
+    bot.registry.dimensionsArray = Array.from({ length: 16 }, () => fallback);
+    bot.registry.dimensionsByName ??= { overworld: fallback };
+}
+
+const CONFIG_BLOCKED_PACKETS = new Set([
+    'position', 'look', 'position_look', 'flying',
+    'chat', 'chat_command', 'chat_command_signed', 'chat_message',
+    'window_click', 'close_window',
+    'arm_animation', 'entity_action',
+    'held_item_slot', 'set_creative_slot',
+]);
+
+let configTransferStartedAt = 0;
+
+function setupConfigurationTransferFix(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    const origLoadDimensionCodec = bot.registry.loadDimensionCodec.bind(bot.registry);
+    bot.registry.loadDimensionCodec = (codec) => {
+        try {
+            origLoadDimensionCodec(codec);
+        } catch {
+            ensureRegistryDimensionStub(bot);
+        }
+    };
+
+    client.prependListener('login', () => ensureRegistryDimensionStub(bot));
+    client.prependListener('respawn', () => ensureRegistryDimensionStub(bot));
+
+    const PACK_ACCEPTED = 3;
+    const PACK_LOADED = 0;
+    let blockSelectKnownPacksWrite = false;
+
+    const origWrite = client.write.bind(client);
+    client.write = (name, params) => {
+        if (client.state === 'configuration' && CONFIG_BLOCKED_PACKETS.has(name)) {
+            return;
+        }
+        if (blockSelectKnownPacksWrite && name === 'select_known_packs') {
+            return;
+        }
+        return origWrite(name, params);
+    };
+
+    client.on('start_configuration', () => {
+        configTransferStartedAt = Date.now();
+        blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = false;
+        logInfo('transfer → configuration phase (жду finish_configuration)');
+    });
+
+    client.on('finish_configuration', () => {
+        configTransferStartedAt = 0;
+        blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = true;
+        logOk('transfer → configuration завершён');
+    });
+
+    client.on('cookie_request', (data) => {
+        if (client.state !== 'configuration') return;
+        logInfo(`config → cookie_request: ${data.cookie}`);
+        origWrite('cookie_response', { key: data.cookie });
+    });
+
+    client.prependListener('add_resource_pack', (data) => {
+        if (client.state !== 'configuration') return;
+        logInfo('config → add_resource_pack, принимаю');
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_ACCEPTED });
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_LOADED });
+    });
+
+    client.prependListener('select_known_packs', (data) => {
+        if (client.state !== 'configuration') return;
+        const packs = (data.packs ?? []).map((p) => ({
+            namespace: p.namespace,
+            id: p.id,
+            version: p.version,
+        }));
+        logInfo(`config → select_known_packs (${packs.length})`);
+        origWrite('select_known_packs', { packs });
+        blockSelectKnownPacksWrite = true;
+    });
+
+    client.on('disconnect', (data) => {
+        if (client.state !== 'configuration') return;
+        logWarn(`config → disconnect: ${JSON.stringify(data.reason ?? data)}`);
+    });
+
+    bot.on('resourcePack', () => {
+        if (client.state === 'configuration') return;
+        bot.acceptResourcePack();
+    });
+}
+
+function isInConfigurationTransfer() {
+    return bot?._client?.state === 'configuration';
+}
+
+function configurationTransferAgeMs() {
+    if (!configTransferStartedAt) return 0;
+    return Date.now() - configTransferStartedAt;
+}
 
 
 const STORAGE_AH_SLOTS = 5;
@@ -233,7 +459,7 @@ function sleep(ms) {
 }
 
 async function safeClickBuy(bot, slot, time, key) {
-    let timeDelay = time;xa
+    let timeDelay = time;
     if (config.botUpdateWindow) {
         config.botUpdateWindow = false;
         config.botStartClickTime = Date.now();
@@ -313,6 +539,36 @@ function findStorageSlotToUnlist() {
 }
 
 const TRY_SELL_MARKER = 'выставлен на продажу за';
+const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
+const SELL_LIST_ACK_TIMEOUT_MS = 300;
+
+let sellListAckResolve = null;
+
+function sellSlotIsEmpty(slotIndex) {
+    const item = bot?.inventory?.slots?.[slotIndex];
+    if (!item) return true;
+    const info = getSlotInfoSafe(item, slotIndex);
+    return !info || !!info.isTrash;
+}
+
+function waitSellListAck() {
+    return new Promise((resolve) => {
+        if (sellListAckResolve) sellListAckResolve('superseded');
+        sellListAckResolve = resolve;
+        setTimeout(() => {
+            if (sellListAckResolve !== resolve) return;
+            sellListAckResolve = null;
+            resolve('timeout');
+        }, SELL_LIST_ACK_TIMEOUT_MS);
+    });
+}
+
+function finishSellListAck(result) {
+    if (!sellListAckResolve) return;
+    const resolve = sellListAckResolve;
+    sellListAckResolve = null;
+    resolve(result);
+}
 
 /** Любые разделители (., запятые, $) — в строке остаются только цифры. */
 function digitsToInt(text) {
@@ -363,6 +619,16 @@ function getHeldItemInfo() {
     return getSlotInfoSafe(bot.inventory.slots[slot], slot);
 }
 
+async function onBotChatText(text) {
+    logChat(text);
+    if (text.includes('[⚝] Телепортация!')) {
+        config.lastWarpTime = Date.now();
+        logInfo('телепортация варпа');
+        return;
+    }
+    await handleChatMessage(text);
+}
+
 async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
@@ -388,12 +654,19 @@ async function handleChatMessage(text) {
         if (!Number.isFinite(price)) return;
         const id = getIdBySellPrice(price) || config.goType;
         if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        finishSellListAck('ok');
+        return;
+    }
+
+    if (text.includes(SELL_EMPTY_MARKER)) {
+        finishSellListAck('empty');
         return;
     }
 
     if (text.includes('[☃] Не удалось выставить') ||
         text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
         config.enoughItems = true;
+        finishSellListAck('full');
         return;
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
@@ -411,7 +684,7 @@ async function handleChatMessage(text) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
         if (!info?.id || !info.sellPrice) {
-            reportError('maxPrice', 'нет предмета в руке или sellPrice');
+            finishSellListAck('skip');
             return;
         }
         const basePrice = Math.floor(balance / 10000) * 10000;
@@ -423,16 +696,21 @@ async function handleChatMessage(text) {
         const durabilityPercent = getDurabilityPercent(heldItem);
         if (durabilityPercent < 0.9) {
             logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — в оркестратор не шлём`);
+            finishSellListAck('skip');
             return;
         }
         parentPort.postMessage({ name: 'set_max_price', type: info.id, price: finalPrice });
+        finishSellListAck('retry');
         return;
     }
 
     if (text.includes('[☃] Минимальная цена')) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
-        if (!info?.id || !info.sellPrice) return;
+        if (!info?.id || !info.sellPrice) {
+            finishSellListAck('skip');
+            return;
+        }
 
         const basePrice = Math.ceil(balance / 10000) * 10000;
         const marker = info.sellPrice % 100;
@@ -440,10 +718,12 @@ async function handleChatMessage(text) {
         config.needPrice = finalPrice;
 
         if (text.includes('круш')) {
+            finishSellListAck('retry');
             return;
         }
 
         parentPort.postMessage({ name: 'set_min_price', type: info.id, price: finalPrice });
+        finishSellListAck('retry');
         return;
     }
 
@@ -535,6 +815,9 @@ async function main() {
         host: 'mc.funtime.su',
         port: 25565,
         version: '1.21.4',
+        physicsEnabled: false,
+        hideErrors: true,
+        logErrors: false,
         agent: agent,
         connect: (client) => {
             SocksClient.createConnection({
@@ -561,26 +844,16 @@ async function main() {
         },
     });
 
+    setupConfigurationTransferFix(bot);
+
+    bot.once('inject_allowed', () => {
+        setupChatSafeGuard(bot);
+    });
+
     // .
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
-        }
-    });
-    bot.on('message', async (message) => {
-        const text = message.toString();
-        logChat(text);
-        if (text.includes('[⚝] Телепортация!')) {
-            config.lastWarpTime = Date.now();
-            logInfo('телепортация варпа');
-            return;
-        }
-        await handleChatMessage(text);
-    });
-
-    bot.on('resourcePack', (_url, hash) => {
-        if (bot._client) {
-            bot._client.write('resource_pack_receive', { uuid: hash.ascii, result: 0 });
         }
     });
 
@@ -593,11 +866,19 @@ async function main() {
         process.exit(1);
     });
     bot.on('error', (err) => {
+        if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
         process.exit(1);
     });
 
+    bot._client?.on('error', (err) => {
+        if (isIgnorableProtocolNoise(err)) return;
+        console.error(`${logTag()} ${ANSI.red}⛔ client error${ANSI.reset}: ${err}`);
+        process.exit(1);
+    });
+
     bot.once('spawn', async () => {
+        bot.physicsEnabled = true;
         botWorkerStartTime = Date.now();
         logOk('spawn → /l → sellItems → safeAH');
         await rnd('BASE_DELAY');
@@ -623,19 +904,7 @@ async function main() {
         // }
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
-        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
-        const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
-
-        if (windowJSON.includes('хранилище')) {
-            config.menu = myItems;
-        } else if (windowJSON.includes('телепортации')) {
-            config.menu = rtp;
-        } else if (windowJSON.includes('подозрительная цена') ||
-            windowJSON.includes('подтверждение покупки')) {
-            config.menu = accept;
-        } else {
-            config.menu = analysisAH;
-        }
+        config.menu = resolveWindowMenu(bot.currentWindow);
         logInfo(`окно: ${config.menu}`);
 
         switch (config.menu) {
@@ -784,8 +1053,19 @@ main();
 async function joinAnarchy() {
     if (!config.timeJoinAnarchy) {
         while (!config.timeJoinAnarchy) {
+            if (isInConfigurationTransfer()) {
+                const ageSec = Math.ceil(configurationTransferAgeMs() / 1000);
+                logInfo(`transfer → в configuration ${ageSec}с, жду…`);
+                if (configurationTransferAgeMs() > 45_000) {
+                    logWarn('transfer → configuration timeout 45с');
+                    process.exit(1);
+                }
+                await rnd('ANARCHY_DELAY');
+                continue;
+            }
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
+            bot.physicsEnabled = false;
             bot.chat(`/an${config.anarchy}`);
             await rnd('ANARCHY_DELAY');
         }
@@ -900,21 +1180,56 @@ async function sellItems() {
 
                 try {
                     const quick = hotbarSlotToQuick(currentSlot);
+                    const slotGone = () => sellSlotIsEmpty(currentSlot);
                     if (bot.quickBarSlot !== quick) {
-                        await rnd('HOTBAR_DELAY');
+                        if (!await rndPoll('HOTBAR_DELAY', 100, slotGone)) {
+                            logInfo(`sellItems slot=${currentSlot} → слот пуст до hotbar`);
+                            currentSlot++;
+                            continue;
+                        }
                         await bot.setQuickBarSlot(quick);
                     }
                     await antiAfkIfNeeded();
-                    await rnd('BASE_DELAY');
-                    if (config.needPrice) {
-                        bot.chat(`/ah sell ${config.needPrice}`);
-                        config.needPrice = 0;
-                    } else {
-                        bot.chat(`/ah sell ${info.sellPrice}`);
+                    if (slotGone()) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст после AFK`);
+                        currentSlot++;
+                        continue;
                     }
-                    await rnd('POLL');
+                    if (!await rndPoll('BASE_DELAY', 100, slotGone)) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст до sell`);
+                        currentSlot++;
+                        continue;
+                    }
+                    if (slotGone()) {
+                        logInfo(`sellItems slot=${currentSlot} → слот пуст, sell пропущен`);
+                        currentSlot++;
+                        continue;
+                    }
+                    const sellPrice = config.needPrice || info.sellPrice;
+                    if (config.needPrice) config.needPrice = 0;
+                    bot.chat(`/ah sell ${sellPrice}`);
+                    let ack = await waitSellListAck();
+                    if (ack === 'timeout') {
+                        if (config.needPrice) ack = 'retry';
+                        else if (config.enoughItems) ack = 'full';
+                    }
+                    if (ack === 'retry') {
+                        logInfo(`sellItems slot=${currentSlot} → min/max цена, повтор`);
+                        continue;
+                    }
+                    if (ack === 'ok') {
+                        logOk(`sellItems slot=${currentSlot} → выставлен`);
+                    } else if (ack === 'empty' || ack === 'skip') {
+                        logInfo(`sellItems slot=${currentSlot} → ${ack === 'empty' ? 'пусто (Воздух)' : 'пропуск'}`);
+                    } else if (ack === 'full') {
+                        logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито`);
+                    } else {
+                        logInfo(`sellItems slot=${currentSlot} → ack ${ack}`);
+                    }
+                    currentSlot++;
                 } catch (err) {
                     reportError(`sellItems ah sell slot=${currentSlot}`, err);
+                    finishSellListAck('error');
                     currentSlot++;
                 }
             }
