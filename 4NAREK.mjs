@@ -486,6 +486,9 @@ function generateKey() {
     return config.key;
 }
 
+/** Один windowOpen за раз */
+let windowOpenQueue = Promise.resolve();
+
 let safeAHRunning = false;
 let safeAHPending = false;
 
@@ -531,19 +534,33 @@ async function safeClickBuy(bot, slot, time, key) {
         if (timeDelay <= 0) timeDelay = 0;
     }
 
-    await sleep(timeDelay);
+    let remaining = timeDelay;
+    while (remaining > 0) {
+        if (config.key !== key) {
+            logWarn(`клик слот ${slot} отменён (новое окно)`);
+            return;
+        }
+        if (!bot.currentWindow) {
+            logWarn(`клик слот ${slot} отменён (окно закрылось)`);
+            return;
+        }
+        const chunk = Math.min(100, remaining);
+        await sleep(chunk);
+        remaining -= chunk;
+    }
+
     if (config.key !== key) {
         logWarn(`клик слот ${slot} отменён (новое окно)`);
         return;
     }
+    if (!bot.currentWindow) {
+        logWarn(`клик слот ${slot} отменён (окно закрылось)`);
+        return;
+    }
 
     config.botUpdateWindow = true;
-    if (bot.currentWindow) {
-        logInfo(`клик слот ${slot}`);
-        await bot.clickWindow(slot, leftMouseButton, shiftClick);
-    } else {
-        logWarn(`клик слот ${slot} — окна нет`);
-    }
+    logInfo(`клик слот ${slot}`);
+    await bot.clickWindow(slot, leftMouseButton, shiftClick);
 }
 
 function getSlotInfoSafe(item, slotIndex) {
@@ -1018,12 +1035,9 @@ async function main() {
         }
     }, 10_000);
 
-    bot.on('windowOpen', async () => {
+    bot.on('windowOpen', () => {
         config.timeActive = Date.now();
-        // if (bot.currentWindow) {
-        //     const { slots, ...winWithoutSlots } = bot.currentWindow;
-        //     console.log(JSON.stringify({ ...winWithoutSlots, slotsCount: slots?.length ?? 0 }));
-        // }
+        windowOpenQueue = windowOpenQueue.then(async () => {
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
         logWindowDebug(bot.currentWindow);
@@ -1044,8 +1058,9 @@ async function main() {
                     logInfo('АХ → sellItems (осмотр/needSell)');
                     windowActionTaken = true;
                     await sellItems();
+                    if (config.key !== key) return;
                     if (!config.hasDangerousTrash) scheduleSafeAH('АХ sellItems');
-                    break;
+                    return;
                 }
 
                 if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
@@ -1053,17 +1068,19 @@ async function main() {
                     config.menu = myItems;
                     windowActionTaken = true;
                     await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
-                    break;
+                    return;
                 }
 
                 if (ahBuySession) {
                     logInfo(`АХ → продолжить покупку (слот ${ahBuySession.slot}, сессия)`);
                     windowActionTaken = true;
                     await runAhBuySession(key);
-                    break;
+                    return;
                 }
 
                 const slotToBuy = await getBestAHSlot();
+                if (config.key !== key) return;
+
                 if (slotToBuy === null || config.needReloadAH) {
                     clearAhBuySession();
                     if (config.needReloadAH) config.needReloadAH = false;
@@ -1088,15 +1105,12 @@ async function main() {
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
 
+                if (config.key !== key) return;
                 await rnd('WINDOW_DELAY');
-                if (key === config.key) {
-                    logInfo('windowOpen → конец (key не изменился)');
-                    if (config.menu === analysisAH && !windowActionTaken) {
-                        await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-                    }
-                    return;
+                if (config.key !== key) return;
+                if (config.menu === analysisAH && !windowActionTaken) {
+                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
-                logInfo(`windowOpen → конец (${config.menu})`);
                 return;
             }
 
@@ -1135,12 +1149,18 @@ async function main() {
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
+                if (config.key !== key) return;
+
                 if (config.lastResetTime < Date.now() - 60000) {
                     if (bot.currentWindow?.slots[0]) {
                         logInfo('хранилище → сброс (клик 52)');
                         config.menu = myItems;
                         await safeClickBuy(bot, 52, delayMs({ min: 1500, max: 4500 }), key);
-                        while (config.lastResetTime < Date.now() - 60000) await rnd('POLL');
+                        if (config.key !== key) return;
+                        while (config.lastResetTime < Date.now() - 60000) {
+                            if (config.key !== key) return;
+                            await rnd('POLL');
+                        }
                     } else {
                         config.lastResetTime = Date.now();
                     }
@@ -1150,26 +1170,27 @@ async function main() {
 
                 if (unlist !== null) {
                     logInfo(`хранилище → снять слот ${unlist.slot} (${unlist.reason})`);
-                    const unlistSlot = unlist.slot;
                     config.needSell = true;
                     config.menu = myItems;
-                    await safeClickBuy(bot, unlistSlot, delayMs({ min: 1500, max: 3500 }), key);
-                    break;
+                    await safeClickBuy(bot, unlist.slot, delayMs({ min: 1500, max: 3500 }), key);
+                    return;
                 }
 
                 if (config.needSell && hasBotItem()) {
                     logInfo('хранилище → sellItems');
                     await sellItems();
-                } else {
-                    logInfo('хранилище → назад в АХ');
-                    config.menu = analysisAH;
-                    await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
+                    return;
                 }
-                break;
+
+                logInfo('хранилище → назад в АХ');
+                config.menu = analysisAH;
+                await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
+                return;
 
             case rtp:
                 logOk('RTP → окно, клик слот 0');
                 await safeClickBuy(bot, 0, delayMs({ min: 1500, max: 3000 }), key);
+                if (config.key !== key) return;
                 await rnd('RTP');
                 config.needRTP = false;
                 config.hasDangerousTrash = false;
@@ -1179,12 +1200,12 @@ async function main() {
                 await dropTrashAllAfterRtp();
                 logOk('RTP → телепорт OK, sellItems');
                 await sellItems();
-                break;
+                return;
               
             case accept:
                 logInfo('окно → подтверждение покупки (клик glass)');
                 await safeClickBuy(bot, slotGlass, delayMs({ min: 400, max: 1000 }), key);
-                break;
+                return;
         
             case clan:
                 logInfo('окно → клан');
@@ -1195,6 +1216,7 @@ async function main() {
                             if (clanSlot !== null) {
                                 logInfo(`клан → забрать предмет из слота ${clanSlot} (shift)`);
                                 await safeClickBuy(bot, clanSlot, delayMs({ min: 1500, max: 3500 }), key);
+                                if (config.key !== key) return;
                                 await safeCloseWindow();
                                 await sellItems();
                             } else {
@@ -1205,36 +1227,34 @@ async function main() {
                         }
                         break;
                     case 'buyer': {
+                        const clanLimit = workerData.clanBalanceLimit ?? CLAN_STORAGE_TARGET;
                         while (config.menu === clan && bot.currentWindow && config.key === key) {
                             const stored = countClanStorageConfigItems();
-                            if (stored >= CLAN_STORAGE_TARGET) {
-                                logInfo(`клан → хранилище полное (${stored}/${CLAN_STORAGE_TARGET})`);
+                            if (stored >= clanLimit) {
+                                logInfo(`клан → хранилище полное (${stored}/${clanLimit}) → enoughItems`);
+                                config.enoughItems = true;
                                 break;
                             }
                             const depositSlot = findClanDepositSourceSlot();
                             if (depositSlot === null) {
-                                logInfo(`клан → нечего класть (${stored}/${CLAN_STORAGE_TARGET})`);
+                                logInfo(`клан → нечего класть (${stored}/${clanLimit})`);
                                 config.enoughItems = false;
                                 break;
                             }
-                            logInfo(`клан → положить предмет из слота ${depositSlot} (${stored}/${CLAN_STORAGE_TARGET})`);
+                            logInfo(`клан → положить предмет из слота ${depositSlot} (${stored}/${clanLimit})`);
                             await safeClickBuy(bot, depositSlot, delayMs({ min: 1500, max: 3500 }), key);
-                            if (config.key !== key) break;
+                            if (config.key !== key) return;
                             await rnd('POLL');
                         }
+                        if (config.key !== key) return;
                         await safeCloseWindow();
                         scheduleSafeAH('клан buyer');
                         break;
                     }
                 }
-                break;
+                return;
             }
-        await rnd('WINDOW_DELAY');
-        if (key === config.key) {
-            logInfo('windowOpen → конец (key не изменился)');
-            return;
-        }
-        logInfo(`windowOpen → конец (${config.menu})`);
+        }).catch((err) => reportError('windowOpen', err));
     });
 }
 
@@ -1517,14 +1537,14 @@ async function sellItems() {
         config.role === 'seller'
             ? !config.enoughItems
             : config.role === 'buyer'
-              ? hasBotItem()
+              ? config.enoughItems
               : true;
     if (!shouldOpenClanStorage) {
         const skipReason =
             config.role === 'seller'
                 ? 'seller, enoughItems'
                 : config.role === 'buyer'
-                  ? 'buyer, нет предметов'
+                  ? 'buyer, !enoughItems'
                   : 'пропуск';
         logInfo(`sellItems → clan storage пропуск (${skipReason})`);
         await safeAH();

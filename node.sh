@@ -31,3 +31,7 @@ nohup bash scripts/502.sh > 502.log 2>&1 &
 ** Чтобы ваш Аккаунт был в БЕЗОПАСНОСТИ!
 
 [⚔] Ошибка: Баланс казны меньше веденной суммы!
+
+
+wget https://raw.githubusercontent.com/ndatg/xray-vless-reality-installer/main/xray-install.sh
+sudo bash xray-install.sh
