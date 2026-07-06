@@ -1112,6 +1112,18 @@ async function tossTrashAtSlot(slot) {
     }
 }
 
+async function closeCurrentWindowSafe() {
+    const win = bot?.currentWindow;
+    if (!win) return;
+    await rnd('BASE_DELAY');
+    if (bot?.currentWindow !== win) return;
+    try {
+        await bot.closeWindow(win);
+    } catch (err) {
+        reportError('closeWindow', err);
+    }
+}
+
 async function sellItems() {
     config.timeActive = Date.now();
     logOk('продажа → старт');
@@ -1135,10 +1147,7 @@ async function sellItems() {
         if (!canSell) logWarn('продажа → пропуск (нет бота или каталога)');
 
         if (bot) {
-            if (bot.currentWindow) {
-                await rnd('BASE_DELAY');
-                await bot.closeWindow(bot.currentWindow);
-            }
+            await closeCurrentWindowSafe();
             if (config.lastWarpTime < Date.now() - 120000) {
                 const warp = warps[Math.floor(Math.random() * warps.length)];
                 await rnd('BASE_DELAY');
@@ -1364,10 +1373,7 @@ async function antiAfkIfNeeded() {
 
     logAfk('сходу с AFK → осмотр');
 
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await closeCurrentWindowSafe();
 
     await lookAroundSpin();
     config.afk = false;
@@ -1378,11 +1384,8 @@ async function antiAfkIfNeeded() {
 async function safeAH() {
     logOk('safeAH → старт');
     if (!bot) return;
-    if (bot.currentWindow) {
-        logInfo('safeAH → закрываю окно');
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    if (bot.currentWindow) logInfo('safeAH → закрываю окно');
+    await closeCurrentWindowSafe();
     await joinAnarchy();
     await rnd('BASE_DELAY');
 
@@ -1411,10 +1414,7 @@ async function safeAH() {
 async function safeBalance() {
     if (!bot) return;
     config.balance = null;
-    if (bot.currentWindow) {
-        await rnd('BASE_DELAY');
-        await bot.closeWindow(bot.currentWindow);
-    }
+    await closeCurrentWindowSafe();
     await joinAnarchy();
     await rnd('BASE_DELAY');
 
