@@ -752,7 +752,7 @@ async function handleChatMessage(text) {
         const finalPrice = basePrice + marker + (info.nacenka ?? 0);
         config.needPrice = finalPrice;
 
-        if (text.includes('круш')) {
+        if (text.toLowerCase().includes('круш')) {
             finishSellListAck('retry');
             return;
         }
