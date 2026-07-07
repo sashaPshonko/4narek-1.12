@@ -270,6 +270,12 @@ const firstInventorySlot = 9;
 const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
+
+/** Рюкзак (27) + 5 ячеек хотбара = 32 слота для учёта «своих» предметов. */
+const botInventoryTrackFirstSlot = firstInventorySlot;
+const botInventoryTrackLastSlot = 40;
+/** Порог «инвентарь забит» — 27 из 32 слотов заняты предметами go-типа бота. */
+const botInventoryFullThreshold = 26;
 const offhandSlot = 45;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
 
@@ -384,6 +390,7 @@ const config = {
     items: workerData.itemPrices ?? [],
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
+    needReset: false,
     walkTime: 0,
     BuyingItem: { id: '', price: 0 },
     needPrice: 0,
@@ -526,7 +533,7 @@ function findStorageSlotToUnlist() {
             continue;
         }
 
-        if (config.enoughItems && priceOrFullSlot === null) {
+        if (isBotInventoryFull() && priceOrFullSlot === null) {
             priceOrFullSlot = i;
             priceOrFullReason = 'переполнение хранилища';
         }
@@ -594,6 +601,27 @@ function getIdBySellPrice(price) {
     return found?.id ?? '';
 }
 
+/** true — у предмета категории бота (goType) изменилась priceSell с прошлого апдейта Go. */
+function hasBotCategoryPriceChanged(prevItems, nextItems) {
+    if (!Array.isArray(nextItems) || !nextItems.length) return false;
+
+    const prevById = new Map();
+    if (Array.isArray(prevItems)) {
+        for (const item of prevItems) {
+            if (item?.id == null || typeof item.priceSell !== 'number') continue;
+            prevById.set(item.id, item.priceSell);
+        }
+    }
+    if (!prevById.size) return false;
+
+    for (const item of nextItems) {
+        if (item?.id == null || typeof item.priceSell !== 'number') continue;
+        const oldPrice = prevById.get(item.id);
+        if (oldPrice !== undefined && oldPrice !== item.priceSell) return true;
+    }
+    return false;
+}
+
 /** Сумма 5× самого дорогого предмета из каталога бота (priceSell, goType). */
 function getSaveSum() {
     if (!Array.isArray(config.items) || !config.items.length) return null;
@@ -632,6 +660,7 @@ async function onBotChatText(text) {
 async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
+        config.needReset = false;
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
@@ -643,6 +672,7 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('[☃] У Вас купили')) {
+        config.enoughItems = false;
         const price = parseChatPrice(text);
         parentPort.postMessage({ name: 'sell', id: getIdBySellPrice(price), price });
         config.needSell = true;
@@ -775,7 +805,12 @@ async function handleChatMessage(text) {
 
 parentPort.on('message', (data) => {
     if (data.type === 'price') {
-        config.items = data.data;
+        const nextItems = data.data;
+        if (hasBotCategoryPriceChanged(config.items, nextItems)) {
+            config.needReset = true;
+            logInfo('цены Go → needReset (изменилась цена категории)');
+        }
+        config.items = nextItems;
         if (Array.isArray(data.catalogAll) && data.catalogAll.length) {
             config.catalogAll = data.catalogAll;
         }
@@ -922,8 +957,8 @@ async function main() {
                     break;
                 }
 
-                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
-                    logInfo('АХ → хранилище (reset/enoughItems)');
+                if (config.lastResetTime < Date.now() - 60000 || config.needReset || isBotInventoryFull()) {
+                    logInfo('АХ → хранилище (reset/needReset/inventoryFull)');
                     config.menu = myItems;
                     await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                     break;
@@ -960,7 +995,8 @@ async function main() {
                 break;
 
             case myItems:
-                if (!bot.currentWindow?.slots[0]) {
+                config.needReset = false;
+                if (!bot.currentWindow?.slots[4]) {
                     config.enoughItems = false;
                 }
                 if (config.needSendAH) {
@@ -1320,6 +1356,27 @@ function hasBotItem() {
         return false;
     } catch (err) {
         reportError('hasBotItem', err);
+        return false;
+    }
+}
+
+/** Сколько слотов 9–40 занято предметами каталога бота (не мусор). */
+function countBotCatalogInventorySlots() {
+    if (!bot?.inventory?.slots) return 0;
+    let count = 0;
+    for (let i = botInventoryTrackFirstSlot; i <= botInventoryTrackLastSlot; i++) {
+        const info = getSlotInfoSafe(bot.inventory.slots[i], i);
+        if (info && !info.isTrash) count++;
+    }
+    return count;
+}
+
+/** true — занято ≥27 из 32 слотов (9–40) предметами go-типа бота. */
+function isBotInventoryFull() {
+    try {
+        return countBotCatalogInventorySlots() >= botInventoryFullThreshold;
+    } catch (err) {
+        reportError('isBotInventoryFull', err);
         return false;
     }
 }
