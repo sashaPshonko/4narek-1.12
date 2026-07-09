@@ -199,6 +199,57 @@ export function formatBotAlert(username, message, bots) {
     return `${label}: ${text}`;
 }
 
+const ALERT_MENTION_HANDLE = 'sasha_pshonko';
+const ALERT_MENTION_COOLDOWN_MS = 60 * 60 * 1000;
+const alertMentionCooldownUntil = new Map();
+
+export const ALERT_KIND = {
+    BAN: 'ban',
+    CAPTCHA: 'captcha',
+    VPN: 'vpn',
+    UNKNOWN: 'unknown',
+};
+
+/** Тип алерта для @тега (бан / капча / vpn / неведомая). */
+export function classifyWorkerAlert(message) {
+    if (message == null) return null;
+    const lower = String(message).toLowerCase();
+    if (lower.includes('забанен')) return ALERT_KIND.BAN;
+    if (lower.includes('ввести капчу') || lower.includes('капч')) return ALERT_KIND.CAPTCHA;
+    if (lower.includes('vpn спалили') || lower.includes('впн спалили')) return ALERT_KIND.VPN;
+    if (lower.includes('хуйня неведомая') || lower.includes('неведомая')) return ALERT_KIND.UNKNOWN;
+    return null;
+}
+
+function alertMentionKey(username, kind) {
+    return `${username}:${kind}`;
+}
+
+function shouldAppendMention(username, kind) {
+    if (!username || !kind) return false;
+    const until = alertMentionCooldownUntil.get(alertMentionKey(username, kind)) || 0;
+    return Date.now() >= until;
+}
+
+function recordMention(username, kind) {
+    if (!username || !kind) return;
+    alertMentionCooldownUntil.set(
+        alertMentionKey(username, kind),
+        Date.now() + ALERT_MENTION_COOLDOWN_MS,
+    );
+}
+
+/** Текст алерта + @sasha_pshonko (не чаще раза в час на бота и тип). */
+export function buildTelegramAlertText({ message, botUsername, bots }) {
+    let text = botUsername ? formatBotAlert(botUsername, message, bots) : String(message ?? '');
+    const kind = botUsername ? classifyWorkerAlert(message) : null;
+    if (kind && shouldAppendMention(botUsername, kind)) {
+        recordMention(botUsername, kind);
+        text = `${text} @${ALERT_MENTION_HANDLE}`;
+    }
+    return text;
+}
+
 export function formatOrchestratorPing(stats, bots = null) {
     const { configured, active, workersRunning, banned, waiting } = stats;
     const label = (u) => (bots ? formatBotLabel(u, bots) : u);
@@ -239,7 +290,7 @@ export async function markBotBanned(username, ctx) {
         bot.isManualStop = true;
     }
     await stopWorkerNoRestart(username, ctx);
-    await ctx.sendAlert(formatBotAlert(username, `🚫 ${username} забанен`, ctx.bots));
+    await ctx.sendAlert(`🚫 ${username} забанен`, username);
 }
 
 /** true — обработано, не слать как обычный лог */

@@ -21,6 +21,7 @@ import {
     sendMarketFloorsToGo,
     getWorkerHealthStats,
     formatBotAlert,
+    buildTelegramAlertText,
     formatOrchestratorPing,
     handleWorkerStatusMessage,
     applyWorkerBuyingClaim,
@@ -80,7 +81,7 @@ function workerStatusCtx() {
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
 async function sendAlert(message, botUsername = null) {
-    const text = botUsername ? formatBotAlert(botUsername, message, bots) : message;
+    const text = buildTelegramAlertText({ message, botUsername, bots });
     try {
         if (tgBot && !isShuttingDown) {
             await tgBot.sendMessage(alertChatID, text);
