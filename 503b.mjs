@@ -48,7 +48,7 @@ const __dirname = dirname(__filename);
 
 // ========== КОНСТАНТЫ ==========
 const LOCAL_MODE = true;
-const SKIP_TELEGRAM = LOCAL_MODE;
+const SKIP_TELEGRAM = false;
 if (LOCAL_MODE) {
     process.env.TELEGRAM_PROXY = 'off';
     process.env.TELEGRAM_AUTO_XRAY = 'off';
@@ -419,7 +419,7 @@ async function initTelegram() {
     attachTelegramDiagnostics(tgBot);
 
     try {
-        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 502 запущен');
+        await tgBot.sendMessage(alertChatID, '✅ Оркестратор 503 запущен');
     } catch (error) {
         console.error('[Telegram] не удалось отправить стартовое сообщение:', error.message);
     }

@@ -47,7 +47,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const LOCAL_MODE = true;
-const SKIP_TELEGRAM = LOCAL_MODE;
+const SKIP_TELEGRAM = false;
 if (LOCAL_MODE) {
     process.env.TELEGRAM_PROXY = 'off';
     process.env.TELEGRAM_AUTO_XRAY = 'off';
