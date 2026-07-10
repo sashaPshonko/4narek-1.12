@@ -222,27 +222,51 @@ export function findBestMatchingConfigItem(item, catalogAll) {
 /**
  * Матч для бота: лучший по num id должен быть своего goType.
  * @param {string|null} ownerGoType — go-тип бота; если задан и лучший id чужой — null
+ * @returns {{ cfg: object, foreign: boolean } | null}
  */
-export function findMatchingConfigItem(item, catalogAll, ownerGoType) {
+export function findMatchingConfigItemResult(item, catalogAll, ownerGoType) {
     const best = findBestMatchingConfigItem(item, catalogAll);
     if (!best) return null;
-    if (ownerGoType && best.type !== ownerGoType) return null;
-    return best;
+    if (ownerGoType && best.type !== ownerGoType) {
+        return { cfg: best, foreign: true };
+    }
+    return { cfg: best, foreign: false };
+}
+
+export function findMatchingConfigItem(item, catalogAll, ownerGoType) {
+    const hit = findMatchingConfigItemResult(item, catalogAll, ownerGoType);
+    if (!hit || hit.foreign) return null;
+    return hit.cfg;
+}
+
+/** Свой торгуемый лот (не мусор и не чужая категория). */
+export function isBotTradeItem(info) {
+    return Boolean(info && info.id && !info.isTrash && !info.isForeignCategory);
 }
 
 /**
  * @param {object|null} item — слот из bot.inventory.slots[i]
  * @param {object[]} catalogAll — полный каталог с ценами (все go-типы)
  * @param {string|null} goType — go-тип бота из bots.json
- * @returns {null|{ isTrash: true }|{ id, sellPrice, buyPrice, nacenka }}
+ * @returns {null|{ isTrash: true }|{ isForeignCategory: true, id?, foreignType? }|{ id, sellPrice, buyPrice, nacenka }}
  */
 export function getSlotInfo(item, catalogAll, goType) {
     if (!item) return null;
 
     try {
-        const cfg = findMatchingConfigItem(item, catalogAll, goType);
-        if (!cfg) return { isTrash: true };
+        const hit = findMatchingConfigItemResult(item, catalogAll, goType);
+        if (!hit) return { isTrash: true };
 
+        // Чужая категория каталога: не покупаем, но не мусор (не дропать / не снимать с АХ).
+        if (hit.foreign) {
+            return {
+                isForeignCategory: true,
+                id: hit.cfg.id,
+                foreignType: hit.cfg.type,
+            };
+        }
+
+        const cfg = hit.cfg;
         if (typeof cfg.priceSell !== 'number' || Number.isNaN(cfg.priceSell)) {
             throw new Error(`нет priceSell у ${cfg.id ?? '?'}`);
         }

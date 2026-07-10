@@ -15,6 +15,7 @@ import {
     getPriceFromAhItem,
     findMatchingConfigItem,
     getDurabilityPercent,
+    isBotTradeItem,
 } from './items/slotInfo.mjs';
 import {
     isUuidBlockedByOther,
@@ -585,6 +586,9 @@ function findStorageSlotToUnlist() {
         if (!currentSlot) continue;
 
         const info = getSlotInfoSafe(currentSlot, i);
+
+        // Чужая категория — оставляем на АХ, не снимаем и не считаем мусором
+        if (info?.isForeignCategory) continue;
 
         if (!info || info.isTrash) {
             return { slot: i, reason: 'мусор (нет в каталоге)' };
@@ -1437,6 +1441,12 @@ async function sellItems() {
                     continue;
                 }
 
+                // Чужая категория — не продаём и не выбрасываем
+                if (info?.isForeignCategory) {
+                    currentSlot++;
+                    continue;
+                }
+
                 if (!info || !item) {
                     currentSlot++;
                     continue;
@@ -1594,7 +1604,7 @@ async function moveToHotBar() {
             for (let src = firstInventorySlot; src <= lastInventorySlot; src++) {
                 const invStack = bot.inventory.slots[src];
                 const invInfo = getSlotInfoSafe(invStack, src);
-                if (invInfo && !invInfo.isTrash) {
+                if (isBotTradeItem(invInfo)) {
                     if (!isStorageSlot(src) || !isHotbarSlot(slot)) {
                         reportError('moveToHotBar', `недопустимый перенос ${src}→${slot}`);
                         break;
@@ -1618,7 +1628,7 @@ function hasBotItem() {
     try {
         for (let i = firstInventorySlot; i <= lastHotbarSlot; i++) {
             const info = getSlotInfoSafe(bot.inventory.slots[i], i);
-            if (info && !info.isTrash) return true;
+            if (isBotTradeItem(info)) return true;
         }
         return false;
     } catch (err) {
@@ -1844,7 +1854,7 @@ async function getBestAHSlot() {
             }
 
             const info = getSlotInfoSafe(slotData, slot);
-            if (!info || info.isTrash || !info.id || !info.buyPrice) continue;
+            if (!info || info.isTrash || info.isForeignCategory || !info.id || !info.buyPrice) continue;
 
             let ahPrice;
             try {
