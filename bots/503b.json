@@ -1,35 +1,35 @@
 [
-  {
-    "username": "dostalimenyavse3",
-    "password": "ggggg",
-    "anarchy": 503,
-    "type": "4narek-old",
-    "item": "netherite boots",
-    "goType": "netherite_boots-1.21",
-    "role": "buyer",
-    "clanBalanceLimit": 10,
-    "ip": "2"
-  },
-  {
-    "username": "skalkamozhno3",
-    "password": "ggggg",
-    "anarchy": 503,
-    "type": "4narek-old",
-    "item": "netherite boots",
-    "goType": "netherite_boots-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "2"
-  },
-  {
-    "username": "snovaopyatnado3",
-    "password": "ggggg",
-    "anarchy": 503,
-    "type": "4narek-old",
-    "item": "netherite boots",
-    "goType": "netherite_boots-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "2"
-  }
+    {
+        "username": "dostalimenyavse4",
+        "password": "ggggg",
+        "anarchy": 503,
+        "type": "4narek-old",
+        "item": "netherite boots",
+        "goType": "netherite_boots-1.21",
+        "role": "buyer",
+        "clanBalanceLimit": 10,
+        "ip": "2"
+    },
+    {
+        "username": "skalkamozhno4",
+        "password": "ggggg",
+        "anarchy": 503,
+        "type": "4narek-old",
+        "item": "netherite boots",
+        "goType": "netherite_boots-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "2"
+    },
+    {
+        "username": "snovaopyatnado4",
+        "password": "ggggg",
+        "anarchy": 503,
+        "type": "4narek-old",
+        "item": "netherite boots",
+        "goType": "netherite_boots-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "2"
+    }
 ]

@@ -1,35 +1,35 @@
 [
-  {
-    "username": "govnaismerti",
-    "password": "ggggg",
-    "anarchy": 509,
-    "type": "4narek-old",
-    "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21",
-    "role": "buyer",
-    "clanBalanceLimit": 10,
-    "ip": "7"
-  },
-  {
-    "username": "spisladkadocha",
-    "password": "ggggg",
-    "anarchy": 509,
-    "type": "4narek-old",
-    "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "7"
-  },
-  {
-    "username": "whichdayidie",
-    "password": "ggggg",
-    "anarchy": 509,
-    "type": "4narek-old",
-    "item": "netherite leggings",
-    "goType": "netherite_leggings-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "7"
-  }
+    {
+        "username": "govnaismerta",
+        "password": "ggggg",
+        "anarchy": 509,
+        "type": "4narek-old",
+        "item": "netherite leggings",
+        "goType": "netherite_leggings-1.21",
+        "role": "buyer",
+        "clanBalanceLimit": 10,
+        "ip": "7"
+    },
+    {
+        "username": "spisladkadoche",
+        "password": "ggggg",
+        "anarchy": 509,
+        "type": "4narek-old",
+        "item": "netherite leggings",
+        "goType": "netherite_leggings-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "7"
+    },
+    {
+        "username": "whichdayidye",
+        "password": "ggggg",
+        "anarchy": 509,
+        "type": "4narek-old",
+        "item": "netherite leggings",
+        "goType": "netherite_leggings-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "7"
+    }
 ]

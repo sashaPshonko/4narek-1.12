@@ -1,35 +1,35 @@
 [
-  {
-    "username": "tablydaite6",
-    "password": "ggggg",
-    "anarchy": 502,
-    "type": "4narek-old",
-    "item": "netherite sword",
-    "goType": "netherite_sword-1.21",
-    "role": "buyer",
-    "clanBalanceLimit": 10,
-    "ip": "1"
-  },
-  {
-    "username": "gorbtikphon5",
-    "password": "gggggg",
-    "anarchy": 502,
-    "type": "4narek-old",
-    "item": "netherite sword",
-    "goType": "netherite_sword-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "1"
-  },
-  {
-    "username": "kventikasha5",
-    "password": "ggggg",
-    "anarchy": 502,
-    "type": "4narek-old",
-    "item": "netherite sword",
-    "goType": "netherite_sword-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "1"
-  }
+    {
+        "username": "tablydaite7",
+        "password": "ggggg",
+        "anarchy": 502,
+        "type": "4narek-old",
+        "item": "netherite sword",
+        "goType": "netherite_sword-1.21",
+        "role": "buyer",
+        "clanBalanceLimit": 10,
+        "ip": "1"
+    },
+    {
+        "username": "gorbtikphon6",
+        "password": "gggggg",
+        "anarchy": 502,
+        "type": "4narek-old",
+        "item": "netherite sword",
+        "goType": "netherite_sword-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "1"
+    },
+    {
+        "username": "kventikasha6",
+        "password": "ggggg",
+        "anarchy": 502,
+        "type": "4narek-old",
+        "item": "netherite sword",
+        "goType": "netherite_sword-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "1"
+    }
 ]
