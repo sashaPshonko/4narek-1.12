@@ -416,25 +416,11 @@ var bot = null;
 /** UUID лотов в очереди: { uuid, username } */
 let itemsBuying = [];
 
-/**
- * Покупка на АХ: таймер с startedAt переживает авто-обновление окна (без нашего клика).
- * @type {{ slot: number, startedAt: number, totalDelay: number, rechecked: boolean } | null}
- */
-let ahBuySession = null;
-
 function claimAhLotUuid(uuid) {
     if (!uuid) return;
     const claim = { uuid, username: config.username };
     itemsBuying = mergeBuyingClaim(itemsBuying, claim);
     parentPort.postMessage({ name: 'buying', data: claim, username: config.username });
-}
-
-function ahBuyDelayMs(slot) {
-    return delayMs({ min: 500, max: 700 }) * (slot + 2);
-}
-
-function clearAhBuySession() {
-    ahBuySession = null;
 }
 
 function markAnarchyJoined() {
@@ -986,30 +972,20 @@ async function main() {
                     break;
                 }
 
-                if (ahBuySession) {
-                    logInfo(`АХ → продолжить покупку (слот ${ahBuySession.slot}, сессия)`);
-                    await runAhBuySession(key);
-                    break;
-                }
-
                 const slotToBuy = await getBestAHSlot();
                 if (slotToBuy === null || config.needReloadAH) {
-                    clearAhBuySession();
                     if (config.needReloadAH) config.needReloadAH = false;
                     logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 } else if (slotToBuy < 9) {
                     logInfo(`АХ → купить слот ${slotToBuy}`);
-                    ahBuySession = {
-                        slot: slotToBuy,
-                        startedAt: Date.now(),
-                        totalDelay: ahBuyDelayMs(slotToBuy),
-                        rechecked: false,
-                        running: false,
-                    };
-                    await runAhBuySession(key);
+                    await safeClickBuy(
+                        bot,
+                        slotToBuy,
+                        delayMs({ min: 500, max: 700 }) * (slotToBuy + 2),
+                        key,
+                    );
                 } else {
-                    clearAhBuySession();
                     logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
@@ -1515,67 +1491,6 @@ async function safeBalance() {
     }
 }
 
-
-/**
- * Покупка с одним startedAt: авто-обновление окна → новый windowOpen продолжает, не ждёт с нуля.
- */
-async function runAhBuySession(key) {
-    if (!ahBuySession) return;
-    if (ahBuySession.running) return;
-    ahBuySession.running = true;
-
-    const halfAt = ahBuySession.startedAt + Math.floor(ahBuySession.totalDelay / 2);
-    const now = Date.now();
-    if (now < halfAt) {
-        await sleep(halfAt - now);
-    }
-
-    if (config.key !== key) {
-        logInfo('АХ покупка: новое окно → сессия сохранена, ждём остаток задержки');
-        ahBuySession.running = false;
-        return;
-    }
-
-    if (!ahBuySession.rechecked) {
-        ahBuySession.rechecked = true;
-        const slotData = bot?.currentWindow?.slots?.[ahBuySession.slot];
-        let currentUUID = null;
-        if (slotData) {
-            try {
-                currentUUID = getItemUUID(slotData);
-            } catch (err) {
-                reportError(`recheck getItemUUID slot=${ahBuySession.slot}`, err);
-            }
-        }
-        if (currentUUID && isUuidBlockedByOther(itemsBuying, currentUUID, config.username)) {
-            logInfo('АХ recheck: UUID занят другим ботом → повторный выбор');
-            const newSlot = await getBestAHSlot();
-            if (newSlot === null || newSlot >= 9) {
-                clearAhBuySession();
-                logInfo('АХ → reload 49 (после recheck нет лота)');
-                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-                return;
-            }
-            ahBuySession.slot = newSlot;
-            ahBuySession.totalDelay = ahBuyDelayMs(newSlot);
-        }
-    }
-
-    if (config.key !== key) {
-        logInfo('АХ покупка: новое окно после recheck → сессия сохранена');
-        ahBuySession.running = false;
-        return;
-    }
-
-    const startedAt = ahBuySession.startedAt;
-    const remaining = Math.max(0, ahBuySession.totalDelay - (Date.now() - startedAt));
-    const slot = ahBuySession.slot;
-    clearAhBuySession();
-
-    config.botStartClickTime = startedAt;
-    config.botUpdateWindow = false;
-    await safeClickBuy(bot, slot, remaining, key);
-}
 
 /**
  * Лучший слот на аукционе для покупки (0–17).
