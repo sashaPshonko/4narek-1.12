@@ -476,7 +476,21 @@ async function safeClickBuy(bot, slot, time, key) {
         if (timeDelay <= 0) timeDelay = 0;
     }
 
-    await sleep(timeDelay);
+    let remaining = timeDelay;
+    while (remaining > 0) {
+        if (config.key !== key) {
+            logWarn(`клик слот ${slot} отменён (новое окно)`);
+            return;
+        }
+        if (!bot.currentWindow) {
+            logWarn(`клик слот ${slot} — окна нет`);
+            return;
+        }
+        const chunk = Math.min(100, remaining);
+        await sleep(chunk);
+        remaining -= chunk;
+    }
+
     if (config.key !== key) {
         logWarn(`клик слот ${slot} отменён (новое окно)`);
         return;
@@ -501,12 +515,13 @@ function getSlotInfoSafe(item, slotIndex) {
 }
 
 /**
- * Слот 0–4 в «Хранилище»: снять мусор, несовпадение цены или лот при переполнении.
+ * Слот 0–4 в «Хранилище»: снять мусор или лот с несовпадением цены.
+ * enoughItems / переполнение — не снимаем. Чужая категория — не трогаем.
  * @returns {{ slot: number, reason: string } | null}
  */
 function findStorageSlotToUnlist() {
-    let priceOrFullSlot = null;
-    let priceOrFullReason = '';
+    let priceSlot = null;
+    let priceReason = '';
 
     for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
         const currentSlot = bot.currentWindow?.slots[i];
@@ -530,21 +545,15 @@ function findStorageSlotToUnlist() {
         }
 
         if (info.sellPrice !== priceOnAH) {
-            if (priceOrFullSlot === null) {
-                priceOrFullSlot = i;
-                priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
+            if (priceSlot === null) {
+                priceSlot = i;
+                priceReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
             }
-            continue;
-        }
-
-        if (isBotInventoryFull() && priceOrFullSlot === null) {
-            priceOrFullSlot = i;
-            priceOrFullReason = 'переполнение хранилища';
         }
     }
 
-    if (priceOrFullSlot !== null) {
-        return { slot: priceOrFullSlot, reason: priceOrFullReason };
+    if (priceSlot !== null) {
+        return { slot: priceSlot, reason: priceReason };
     }
     return null;
 }
@@ -942,13 +951,22 @@ async function main() {
 
     bot.on('windowOpen', async () => {
         config.timeActive = Date.now();
-        // if (bot.currentWindow) {
-        //     const { slots, ...winWithoutSlots } = bot.currentWindow;
-        //     console.log(JSON.stringify({ ...winWithoutSlots, slotsCount: slots?.length ?? 0 }));
-        // }
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
-        config.menu = resolveWindowMenu(bot.currentWindow);
+
+        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
+        const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
+
+        if (windowJSON.includes('хранилище')) {
+            config.menu = myItems;
+        } else if (windowJSON.includes('телепортации')) {
+            config.menu = rtp;
+        } else if (windowJSON.includes('подозрительная цена') ||
+            windowJSON.includes('подтверждение покупки')) {
+            config.menu = accept;
+        } else {
+            config.menu = analysisAH;
+        }
         logInfo(`окно: ${config.menu}`);
 
         switch (config.menu) {
@@ -961,8 +979,8 @@ async function main() {
                     break;
                 }
 
-                if (config.lastResetTime < Date.now() - 60000 || config.needReset || isBotInventoryFull()) {
-                    logInfo('АХ → хранилище (reset/needReset/inventoryFull)');
+                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems || config.needReset) {
+                    logInfo('АХ → хранилище (reset/enoughItems/needReset)');
                     config.menu = myItems;
                     await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                     break;
@@ -1000,7 +1018,7 @@ async function main() {
 
             case myItems:
                 config.needReset = false;
-                if (!bot.currentWindow?.slots[4]) {
+                if (!bot.currentWindow?.slots[0]) {
                     config.enoughItems = false;
                 }
                 if (config.needSendAH) {
@@ -1034,6 +1052,7 @@ async function main() {
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
+                // Клик 52 только если прошло ≥60с — needReset сам по себе не форсит сброс
                 if (config.lastResetTime < Date.now() - 60000) {
                     if (bot.currentWindow?.slots[0]) {
                         logInfo('хранилище → сброс (клик 52)');
