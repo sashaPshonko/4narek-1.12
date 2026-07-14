@@ -326,6 +326,18 @@ const myItems = 'Хранилище';
 const rtp = 'RTP';
 const accept = 'подтверждение покупки';
 
+function resolveWindowMenu(win) {
+    const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
+    const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
+    if (windowJSON.includes('хранилище')) return myItems;
+    if (windowJSON.includes('телепортации')) return rtp;
+    if (windowJSON.includes('подозрительная цена') ||
+        windowJSON.includes('подтверждение покупки')) {
+        return accept;
+    }
+    return analysisAH;
+}
+
 const LOBBY_IGNORE_MS = 60_000;
 const LOBBY_BROADCAST_MARKERS = [
     '⚡ Наша группа ВК vk.com/funtime',
@@ -940,74 +952,103 @@ async function main() {
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
 
-        const { slots: _windowSlots, ...windowWithoutSlots } = bot.currentWindow ?? {};
-        const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
-
-        if (windowJSON.includes('хранилище')) {
-            config.menu = myItems;
-        } else if (windowJSON.includes('телепортации')) {
-            config.menu = rtp;
-        } else if (windowJSON.includes('подозрительная цена') ||
-            windowJSON.includes('подтверждение покупки')) {
-            config.menu = accept;
-        } else {
-            config.menu = analysisAH;
-        }
+        config.menu = resolveWindowMenu(bot.currentWindow);
         logInfo(`окно: ${config.menu}`);
 
         switch (config.menu) {
             case analysisAH: {
-                let windowActionTaken = false;
-                if (config.walkTime < Date.now() - 55000 ||
-                    (config.needSell && !config.enoughItems && hasBotItem())) {
-                    logInfo('АХ → sellItems (осмотр/needSell)');
-                    windowActionTaken = true;
-                    await sellItems();
+                // Reload без нового windowOpen: после паузы заново определяем окно и слоты.
+                // Не жмём 49 вслепую — вдруг это уже хранилище / подтверждение.
+                const maxSameKeyPasses = 3;
+                for (let pass = 0; ; pass++) {
                     if (config.key !== key) return;
-                    if (!config.hasDangerousTrash) await safeAH();
+                    if (!bot.currentWindow) {
+                        logWarn('АХ → окна нет, выход');
+                        return;
+                    }
+
+                    config.menu = resolveWindowMenu(bot.currentWindow);
+                    if (config.menu !== analysisAH) {
+                        logInfo(`АХ-цикл → окно уже «${config.menu}», не жму reload`);
+                        break;
+                    }
+
+                    if (config.walkTime < Date.now() - 55000 ||
+                        (config.needSell && !config.enoughItems && hasBotItem())) {
+                        logInfo('АХ → sellItems (осмотр/needSell)');
+                        await sellItems();
+                        if (config.key !== key) return;
+                        if (!config.hasDangerousTrash) await safeAH();
+                        return;
+                    }
+
+                    if (config.lastResetTime < Date.now() - 60000 || config.enoughItems || config.needReset) {
+                        logInfo('АХ → хранилище (reset/enoughItems/needReset)');
+                        config.menu = myItems;
+                        await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
+                        return;
+                    }
+
+                    const slotToBuy = await getBestAHSlot();
+                    if (config.key !== key) return;
+
+                    if (slotToBuy !== null && slotToBuy < 9) {
+                        logInfo(`АХ → купить слот ${slotToBuy}`);
+                        await safeClickBuy(
+                            bot,
+                            slotToBuy,
+                            delayMs({ min: 500, max: 700 }) * (slotToBuy + 2),
+                            key,
+                        );
+                        return;
+                    }
+
+                    if (slotToBuy === null || config.needReloadAH) {
+                        if (config.needReloadAH) config.needReloadAH = false;
+                        logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                    } else {
+                        logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
+                    }
+
+                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                    if (config.key !== key) return;
+
+                    await rnd('WINDOW_DELAY');
+                    if (config.key !== key) return;
+
+                    if (pass + 1 >= maxSameKeyPasses) {
+                        logWarn(`АХ → ${maxSameKeyPasses} прохода без нового окна → safeAH`);
+                        await safeAH();
+                        return;
+                    }
+
+                    logInfo(`АХ → key тот же, заново анализ окна (${pass + 2}/${maxSameKeyPasses})`);
+                }
+
+                if (config.key !== key) return;
+                if (!bot.currentWindow) return;
+
+                config.menu = resolveWindowMenu(bot.currentWindow);
+                if (config.menu === accept) {
+                    logInfo('окно → подтверждение покупки (клик glass)');
+                    await safeClickBuy(bot, slotGlass, delayMs({ min: 400, max: 1000 }), key);
                     return;
                 }
-
-                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems || config.needReset) {
-                    logInfo('АХ → хранилище (reset/enoughItems/needReset)');
-                    config.menu = myItems;
-                    windowActionTaken = true;
-                    await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
+                if (config.menu === rtp) {
+                    await safeClickBuy(bot, 0, delayMs({ min: 1000, max: 3000 }), key);
+                    config.needRTP = false;
+                    config.hasDangerousTrash = false;
+                    config.lastWarpTime = Date.now();
+                    await sellItems();
+                    await safeAH();
                     return;
                 }
-
-                const slotToBuy = await getBestAHSlot();
-                if (config.key !== key) return;
-
-                if (slotToBuy === null || config.needReloadAH) {
-                    if (config.needReloadAH) config.needReloadAH = false;
-                    logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
-                    windowActionTaken = true;
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-                } else if (slotToBuy < 9) {
-                    logInfo(`АХ → купить слот ${slotToBuy}`);
-                    windowActionTaken = true;
-                    await safeClickBuy(
-                        bot,
-                        slotToBuy,
-                        delayMs({ min: 500, max: 700 }) * (slotToBuy + 2),
-                        key,
-                    );
-                } else {
-                    logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
-                    windowActionTaken = true;
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                if (config.menu !== myItems) {
+                    return;
                 }
-
-                if (config.key !== key) return;
-                await rnd('WINDOW_DELAY');
-                if (config.key !== key) return;
-                if (config.menu === analysisAH && !windowActionTaken) {
-                    logInfo('windowOpen → конец (key не изменился)');
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-                }
-                return;
+                logInfo('АХ-цикл → обрабатываю как хранилище');
             }
+            // fallthrough: меню стало «Хранилище» без нового windowOpen
 
             case myItems:
                 config.needReset = false;
