@@ -276,7 +276,7 @@ const lastHotbarSlot = 44;
 const botInventoryTrackFirstSlot = firstInventorySlot;
 const botInventoryTrackLastSlot = 40;
 /** Порог «инвентарь забит» — 27 из 32 слотов заняты предметами go-типа бота. */
-const botInventoryFullThreshold = 26;
+const botInventoryFullThreshold = 27;
 const offhandSlot = 45;
 const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
 
@@ -501,13 +501,14 @@ function getSlotInfoSafe(item, slotIndex) {
 }
 
 /**
- * Слот 0–4 в «Хранилище»: снять мусор или лот с несовпадением цены.
- * enoughItems / переполнение — не снимаем. Чужая категория — не трогаем.
+ * Слот 0–4 в «Хранилище»: снять мусор / несовпадение цены.
+ * Если инвентарь ≥27 своих — снимаем любой свой лот (цикл: снять всё → продать всё).
  * @returns {{ slot: number, reason: string } | null}
  */
 function findStorageSlotToUnlist() {
-    let priceSlot = null;
-    let priceReason = '';
+    let priceOrFullSlot = null;
+    let priceOrFullReason = '';
+    const invFull = isBotInventoryFull();
 
     for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
         const currentSlot = bot.currentWindow?.slots[i];
@@ -531,15 +532,21 @@ function findStorageSlotToUnlist() {
         }
 
         if (info.sellPrice !== priceOnAH) {
-            if (priceSlot === null) {
-                priceSlot = i;
-                priceReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
+            if (priceOrFullSlot === null) {
+                priceOrFullSlot = i;
+                priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
             }
+            continue;
+        }
+
+        if (invFull && priceOrFullSlot === null) {
+            priceOrFullSlot = i;
+            priceOrFullReason = 'инвентарь ≥27 — снять для перевыставления';
         }
     }
 
-    if (priceSlot !== null) {
-        return { slot: priceSlot, reason: priceReason };
+    if (priceOrFullSlot !== null) {
+        return { slot: priceOrFullSlot, reason: priceOrFullReason };
     }
     return null;
 }
@@ -961,19 +968,29 @@ async function main() {
                         break;
                     }
 
+                    // Сброс / инвентарь≥27 раньше sellItems — иначе осмотр съедает минуту или не даёт цикл снять→продать.
+                    if (
+                        config.lastResetTime < Date.now() - 60000 ||
+                        config.enoughItems ||
+                        config.needReset ||
+                        isBotInventoryFull()
+                    ) {
+                        logInfo(
+                            isBotInventoryFull()
+                                ? 'АХ → хранилище (инвентарь ≥27)'
+                                : 'АХ → хранилище (reset/enoughItems/needReset)',
+                        );
+                        config.menu = myItems;
+                        await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
+                        return;
+                    }
+
                     if (config.walkTime < Date.now() - 55000 ||
                         (config.needSell && !config.enoughItems && hasBotItem())) {
                         logInfo('АХ → sellItems (осмотр/needSell)');
                         await sellItems();
                         if (config.key !== key) return;
                         if (!config.hasDangerousTrash) await safeAH();
-                        return;
-                    }
-
-                    if (config.lastResetTime < Date.now() - 60000 || config.enoughItems || config.needReset) {
-                        logInfo('АХ → хранилище (reset/enoughItems/needReset)');
-                        config.menu = myItems;
-                        await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
                         return;
                     }
 
@@ -1097,8 +1114,13 @@ async function main() {
                     break;
                 }
 
-                if (config.needSell && hasBotItem()) {
-                    logInfo('хранилище → sellItems');
+                // Инвентарь ≥27: после «снять всё» — продать всё; на АХ снова зайдём в хранилище, если ещё ≥27.
+                if ((config.needSell || isBotInventoryFull()) && hasBotItem()) {
+                    logInfo(
+                        isBotInventoryFull()
+                            ? 'хранилище → sellItems (инвентарь ≥27, продать всё)'
+                            : 'хранилище → sellItems',
+                    );
                     await sellItems();
                     await safeAH();
                 } else {
