@@ -326,18 +326,6 @@ const myItems = 'Хранилище';
 const rtp = 'RTP';
 const accept = 'подтверждение покупки';
 
-function resolveWindowMenu(win) {
-    const { slots: _windowSlots, ...windowWithoutSlots } = win ?? {};
-    const windowJSON = JSON.stringify(windowWithoutSlots).toLowerCase();
-    if (windowJSON.includes('хранилище')) return myItems;
-    if (windowJSON.includes('телепортации')) return rtp;
-    if (windowJSON.includes('подозрительная цена') ||
-        windowJSON.includes('подтверждение покупки')) {
-        return accept;
-    }
-    return analysisAH;
-}
-
 const LOBBY_IGNORE_MS = 60_000;
 const LOBBY_BROADCAST_MARKERS = [
     '⚡ Наша группа ВК vk.com/funtime',
