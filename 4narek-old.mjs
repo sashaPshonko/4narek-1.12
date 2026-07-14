@@ -956,29 +956,37 @@ async function main() {
         logInfo(`окно: ${config.menu}`);
 
         switch (config.menu) {
-            case analysisAH:
+            case analysisAH: {
+                let windowActionTaken = false;
                 if (config.walkTime < Date.now() - 55000 ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
                     logInfo('АХ → sellItems (осмотр/needSell)');
+                    windowActionTaken = true;
                     await sellItems();
+                    if (config.key !== key) return;
                     if (!config.hasDangerousTrash) await safeAH();
-                    break;
+                    return;
                 }
 
                 if (config.lastResetTime < Date.now() - 60000 || config.enoughItems || config.needReset) {
                     logInfo('АХ → хранилище (reset/enoughItems/needReset)');
                     config.menu = myItems;
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
-                    break;
+                    return;
                 }
 
                 const slotToBuy = await getBestAHSlot();
+                if (config.key !== key) return;
+
                 if (slotToBuy === null || config.needReloadAH) {
                     if (config.needReloadAH) config.needReloadAH = false;
                     logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 } else if (slotToBuy < 9) {
                     logInfo(`АХ → купить слот ${slotToBuy}`);
+                    windowActionTaken = true;
                     await safeClickBuy(
                         bot,
                         slotToBuy,
@@ -987,10 +995,19 @@ async function main() {
                     );
                 } else {
                     logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
+                    windowActionTaken = true;
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                 }
 
-                break;
+                if (config.key !== key) return;
+                await rnd('WINDOW_DELAY');
+                if (config.key !== key) return;
+                if (config.menu === analysisAH && !windowActionTaken) {
+                    logInfo('windowOpen → конец (key не изменился)');
+                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                }
+                return;
+            }
 
             case myItems:
                 config.needReset = false;
@@ -1079,9 +1096,6 @@ async function main() {
         await rnd('WINDOW_DELAY');
         if (key === config.key) {
             logInfo('windowOpen → конец (key не изменился)');
-            if (config.menu === analysisAH) {
-                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
-            }
             return;
         }
         logInfo(`windowOpen → конец (${config.menu})`);
