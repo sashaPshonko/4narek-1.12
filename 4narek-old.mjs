@@ -437,9 +437,13 @@ function reportError(where, err) {
     parentPort.postMessage(text);
 }
 
-/** Ошибки парсинга слота АХ — в TG шлём JSON слота, не stack. */
+/** Ошибки парсинга слота АХ — в TG шлём #slot + JSON, не stack. Подозрительные цены не шлём. */
 function reportSlotError(where, err, slotData) {
     const msg = err instanceof Error ? err.message : String(err);
+    if (/подозрительная цена/i.test(msg)) {
+        console.warn(`${logTag()} ${ANSI.yellow}!${ANSI.reset} ${where}: ${msg} (в TG не шлём)`);
+        return;
+    }
     let json = '?';
     try {
         json = JSON.stringify(slotData);
@@ -447,7 +451,7 @@ function reportSlotError(where, err, slotData) {
     } catch (serErr) {
         json = `[serialize fail: ${serErr.message}]`;
     }
-    const text = `${config.username} — ${where}: ${msg}\n${json}`;
+    const text = `#slot ${config.username} — ${where}: ${msg}\n${json}`;
     console.error(`${logTag()} ${ANSI.red}✖${ANSI.reset} ${ANSI.red}${where}${ANSI.reset}: ${msg}`);
     parentPort.postMessage(text);
 }

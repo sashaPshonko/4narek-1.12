@@ -310,6 +310,42 @@ function extractStrings(node, out) {
     if (typeof node === 'string') out.push(node);
 }
 
+/** FunTime мешает латиницу в «Цена» (Ценa / Цeна). */
+function loreLooksLikePriceLabel(s) {
+    const n = String(s)
+        .toLowerCase()
+        .replace(/a/g, 'а')
+        .replace(/e/g, 'е')
+        .replace(/o/g, 'о')
+        .replace(/p/g, 'р')
+        .replace(/c/g, 'с')
+        .replace(/x/g, 'х')
+        .replace(/y/g, 'у');
+    return n.includes('цен');
+}
+
+/** «$2,500,000» / « 2.500.000» → число. Цвета #RRGGBB игнорируем. */
+function parseAhPriceNumber(s) {
+    if (typeof s !== 'string') return null;
+    const trimmed = s.trim();
+    if (!trimmed || /^#[0-9a-fA-F]{3,8}$/.test(trimmed)) return null;
+    // нужен хотя бы один признак цены: $ или разрядная запятая/пробел в числе
+    const looksLikeMoney =
+        trimmed.includes('$') ||
+        /\d,\d{3}/.test(trimmed) ||
+        /\d\s\d{3}/.test(trimmed);
+    if (!looksLikeMoney && !/^\d[\d\s.,]*$/.test(trimmed)) return null;
+
+    const cleaned = trimmed.replace(/[^\d.]/g, '');
+    if (!cleaned || cleaned === '.') return null;
+    let normalized = cleaned;
+    const dotCount = (cleaned.match(/\./g) || []).length;
+    if (dotCount > 1) normalized = cleaned.replace(/\./g, '');
+    const num = parseFloat(normalized);
+    if (Number.isNaN(num)) return null;
+    return num;
+}
+
 /** UUID лота на аукционе (auctions:if-uuid) */
 export function getItemUUID(item) {
     const customDataComp = item?.components?.find((c) => c?.type === 'custom_data');
@@ -335,22 +371,25 @@ export function getPriceFromAhItem(item) {
         const strings = [];
         extractStrings(loreEntry, strings);
 
-        if (!strings.some((s) => typeof s === 'string' && s.includes('Цен'))) continue;
+        if (!strings.some((s) => typeof s === 'string' && loreLooksLikePriceLabel(s))) continue;
 
+        const candidates = [];
         for (const s of strings) {
             if (typeof s !== 'string') continue;
-            const trimmed = s.trim();
-            if (!trimmed) continue;
-
-            const withoutCommas = trimmed.replace(/,/g, '');
-            if (/^\d*\.?\d+$/.test(withoutCommas)) {
-                const num = parseFloat(withoutCommas);
-                if (!Number.isNaN(num)) {
-                    if (num > 20000) return num;
-                    throw new Error(`подозрительная цена ${num} для ${item?.name ?? '?'}`);
-                }
-            }
+            const num = parseAhPriceNumber(s);
+            if (num == null) continue;
+            const score =
+                (s.includes('$') ? 4 : 0) +
+                (/\d,\d{3}/.test(s) ? 2 : 0) +
+                (num > 20000 ? 1 : 0);
+            candidates.push({ num, score });
         }
+        if (!candidates.length) continue;
+
+        candidates.sort((a, b) => b.score - a.score || b.num - a.num);
+        const best = candidates[0].num;
+        if (best > 20000) return best;
+        throw new Error(`подозрительная цена ${best} для ${item?.name ?? '?'}`);
     }
 
     throw new Error(`не удалось извлечь цену для ${item?.name ?? '?'}`);
