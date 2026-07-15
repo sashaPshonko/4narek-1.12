@@ -1,0 +1,45 @@
+{
+  "type": 907,
+  "count": 1,
+  "name": "netherite_helmet",
+  "components": [
+    {
+      "type": "lore",
+      "data": [
+        { "type": "string", "value": "" },
+        {
+          "type": "compound",
+          "value": {
+            "italic": { "type": "byte", "value": 0 },
+            "color": { "type": "string", "value": "#00FF00" },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": { "type": "string", "value": "#FFFFE6" },
+                    "extra": {
+                      "type": "list",
+                      "value": {
+                        "type": "compound",
+                        "value": [
+                          {
+                            "color": { "type": "string", "value": "#00FF00" },
+                            "text": { "type": "string", "value": " $2,500,000" }
+                          }
+                        ]
+                      }
+                    },
+                    "text": { "type": "string", "value": " Ценa:" }
+                  }
+                ]
+              }
+            },
+            "text": { "type": "string", "value": "$" }
+          }
+        }
+      ]
+    }
+  ]
+}

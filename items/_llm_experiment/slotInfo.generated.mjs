@@ -1,0 +1,32 @@
+export function getPriceFromAhItemGenerated(item) {
+  const loreComp = item?.components?.find((c) => c?.type === 'lore');
+  if (!loreComp || !Array.isArray(loreComp.data)) throw new Error('нет лора');
+
+  function extractStrings(node, out) {
+    if (node == null) return;
+    if (Array.isArray(node)) { for (const x of node) extractStrings(x, out); return; }
+    if (typeof node === 'object') {
+      if (node.type === 'string' && 'value' in node) {
+        if (typeof node.value === 'string') out.push(node.value);
+        else extractStrings(node.value, out);
+      } else for (const v of Object.values(node)) extractStrings(v, out);
+      return;
+    }
+    if (typeof node === 'string') out.push(node);
+  }
+
+  const pricePattern = /цена?[:：]?\s*(\d{1,3}(?:,\d{3})*(?:\.\d+)?)$/i;
+
+  for (const loreEntry of loreComp.data) {
+    let strings = [];
+    extractStrings(loreEntry, strings);
+    const combinedString = strings.join('').replace(/#00FF00/g, '').trim();
+    const match = pricePattern.exec(combinedString);
+    if (match) {
+      const priceStr = match[1].replace(',', '');
+      return parseFloat(priceStr);
+    }
+  }
+
+  throw new Error('не удалось извлечь цену');
+}

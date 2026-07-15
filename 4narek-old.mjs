@@ -988,16 +988,18 @@ async function main() {
                     }
 
                     // Сброс / инвентарь≥27 раньше sellItems — иначе осмотр съедает минуту или не даёт цикл снять→продать.
+                    // enoughItems сюда НЕ входит: это «АХ забит при выставлении» — стоп sellItems, не повод лезть в хранилище.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
-                        config.enoughItems ||
                         config.needReset ||
                         isBotInventoryFull()
                     ) {
                         logInfo(
                             isBotInventoryFull()
                                 ? 'АХ → хранилище (инвентарь ≥27)'
-                                : 'АХ → хранилище (reset/enoughItems/needReset)',
+                                : config.needReset
+                                  ? 'АХ → хранилище (needReset)'
+                                  : 'АХ → хранилище (timer60)',
                         );
                         config.menu = myItems;
                         await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);

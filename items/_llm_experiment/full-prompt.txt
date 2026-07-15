@@ -1,0 +1,103 @@
+Ты пишешь JS-модуль для mineflayer бота.
+
+Ошибка:
+не удалось извлечь цену для netherite_helmet
+
+Текущий сломанный алгоритм (упрости):
+```js
+export function getPriceFromAhItem(item) {
+  const loreComp = item?.components?.find((c) => c?.type === 'lore');
+  if (!loreComp || !Array.isArray(loreComp.data)) throw new Error('нет лора');
+  function extractStrings(node, out) {
+    if (node == null) return;
+    if (Array.isArray(node)) { for (const x of node) extractStrings(x, out); return; }
+    if (typeof node === 'object') {
+      if (node.type === 'string' && 'value' in node) {
+        if (typeof node.value === 'string') out.push(node.value);
+        else extractStrings(node.value, out);
+      } else for (const v of Object.values(node)) extractStrings(v, out);
+      return;
+    }
+    if (typeof node === 'string') out.push(node);
+  }
+  for (const loreEntry of loreComp.data) {
+    const strings = [];
+    extractStrings(loreEntry, strings);
+    if (!strings.some((s) => typeof s === 'string' && s.includes('Цен'))) continue;
+    for (const s of strings) {
+      if (typeof s !== 'string') continue;
+      const withoutCommas = s.trim().replace(/,/g, '');
+      if (/^\d*\.?\d+$/.test(withoutCommas)) {
+        const num = parseFloat(withoutCommas);
+        if (!Number.isNaN(num)) {
+          if (num > 20000) return num;
+          throw new Error('подозрительная цена ' + num);
+        }
+      }
+    }
+  }
+  throw new Error('не удалось извлечь цену');
+}
+```
+
+JSON слота во вложении (ниже).
+
+Задача: напиши НОВЫЙ файл целиком:
+export function getPriceFromAhItemGenerated(item) { ... }
+
+Требования:
+- вернуть number цены (ожидается 2500000)
+- FunTime иногда подменяет кириллицу латиницей (Ценa / Цeна)
+- цена может быть как "$2,500,000"
+- не брать цвета #00FF00 как цену
+- без fs/network/eval
+- только чистый JS ESM
+- ответ: ТОЛЬКО код файла, без markdown
+
+
+JSON слота:
+{
+  "type": 907,
+  "count": 1,
+  "name": "netherite_helmet",
+  "components": [
+    {
+      "type": "lore",
+      "data": [
+        { "type": "string", "value": "" },
+        {
+          "type": "compound",
+          "value": {
+            "italic": { "type": "byte", "value": 0 },
+            "color": { "type": "string", "value": "#00FF00" },
+            "extra": {
+              "type": "list",
+              "value": {
+                "type": "compound",
+                "value": [
+                  {
+                    "color": { "type": "string", "value": "#FFFFE6" },
+                    "extra": {
+                      "type": "list",
+                      "value": {
+                        "type": "compound",
+                        "value": [
+                          {
+                            "color": { "type": "string", "value": "#00FF00" },
+                            "text": { "type": "string", "value": " $2,500,000" }
+                          }
+                        ]
+                      }
+                    },
+                    "text": { "type": "string", "value": " Ценa:" }
+                  }
+                ]
+              }
+            },
+            "text": { "type": "string", "value": "$" }
+          }
+        }
+      ]
+    }
+  ]
+}
