@@ -437,6 +437,21 @@ function reportError(where, err) {
     parentPort.postMessage(text);
 }
 
+/** Ошибки парсинга слота АХ — в TG шлём JSON слота, не stack. */
+function reportSlotError(where, err, slotData) {
+    const msg = err instanceof Error ? err.message : String(err);
+    let json = '?';
+    try {
+        json = JSON.stringify(slotData);
+        if (json.length > 3500) json = `${json.slice(0, 3500)}…[trunc ${json.length}]`;
+    } catch (serErr) {
+        json = `[serialize fail: ${serErr.message}]`;
+    }
+    const text = `${config.username} — ${where}: ${msg}\n${json}`;
+    console.error(`${logTag()} ${ANSI.red}✖${ANSI.reset} ${ANSI.red}${where}${ANSI.reset}: ${msg}`);
+    parentPort.postMessage(text);
+}
+
 /** Новый ключ сессии кликов по АХ (если окно обновилось — старые клики не выполняются) */
 function generateKey() {
     config.key = Math.random().toString(36).substring(2, 15);
@@ -527,7 +542,7 @@ function findStorageSlotToUnlist() {
         try {
             priceOnAH = getPriceFromAhItem(currentSlot);
         } catch (err) {
-            reportError(`хранилище слот ${i} цена`, err);
+            reportSlotError(`хранилище слот ${i} цена`, err, currentSlot);
             return { slot: i, reason: 'мусор (не читается цена)' };
         }
 
@@ -1573,7 +1588,7 @@ async function getBestAHSlot() {
             try {
                 currentUUID = getItemUUID(slotData);
             } catch (err) {
-                reportError(`getItemUUID slot=${slot}`, err);
+                reportSlotError(`getItemUUID slot=${slot}`, err, slotData);
                 continue;
             }
 
@@ -1588,7 +1603,7 @@ async function getBestAHSlot() {
             try {
                 ahPrice = getPriceFromAhItem(slotData);
             } catch (err) {
-                reportError(`getPriceFromAh slot=${slot}`, err);
+                reportSlotError(`getPriceFromAh slot=${slot}`, err, slotData);
                 continue;
             }
 
