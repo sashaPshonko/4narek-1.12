@@ -1,3 +1,9 @@
+import {
+    normalizeFuntimeEnchantName,
+    refreshFuntimeEnchantNames,
+    resolveFuntimeEnchantId,
+} from '../../4NAREK/items/funtime-enchants.mjs';
+
 /** Запрещённые чары по minecraft-типу (name в каталоге). Исключения — forbidden_effects у id в items_config.json */
 const forbiddenEnchantsByType = {
     netherite_sword: ['heavy', 'unstable'],
@@ -10,25 +16,23 @@ const forbiddenEnchantsByType = {
     elytra: [],
 };
 
-const numericToName = {
-    33: 'minecraft:sharpness',
-    10: 'minecraft:fire_aspect',
-    40: 'minecraft:unbreaking',
-    36: 'minecraft:sweeping',
-    17: 'minecraft:knockback',
-    18: 'minecraft:looting',
-    28: 'minecraft:protection',
-    27: 'minecraft:projectile_protection',
-    23: 'minecraft:mending',
-    39: 'minecraft:thorns',
-    11: 'minecraft:fire_protection',
-    1: 'minecraft:aqua_affinity',
-    31: 'minecraft:respiration',
-    7: 'minecraft:depth_strider',
-    9: 'minecraft:feather_falling',
-    13: 'minecraft:fortune',
-    8: 'minecraft:efficiency',
-};
+/** FunTime numeric id — см. 4NAREK/items/funtime-enchants.mjs */
+export function setEnchantRegistry() {
+    refreshFuntimeEnchantNames();
+}
+
+/** Ваниль → minecraft:*, кастом (poison) без префикса. */
+export function normalizeEnchantName(name) {
+    return normalizeFuntimeEnchantName(name);
+}
+
+function resolveEnchantId(id) {
+    return resolveFuntimeEnchantId(id);
+}
+
+function enchantNamesMatch(a, b) {
+    return normalizeEnchantName(a) === normalizeEnchantName(b);
+}
 
 const customNameMap = {
     'Яд': 'poison',
@@ -40,6 +44,10 @@ const customNameMap = {
     'Магнит': 'magnet',
     'Паутина': 'web',
     'Авто-плавка': 'smelting',
+    'Опытный': 'skilled',
+    'Попрыгун': 'jumping',
+    'Снайпер': 'sniper',
+    'Окисление': 'oxidation',
 };
 
 export function getDurabilityPercent(item) {
@@ -66,11 +74,15 @@ function getForbiddenEffectNames(configItem) {
 
 function hasForbiddenEnchant(allEnchants, forbiddenList = [], configEffects = []) {
     if (!forbiddenList?.length) return false;
-    const allowedByConfig = new Set((configEffects || []).map((e) => e?.name).filter(Boolean));
+    const allowedByConfig = (configEffects || [])
+        .map((e) => normalizeEnchantName(e?.name))
+        .filter(Boolean);
+    const forbiddenNorm = forbiddenList.map((n) => normalizeEnchantName(n));
     return allEnchants.some((enchant) => {
         if (!enchant?.name) return false;
-        if (allowedByConfig.has(enchant.name)) return false;
-        return forbiddenList.includes(enchant.name);
+        const name = normalizeEnchantName(enchant.name);
+        if (allowedByConfig.some((a) => a === name)) return false;
+        return forbiddenNorm.includes(name);
     });
 }
 
@@ -79,7 +91,7 @@ function exceedsMaxEffectLevels(allEnchants, maxEffects = []) {
     if (!maxEffects?.length) return false;
     return maxEffects.some((cap) => {
         if (!cap?.name) return false;
-        const found = allEnchants.find((e) => e?.name === cap.name);
+        const found = allEnchants.find((e) => enchantNamesMatch(e?.name, cap.name));
         return found && found.lvl > cap.lvl;
     });
 }
@@ -158,24 +170,63 @@ function loreMatchesConfig(item, config) {
 }
 
 function getVanillaEnchants(item) {
-    const enchComponent = item.components?.find((c) => c?.type === 'enchantments');
-    if (!enchComponent?.data?.enchantments) return [];
-    return enchComponent.data.enchantments
-        .map((e) => {
-            if (!e) return null;
-            let name = e.id;
-            if (typeof name === 'number') name = numericToName[name] || `enchantment.${name}`;
-            return { name, lvl: e.level ?? 1 };
-        })
-        .filter(Boolean);
+    const out = [];
+    const hasComponentEnchants = item?.components?.some(
+        (c) => c.type === 'enchantments' || c.type === 'stored_enchantments',
+    );
+
+    if (!hasComponentEnchants && Array.isArray(item?.enchants) && item.enchants.length) {
+        for (const e of item.enchants) {
+            const name = resolveEnchantId(e.id ?? e.name);
+            const lvl = e.lvl ?? e.level ?? 1;
+            if (name) out.push({ name, lvl });
+        }
+    }
+
+    const enchComponent = item?.components?.find((c) => c?.type === 'enchantments');
+    const enchList = enchComponent?.data?.enchantments;
+    if (Array.isArray(enchList)) {
+        for (const e of enchList) {
+            if (!e) continue;
+            const name = resolveEnchantId(e.id ?? e.name);
+            if (!name) continue;
+            out.push({ name, lvl: e.level ?? e.lvl ?? 1 });
+        }
+    } else if (enchComponent?.data && typeof enchComponent.data === 'object') {
+        for (const [k, v] of Object.entries(enchComponent.data)) {
+            if (k === 'showInTooltip' || k === 'enchantments') continue;
+            const name = resolveEnchantId(k);
+            const lvl = typeof v === 'number' ? v : v?.lvl ?? v?.level;
+            if (name && typeof lvl === 'number') out.push({ name, lvl });
+        }
+    }
+
+    const storedList = item?.components?.find((c) => c?.type === 'stored_enchantments')?.data
+        ?.enchantments;
+    if (Array.isArray(storedList)) {
+        for (const e of storedList) {
+            const name = resolveEnchantId(e.id ?? e.name);
+            const lvl = e.level ?? e.lvl;
+            if (name && typeof lvl === 'number') out.push({ name, lvl });
+        }
+    }
+
+    return out;
 }
 
 function getAllEnchants(item) {
+    const byName = new Map();
     const custom = extractCustomEnchantsFromItem(item).map((ench) => {
         const englishName = customNameMap[ench.name];
         return englishName ? { name: englishName, lvl: ench.lvl } : ench;
     });
-    return [...getVanillaEnchants(item), ...custom];
+    for (const e of [...getVanillaEnchants(item), ...custom]) {
+        if (!e?.name) continue;
+        const name = normalizeEnchantName(e.name);
+        const prev = byName.get(name);
+        if (!prev || e.lvl > prev.lvl) byName.set(name, { name, lvl: e.lvl });
+    }
+    return [...byName.values()];
 }
 
 function catalogCandidates(itemPrices) {
@@ -191,7 +242,7 @@ function itemMatchesConfigEntry(item, configItem, allEnchants) {
 
     const requiredEffects = configItem.effects || [];
     const enchantsOk = requiredEffects.every((required) => {
-        const found = allEnchants.find((e) => e?.name === required.name);
+        const found = allEnchants.find((e) => enchantNamesMatch(e?.name, required.name));
         return found && found.lvl >= required.lvl;
     });
     if (!enchantsOk) return false;

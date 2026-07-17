@@ -1,35 +1,35 @@
 [
-  {
-    "username": "nahui1akzhit4",
-    "password": "ggggg",
-    "anarchy": 504,
-    "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
-    "role": "buyer",
-    "clanBalanceLimit": 10,
-    "ip": "3"
-  },
-  {
-    "username": "depression5",
-    "password": "ggggg",
-    "anarchy": 504,
-    "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "3"
-  },
-  {
-    "username": "yalub1udashu",
-    "password": "ggggg",
-    "anarchy": 504,
-    "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
-    "role": "seller",
-    "clanBalanceLimit": 10,
-    "ip": "3"
-  }
+    {
+        "username": "nahui1akzhit6",
+        "password": "ggggg",
+        "anarchy": 504,
+        "type": "4narek-old",
+        "item": "netherite helmet",
+        "goType": "netherite_helmet-1.21",
+        "role": "buyer",
+        "clanBalanceLimit": 10,
+        "ip": "504"
+    },
+    {
+        "username": "depression6",
+        "password": "ggggg",
+        "anarchy": 504,
+        "type": "4narek-old",
+        "item": "netherite helmet",
+        "goType": "netherite_helmet-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "504"
+    },
+    {
+        "username": "yalub1udashu1",
+        "password": "ggggg",
+        "anarchy": 504,
+        "type": "4narek-old",
+        "item": "netherite helmet",
+        "goType": "netherite_helmet-1.21",
+        "role": "seller",
+        "clanBalanceLimit": 10,
+        "ip": "504"
+    }
 ]

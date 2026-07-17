@@ -16,6 +16,7 @@ import {
     findMatchingConfigItem,
     getDurabilityPercent,
     isBotTradeItem,
+    setEnchantRegistry,
 } from './items/slotInfo.mjs';
 import {
     isUuidBlockedByOther,
@@ -259,7 +260,8 @@ function configurationTransferAgeMs() {
 const STORAGE_AH_SLOTS = 5;
 
 const firstAHSlot = 0;
-const lastAHSlot = 17;
+/** Только верхняя строка лотов АХ (0–8). */
+const lastAHSlot = 8;
 const slotToReloadAH = 49;
 const slotToStorage = 46;
 const leftMouseButton = 0;
@@ -908,6 +910,7 @@ async function main() {
             });
         },
     });
+    setEnchantRegistry();
 
     setupConfigurationTransferFix(bot);
 

@@ -1,6 +1,6 @@
 [
     {
-        "username": "helpmymomplt",
+        "username": "helpmymomplt1",
         "password": "ggggg",
         "anarchy": 508,
         "type": "4narek-old",
@@ -8,10 +8,10 @@
         "goType": "netherite_chestplate-1.21",
         "role": "buyer",
         "clanBalanceLimit": 10,
-        "ip": "6"
+        "ip": "508"
     },
     {
-        "username": "howtofuckgorv",
+        "username": "howtofuckgorv1",
         "password": "ggggg",
         "anarchy": 508,
         "type": "4narek-old",
@@ -19,10 +19,10 @@
         "goType": "netherite_chestplate-1.21",
         "role": "seller",
         "clanBalanceLimit": 10,
-        "ip": "6"
+        "ip": "508"
     },
     {
-        "username": "bolshedenef",
+        "username": "bolshedenef1",
         "password": "ggggg",
         "anarchy": 508,
         "type": "4narek-old",
@@ -30,6 +30,6 @@
         "goType": "netherite_chestplate-1.21",
         "role": "seller",
         "clanBalanceLimit": 10,
-        "ip": "6"
+        "ip": "508"
     }
 ]

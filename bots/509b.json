@@ -1,6 +1,6 @@
 [
     {
-        "username": "govnaismerta",
+        "username": "govnaismerti1",
         "password": "ggggg",
         "anarchy": 509,
         "type": "4narek-old",
@@ -8,10 +8,10 @@
         "goType": "netherite_leggings-1.21",
         "role": "buyer",
         "clanBalanceLimit": 10,
-        "ip": "7"
+        "ip": "509"
     },
     {
-        "username": "spisladkadoche",
+        "username": "spisladkadocha1",
         "password": "ggggg",
         "anarchy": 509,
         "type": "4narek-old",
@@ -19,10 +19,10 @@
         "goType": "netherite_leggings-1.21",
         "role": "seller",
         "clanBalanceLimit": 10,
-        "ip": "7"
+        "ip": "509"
     },
     {
-        "username": "whichdayidye",
+        "username": "whichdayidye1",
         "password": "ggggg",
         "anarchy": 509,
         "type": "4narek-old",
@@ -30,6 +30,6 @@
         "goType": "netherite_leggings-1.21",
         "role": "seller",
         "clanBalanceLimit": 10,
-        "ip": "7"
+        "ip": "509"
     }
 ]
