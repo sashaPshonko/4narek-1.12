@@ -2,7 +2,7 @@ import {
     normalizeFuntimeEnchantName,
     refreshFuntimeEnchantNames,
     resolveFuntimeEnchantId,
-} from '../../4NAREK/items/funtime-enchants.mjs';
+} from './funtime-enchants.mjs';
 
 /** Запрещённые чары по minecraft-типу (name в каталоге). Исключения — forbidden_effects у id в items_config.json */
 const forbiddenEnchantsByType = {
@@ -16,7 +16,7 @@ const forbiddenEnchantsByType = {
     elytra: [],
 };
 
-/** FunTime numeric id — см. 4NAREK/items/funtime-enchants.mjs */
+/** FunTime numeric id — см. ./funtime-enchants.mjs */
 export function setEnchantRegistry() {
     refreshFuntimeEnchantNames();
 }
