@@ -1101,13 +1101,35 @@ async function main() {
 
                     if (slotToBuy !== null && slotToBuy < 9) {
                         logInfo(`АХ → купить слот ${slotToBuy}`);
+                        const contentBeforeBuy = ahWindowContentKey(bot.currentWindow);
                         await safeClickBuy(
                             bot,
                             slotToBuy,
                             delayMs({ min: 500, max: 700 }) * (slotToBuy + 2),
                             key,
                         );
-                        return;
+                        // Раньше тут был return → ждали windowOpen. FunTime часто обновляет
+                        // АХ in-place после клика → бот мёртв до physicTick (~60с).
+                        if (config.key !== key) return;
+                        await rnd('WINDOW_DELAY');
+                        if (config.key !== key) return;
+                        if (!bot.currentWindow) {
+                            logWarn('АХ → окна нет после buy');
+                            return;
+                        }
+                        config.menu = resolveWindowMenu(bot.currentWindow);
+                        if (config.menu !== analysisAH) {
+                            logInfo(`АХ → после buy окно «${config.menu}»`);
+                            break;
+                        }
+                        const contentAfterBuy = ahWindowContentKey(bot.currentWindow);
+                        if (contentAfterBuy !== contentBeforeBuy) {
+                            staleContentPasses = 0;
+                            logInfo('АХ → buy in-place (слоты сменились, windowOpen нет)');
+                        } else {
+                            logInfo('АХ → после buy всё ещё Анализ, продолжаю цикл');
+                        }
+                        continue;
                     }
 
                     if (slotToBuy === null || config.needReloadAH) {
