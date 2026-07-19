@@ -394,6 +394,7 @@ const config = {
     items: workerData.itemPrices ?? [],
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
+    sellInFlight: false,
     needReset: false,
     walkTime: 0,
     BuyingItem: { id: '', price: 0 },
@@ -621,7 +622,9 @@ function findStorageSlotToUnlist() {
 
 const TRY_SELL_MARKER = 'выставлен на продажу за';
 const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
-const SELL_LIST_ACK_TIMEOUT_MS = 300;
+/** Ждём ответ чата дольше — «слишком дорого» приходит не за 300мс. */
+const SELL_LIST_ACK_TIMEOUT_MS = 2500;
+const SELL_SLOT_MAX_ATTEMPTS = 5;
 
 let sellListAckResolve = null;
 
@@ -829,6 +832,15 @@ async function handleChatMessage(text) {
         return;
     }
 
+    // FunTime: «[☃] Вы пытаетесь выставить <item> слишком дорого! Введите команду продажи ещё раз, чтобы подтвердить!»
+    if (
+        text.includes('[☃] Вы пытаетесь выставить')
+        && text.includes('слишком дорого! Введите команду продажи ещё раз, чтобы подтвердить!')
+    ) {
+        finishSellListAck('confirm');
+        return;
+    }
+
     if (text.includes('[☃] Минимальная цена')) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
@@ -1020,10 +1032,11 @@ async function main() {
     });
 
     bot.on('physicTick', async () => {
+        if (config.sellInFlight) return;
         if (Date.now() - config.timeActive > 60000) {
             config.timeActive = Date.now();
             await sellItems();
-            await safeAH();
+            if (!config.sellInFlight) await safeAH();
         }
     })
 
@@ -1337,12 +1350,18 @@ async function closeCurrentWindowSafe() {
 }
 
 async function sellItems() {
+    if (config.sellInFlight) {
+        logWarn('продажа → уже идёт, skip');
+        return;
+    }
+    config.sellInFlight = true;
     config.timeActive = Date.now();
     logOk('продажа → старт');
     try {
         config.needSell = false;
         config.needSendAH = true;
         await joinAnarchy();
+        config.timeActive = Date.now();
         let canSell = true;
 
         if (!bot) {
@@ -1437,26 +1456,48 @@ async function sellItems() {
                         currentSlot++;
                         continue;
                     }
-                    const sellPrice = config.needPrice || info.sellPrice;
+                    let sellPrice = config.needPrice || info.sellPrice;
                     if (config.needPrice) config.needPrice = 0;
-                    bot.chat(`/ah sell ${sellPrice}`);
-                    let ack = await waitSellListAck();
-                    if (ack === 'timeout') {
-                        if (config.needPrice) ack = 'retry';
-                        else if (config.enoughItems) ack = 'full';
-                    }
-                    if (ack === 'retry') {
-                        logInfo(`sellItems slot=${currentSlot} → min/max цена, повтор`);
-                        continue;
-                    }
-                    if (ack === 'ok') {
-                        logOk(`sellItems slot=${currentSlot} → выставлен`);
-                    } else if (ack === 'empty' || ack === 'skip') {
-                        logInfo(`sellItems slot=${currentSlot} → ${ack === 'empty' ? 'пусто (Воздух)' : 'пропуск'}`);
-                    } else if (ack === 'full') {
-                        logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито`);
-                    } else {
+                    // Слот на месте → повторяем /ah sell (confirm «слишком дорого», мин/макс, глюк чата)
+                    for (let attempt = 1; attempt <= SELL_SLOT_MAX_ATTEMPTS; attempt++) {
+                        if (slotGone() || config.enoughItems || config.hasDangerousTrash) break;
+                        if (config.needPrice) {
+                            sellPrice = config.needPrice;
+                            config.needPrice = 0;
+                        }
+                        bot.chat(`/ah sell ${sellPrice}`);
+                        let ack = await waitSellListAck();
+                        if (ack === 'timeout') {
+                            if (config.needPrice) ack = 'retry';
+                            else if (config.enoughItems) ack = 'full';
+                            else if (!slotGone()) ack = 'confirm';
+                        }
+                        if (ack === 'ok') {
+                            logOk(`sellItems slot=${currentSlot} → выставлен`);
+                            break;
+                        }
+                        if (ack === 'empty' || ack === 'skip') {
+                            logInfo(
+                                `sellItems slot=${currentSlot} → ${ack === 'empty' ? 'пусто (Воздух)' : 'пропуск'}`,
+                            );
+                            break;
+                        }
+                        if (ack === 'full') {
+                            logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито`);
+                            break;
+                        }
+                        if (ack === 'retry' || ack === 'confirm') {
+                            logInfo(
+                                `sellItems slot=${currentSlot} → повтор ${attempt}/${SELL_SLOT_MAX_ATTEMPTS} (${ack})`,
+                            );
+                            if (attempt < SELL_SLOT_MAX_ATTEMPTS && !slotGone()) {
+                                await rnd('BASE_DELAY');
+                                continue;
+                            }
+                            break;
+                        }
                         logInfo(`sellItems slot=${currentSlot} → ack ${ack}`);
+                        break;
                     }
                     currentSlot++;
                 } catch (err) {
@@ -1488,6 +1529,8 @@ async function sellItems() {
     } finally {
         config.needSell = false;
         await waitWarpTeleport();
+        config.timeActive = Date.now();
+        config.sellInFlight = false;
         logOk('продажа → конец');
     }
 }
