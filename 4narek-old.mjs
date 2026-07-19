@@ -460,8 +460,8 @@ function reportSlotError(where, err, slotData) {
 }
 
 /**
- * Окно АХ не обновилось после клика (key тот же).
- * В TG — JSON окна без slots (как в resolveWindowMenu).
+ * Окно АХ зависло: после клика ни windowOpen, ни смена слотов.
+ * В TG — JSON окна без slots. `menu` / `pass` / `contentSame` — наши поля, не FunTime.
  */
 function reportStaleAhWindow(win, meta = {}) {
     let json = '?';
@@ -476,9 +476,33 @@ function reportStaleAhWindow(win, meta = {}) {
     } catch (serErr) {
         json = `[serialize fail: ${serErr.message}]`;
     }
-    const text = `#ah-stale ${config.username} — окно не обновилось\n${json}`;
-    console.warn(`${logTag()} ${ANSI.yellow}!${ANSI.reset} ah-stale: окно не обновилось`);
+    const text = `#ah-stale ${config.username} — АХ завис (слоты не изменились)\n${json}`;
+    console.warn(`${logTag()} ${ANSI.yellow}!${ANSI.reset} ah-stale: слоты не изменились`);
     parentPort.postMessage(text);
+}
+
+/** Отпечаток лотов АХ (0..inventoryStart−1) — ловим in-place update без windowOpen. */
+function ahWindowContentKey(win) {
+    if (!win?.slots) return '';
+    const end = Number.isFinite(win.inventoryStart) ? win.inventoryStart : 54;
+    const parts = [];
+    for (let i = 0; i < end; i++) {
+        const item = win.slots[i];
+        if (!item) {
+            parts.push(`${i}:`);
+            continue;
+        }
+        let uuid = '';
+        try {
+            uuid = getItemUUID(item) || '';
+        } catch {
+            /* ignore */
+        }
+        parts.push(
+            `${i}:${item.name || '?'}:${item.count ?? 0}:${uuid}:${item.nbt ? 'n' : ''}`,
+        );
+    }
+    return parts.join('|');
 }
 
 /** Новый ключ сессии кликов по АХ (если окно обновилось — старые клики не выполняются) */
@@ -1017,7 +1041,8 @@ async function main() {
                 // Не жмём 49 вслепую — вдруг это уже хранилище / подтверждение.
                 const maxSameKeyPasses = 3;
                 let staleAhReported = false;
-                for (let pass = 0; ; pass++) {
+                let staleContentPasses = 0;
+                for (;;) {
                     if (config.key !== key) return;
                     if (!bot.currentWindow) {
                         logWarn('АХ → окна нет, выход');
@@ -1079,28 +1104,42 @@ async function main() {
                         logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
                     }
 
+                    const contentBefore = ahWindowContentKey(bot.currentWindow);
                     await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
                     if (config.key !== key) return;
 
                     await rnd('WINDOW_DELAY');
                     if (config.key !== key) return;
 
-                    // Кликнули reload — windowOpen не пришёл (key тот же)
+                    const contentAfter = ahWindowContentKey(bot.currentWindow);
+                    if (contentAfter !== contentBefore) {
+                        // FunTime часто обновляет АХ in-place без windowOpen — это не зависание
+                        staleContentPasses = 0;
+                        logInfo('АХ → reload in-place (слоты сменились, windowOpen нет)');
+                        continue;
+                    }
+
+                    staleContentPasses += 1;
                     if (!staleAhReported && bot.currentWindow) {
                         staleAhReported = true;
                         reportStaleAhWindow(bot.currentWindow, {
-                            pass: pass + 1,
+                            pass: staleContentPasses,
                             maxSameKeyPasses,
+                            contentSame: true,
                         });
                     }
 
-                    if (pass + 1 >= maxSameKeyPasses) {
-                        logWarn(`АХ → ${maxSameKeyPasses} прохода без нового окна → safeAH`);
+                    if (staleContentPasses >= maxSameKeyPasses) {
+                        logWarn(
+                            `АХ → ${maxSameKeyPasses}× reload без смены слотов → safeAH`,
+                        );
                         await safeAH();
                         return;
                     }
 
-                    logInfo(`АХ → key тот же, заново анализ окна (${pass + 2}/${maxSameKeyPasses})`);
+                    logInfo(
+                        `АХ → слоты те же после reload (${staleContentPasses}/${maxSameKeyPasses})`,
+                    );
                 }
 
                 if (config.key !== key) return;
