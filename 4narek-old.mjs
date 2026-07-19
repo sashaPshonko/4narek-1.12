@@ -459,6 +459,28 @@ function reportSlotError(where, err, slotData) {
     parentPort.postMessage(text);
 }
 
+/**
+ * Окно АХ не обновилось после клика (key тот же).
+ * В TG — JSON окна без slots (как в resolveWindowMenu).
+ */
+function reportStaleAhWindow(win, meta = {}) {
+    let json = '?';
+    try {
+        const { slots: _slots, ...windowWithoutSlots } = win ?? {};
+        json = JSON.stringify({
+            ...windowWithoutSlots,
+            menu: config.menu,
+            ...meta,
+        });
+        if (json.length > 3500) json = `${json.slice(0, 3500)}…[trunc ${json.length}]`;
+    } catch (serErr) {
+        json = `[serialize fail: ${serErr.message}]`;
+    }
+    const text = `#ah-stale ${config.username} — окно не обновилось\n${json}`;
+    console.warn(`${logTag()} ${ANSI.yellow}!${ANSI.reset} ah-stale: окно не обновилось`);
+    parentPort.postMessage(text);
+}
+
 /** Новый ключ сессии кликов по АХ (если окно обновилось — старые клики не выполняются) */
 function generateKey() {
     config.key = Math.random().toString(36).substring(2, 15);
@@ -994,6 +1016,7 @@ async function main() {
                 // Reload без нового windowOpen: после паузы заново определяем окно и слоты.
                 // Не жмём 49 вслепую — вдруг это уже хранилище / подтверждение.
                 const maxSameKeyPasses = 3;
+                let staleAhReported = false;
                 for (let pass = 0; ; pass++) {
                     if (config.key !== key) return;
                     if (!bot.currentWindow) {
@@ -1061,6 +1084,15 @@ async function main() {
 
                     await rnd('WINDOW_DELAY');
                     if (config.key !== key) return;
+
+                    // Кликнули reload — windowOpen не пришёл (key тот же)
+                    if (!staleAhReported && bot.currentWindow) {
+                        staleAhReported = true;
+                        reportStaleAhWindow(bot.currentWindow, {
+                            pass: pass + 1,
+                            maxSameKeyPasses,
+                        });
+                    }
 
                     if (pass + 1 >= maxSameKeyPasses) {
                         logWarn(`АХ → ${maxSameKeyPasses} прохода без нового окна → safeAH`);
