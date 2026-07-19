@@ -7,7 +7,7 @@ import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import prismarineChat from 'prismarine-chat';
 
-const ChatMessage = prismarineChat('1.21.4');
+const ChatMessage = prismarineChat('1.21.11');
 
 import {
     getSlotInfo,
@@ -47,6 +47,7 @@ function isIgnorableProtocolNoise(err) {
     if (stack.includes('prismarine-chat') || stack.includes('ChatMessage.fromNetwork')) return true;
     if (msg.includes('Cannot convert undefined or null to object')) return true;
     if (msg.includes('uncompressed length') || msg.includes('problem inflating chunk')) return true;
+    if (msg.includes('array size is abnormally large')) return true;
     if (msg.includes('client timed out')) return true;
     if (msg.includes("reading 'translate'")) return true;
     return false;
@@ -266,7 +267,7 @@ const slotToReloadAH = 49;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
-const slotGlass = 31;
+const slotGlass = 0;
 
 /** mineflayer bot.inventory.slots: 0–4 крафт, 5–8 броня, 9–35 рюкзак, 36–44 хотбар, 45 offhand */
 const firstInventorySlot = 9;
@@ -604,15 +605,29 @@ function finishSellListAck(result) {
     resolve(result);
 }
 
-/** Любые разделители (., запятые, $) — в строке остаются только цифры. */
+/** Цифры из фрагмента (точки/пробелы — разделители тысяч). */
 function digitsToInt(text) {
     const digits = String(text).replace(/\D/g, '');
     if (!digits) return NaN;
     return parseInt(digits, 10);
 }
 
+/**
+ * Цена из чата. Не склеивать все цифры строки («x64 … за 80.000» ≠ 6480000).
+ */
 function parseChatPrice(text) {
-    return digitsToInt(text);
+    const s = String(text || '');
+    const afterZa = s.match(/за\s*([\d.\s\u00a0]+)/i);
+    if (afterZa) {
+        const n = digitsToInt(afterZa[1]);
+        if (Number.isFinite(n) && n > 0) return n;
+    }
+    const groups = [...s.matchAll(/(\d(?:[\d.\s\u00a0]*\d)?)/g)]
+        .map((m) => digitsToInt(m[1]))
+        .filter((n) => Number.isFinite(n) && n >= 1000);
+    if (groups.length) return groups[groups.length - 1];
+    const n = digitsToInt(s);
+    return Number.isFinite(n) && n > 0 ? n : NaN;
 }
 
 /** Цена только из хвоста после «выставлен на продажу за» (для % 100 → тип предмета). */
@@ -691,7 +706,9 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
-        const price = parseChatPrice(text);
+        const fromChat = parseChatPrice(text);
+        const known = Number(config.BuyingItem.price);
+        const price = known > 0 && Number.isFinite(known) ? known : fromChat;
         const id = config.BuyingItem.id;
         parentPort.postMessage({ name: 'buy', id, price });
         config.needSell = true;
@@ -881,7 +898,7 @@ async function main() {
         password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        version: '1.21.4',
+        version: '1.21.11',
         physicsEnabled: false,
         hideErrors: true,
         logErrors: false,

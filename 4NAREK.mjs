@@ -7,7 +7,7 @@ import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import prismarineChat from 'prismarine-chat';
 
-const ChatMessage = prismarineChat('1.21.4');
+const ChatMessage = prismarineChat('1.21.11');
 
 import {
     getSlotInfo,
@@ -47,6 +47,7 @@ function isIgnorableProtocolNoise(err) {
     if (stack.includes('prismarine-chat') || stack.includes('ChatMessage.fromNetwork')) return true;
     if (msg.includes('Cannot convert undefined or null to object')) return true;
     if (msg.includes('uncompressed length') || msg.includes('problem inflating chunk')) return true;
+    if (msg.includes('array size is abnormally large')) return true;
     if (msg.includes('client timed out')) return true;
     if (msg.includes("reading 'translate'")) return true;
     return false;
@@ -956,7 +957,7 @@ async function main() {
         password: config.password,
         host: 'mc.funtime.su',
         port: 25565,
-        version: '1.21.4',
+        version: '1.21.11',
         physicsEnabled: false,
         hideErrors: true,
         logErrors: false,

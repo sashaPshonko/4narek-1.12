@@ -18,7 +18,7 @@ apt install git -y
 git clone https://github.com/sashaPshonko/4narek-1.12
 cd 4narek-1.12
 nohup bash scripts/506.sh > 506.log 2>&1 &
-git pull
+git pullа
 chmod +x xray.sh xray-check.sh
 sudo bash xray.sh
 
