@@ -1401,6 +1401,8 @@ async function sellItems() {
 
         if (bot) {
             await closeCurrentWindowSafe();
+            await rnd('BASE_DELAY');
+            await bot.chat(`/an${config.anarchy}`);
             if (config.lastWarpTime < Date.now() - 120000) {
                 const warp = warps[Math.floor(Math.random() * warps.length)];
                 await rnd('BASE_DELAY');
