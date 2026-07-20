@@ -395,6 +395,9 @@ const config = {
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
     sellInFlight: false,
+    /** Поколение sellItems — лобби/таймаут бампят, старая сессия выходит. */
+    sellGen: 0,
+    sellStartedAt: 0,
     needReset: false,
     walkTime: 0,
     BuyingItem: { id: '', price: 0 },
@@ -625,6 +628,8 @@ const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
 /** Ждём ответ чата дольше — «слишком дорого» приходит не за 300мс. */
 const SELL_LIST_ACK_TIMEOUT_MS = 2500;
 const SELL_SLOT_MAX_ATTEMPTS = 5;
+/** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
+const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
 
 let sellListAckResolve = null;
 
@@ -899,6 +904,7 @@ async function handleChatMessage(text) {
         if (Date.now() - botWorkerStartTime < LOBBY_IGNORE_MS) return;
         const preview = text.trim().length > 50 ? `${text.trim().slice(0, 50)}…` : text.trim();
         logWarn(`лобби «${preview}» → sellItems`);
+        abortSellSession('лобби');
         config.timeJoinAnarchy = 0;
         await sellItems();
         return;
@@ -1032,7 +1038,13 @@ async function main() {
     });
 
     bot.on('physicTick', async () => {
-        if (config.sellInFlight) return;
+        if (config.sellInFlight) {
+            if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
+                abortSellSession('таймаут');
+            } else {
+                return;
+            }
+        }
         if (Date.now() - config.timeActive > 60000) {
             config.timeActive = Date.now();
             await sellItems();
@@ -1302,31 +1314,58 @@ async function main() {
 
 main();
 
-async function joinAnarchy() {
-    if (!config.timeJoinAnarchy) {
-        while (!config.timeJoinAnarchy) {
-            if (isInConfigurationTransfer()) {
-                const ageSec = Math.ceil(configurationTransferAgeMs() / 1000);
-                logInfo(`transfer → в configuration ${ageSec}с, жду…`);
-                if (configurationTransferAgeMs() > 45_000) {
-                    logWarn('transfer → configuration timeout 45с');
-                    process.exit(1);
+async function joinAnarchy(gen = null) {
+    for (;;) {
+        if (gen != null && !isSellSessionAlive(gen)) return;
+        if (!config.timeJoinAnarchy) {
+            while (!config.timeJoinAnarchy) {
+                if (gen != null && !isSellSessionAlive(gen)) return;
+                if (isInConfigurationTransfer()) {
+                    const ageSec = Math.ceil(configurationTransferAgeMs() / 1000);
+                    logInfo(`transfer → в configuration ${ageSec}с, жду…`);
+                    if (configurationTransferAgeMs() > 45_000) {
+                        logWarn('transfer → configuration timeout 45с');
+                        process.exit(1);
+                    }
+                    await rnd('ANARCHY_DELAY');
+                    continue;
                 }
+                await rnd('BASE_DELAY');
+                logInfo(`/an${config.anarchy}… (жду входа)`);
+                bot.physicsEnabled = false;
+                bot.chat(`/an${config.anarchy}`);
                 await rnd('ANARCHY_DELAY');
-                continue;
             }
-            await rnd('BASE_DELAY');
-            logInfo(`/an${config.anarchy}… (жду входа)`);
-            bot.physicsEnabled = false;
-            bot.chat(`/an${config.anarchy}`);
-            await rnd('ANARCHY_DELAY');
         }
+        const joinedAt = config.timeJoinAnarchy;
+        if (!joinedAt) continue;
+        const waitUntil = joinedAt + 11000;
+        if (Date.now() < waitUntil) {
+            logInfo(`joinAnarchy → пауза ${Math.ceil((waitUntil - Date.now()) / 1000)}с`);
+            while (Date.now() < waitUntil) {
+                if (gen != null && !isSellSessionAlive(gen)) return;
+                // Выкинуло в лобби — timeJoin сброшен, заново /an
+                if (!config.timeJoinAnarchy || config.timeJoinAnarchy !== joinedAt) break;
+                await rnd('POLL');
+            }
+        }
+        if (config.timeJoinAnarchy && config.timeJoinAnarchy === joinedAt) return;
     }
-    const waitUntil = config.timeJoinAnarchy + 11000;
-    if (Date.now() < waitUntil) {
-        logInfo(`joinAnarchy → пауза ${Math.ceil((waitUntil - Date.now()) / 1000)}с`);
-        while (Date.now() < waitUntil) await rnd('POLL');
+}
+
+function isSellSessionAlive(gen) {
+    if (gen !== config.sellGen) return false;
+    if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
+        return false;
     }
+    return true;
+}
+
+function abortSellSession(reason) {
+    config.sellGen += 1;
+    config.sellInFlight = false;
+    config.sellStartedAt = 0;
+    logWarn(`продажа → прервана (${reason})`);
 }
 
 async function waitWarpTeleport() {
@@ -1373,16 +1412,26 @@ async function closeCurrentWindowSafe() {
 
 async function sellItems() {
     if (config.sellInFlight) {
-        logWarn('продажа → уже идёт, skip');
-        return;
+        if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
+            abortSellSession('таймаут');
+        } else {
+            logWarn('продажа → уже идёт, skip');
+            return;
+        }
     }
+    const gen = config.sellGen;
     config.sellInFlight = true;
+    config.sellStartedAt = Date.now();
     config.timeActive = Date.now();
     logOk('продажа → старт');
     try {
         config.needSell = false;
         config.needSendAH = true;
-        await joinAnarchy();
+        await joinAnarchy(gen);
+        if (!isSellSessionAlive(gen)) {
+            logWarn('продажа → abort после joinAnarchy');
+            return;
+        }
         config.timeActive = Date.now();
         let canSell = true;
 
@@ -1401,16 +1450,17 @@ async function sellItems() {
 
         if (bot) {
             await closeCurrentWindowSafe();
-            await rnd('BASE_DELAY');
-            await bot.chat(`/an${config.anarchy}`);
+            if (!isSellSessionAlive(gen)) return;
             if (config.lastWarpTime < Date.now() - 120000) {
                 const warp = warps[Math.floor(Math.random() * warps.length)];
                 await rnd('BASE_DELAY');
+                if (!isSellSessionAlive(gen)) return;
                 bot.chat(`/warp ${warp}`);
             }
 
             if (canSell) {
-                await lookAroundSpin();
+                await lookAroundSpin(() => !isSellSessionAlive(gen));
+                if (!isSellSessionAlive(gen)) return;
                 await dropTrash();
             }
 
@@ -1418,9 +1468,16 @@ async function sellItems() {
 
         if (canSell) {
             await moveToHotBar();
+            if (!isSellSessionAlive(gen)) return;
 
             let currentSlot = firstHotbarSlot;
-            while (hasBotItem() && !config.enoughItems && currentSlot <= lastHotbarSlot && !config.hasDangerousTrash) {
+            while (
+                hasBotItem()
+                && !config.enoughItems
+                && currentSlot <= lastHotbarSlot
+                && !config.hasDangerousTrash
+                && isSellSessionAlive(gen)
+            ) {
                 if (currentSlot > lastHotbarSlot) {
                     currentSlot = firstHotbarSlot;
                     continue;
@@ -1464,7 +1521,8 @@ async function sellItems() {
                         }
                         await bot.setQuickBarSlot(quick);
                     }
-                    await antiAfkIfNeeded();
+                    await antiAfkIfNeeded(() => !isSellSessionAlive(gen));
+                    if (!isSellSessionAlive(gen)) return;
                     if (slotGone()) {
                         logInfo(`sellItems slot=${currentSlot} → слот пуст после AFK`);
                         currentSlot++;
@@ -1484,6 +1542,7 @@ async function sellItems() {
                     if (config.needPrice) config.needPrice = 0;
                     // Слот на месте → повторяем /ah sell (confirm «слишком дорого», мин/макс, глюк чата)
                     for (let attempt = 1; attempt <= SELL_SLOT_MAX_ATTEMPTS; attempt++) {
+                        if (!isSellSessionAlive(gen)) return;
                         if (slotGone() || config.enoughItems || config.hasDangerousTrash) break;
                         if (config.needPrice) {
                             sellPrice = config.needPrice;
@@ -1491,6 +1550,7 @@ async function sellItems() {
                         }
                         bot.chat(`/ah sell ${sellPrice}`);
                         let ack = await waitSellListAck();
+                        if (!isSellSessionAlive(gen)) return;
                         if (ack === 'timeout') {
                             if (config.needPrice) ack = 'retry';
                             else if (config.enoughItems) ack = 'full';
@@ -1530,7 +1590,7 @@ async function sellItems() {
                     currentSlot++;
                 }
             }
-            if (!config.hasDangerousTrash) {
+            if (!config.hasDangerousTrash && isSellSessionAlive(gen)) {
                 await safeBalance();
                 const saveSum = getSaveSum();
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
@@ -1549,13 +1609,18 @@ async function sellItems() {
 
     } catch (err) {
         reportError('sellItems', err);
-        await waitWarpTeleport();
+        if (isSellSessionAlive(gen)) await waitWarpTeleport();
     } finally {
         config.needSell = false;
-        await waitWarpTeleport();
-        config.timeActive = Date.now();
-        config.sellInFlight = false;
-        logOk('продажа → конец');
+        if (gen === config.sellGen) {
+            await waitWarpTeleport();
+            config.timeActive = Date.now();
+            config.sellInFlight = false;
+            config.sellStartedAt = 0;
+            logOk('продажа → конец');
+        } else {
+            logWarn('продажа → конец (устаревшая сессия)');
+        }
     }
 }
 
@@ -1631,7 +1696,7 @@ function isBotInventoryFull() {
 }
 
 /** Осмотр: от текущего yaw/pitch сервера, мелкие GCD-шаги, фикс. число итераций. */
-async function lookAroundSpin() {
+async function lookAroundSpin(shouldAbort = null) {
     if (!bot?.entity) return;
 
     const startedAt = Date.now();
@@ -1648,6 +1713,7 @@ async function lookAroundSpin() {
 
     for (let i = 0; i < steps; i++) {
         if (Date.now() >= deadline) break;
+        if (typeof shouldAbort === 'function' && shouldAbort()) break;
 
         const yawUnits = 2 + Math.floor(Math.random() * 5);
         const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
@@ -1674,14 +1740,15 @@ async function lookAroundSpin() {
 }
 
 /** Сход с AFK — крутим головой. */
-async function antiAfkIfNeeded() {
+async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
     logAfk('сходу с AFK → осмотр');
 
     await closeCurrentWindowSafe();
 
-    await lookAroundSpin();
+    await lookAroundSpin(shouldAbort);
     config.afk = false;
     logOk('AFK снят');
 }
