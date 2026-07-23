@@ -5,3 +5,5 @@ xray.local.env
 .xray-start.lock
 bot.log
 *.log
+# listing memory per bot (orchestrator)
+listings-state/

@@ -32,6 +32,7 @@ import {
     ackWorkerReady,
     isWorkerReady,
     WORKER_READY_TIMEOUT_MS,
+    createListingStore,
 } from './orchestrator-shared.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -45,6 +46,7 @@ marketFloorTracker.start();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const listingStore = createListingStore(join(__dirname, 'listings-state'));
 
 const LOCAL_MODE = true;
 const SKIP_TELEGRAM = LOCAL_MODE;
@@ -208,6 +210,13 @@ async function runWorker(bot) {
                             console.log(`✅ ${username} запущен`);
                             pushPresenceToGo();
                         }
+                    } else if (message.name === 'listing') {
+                        const result = listingStore.handle(username, message);
+                        safePostMessage(username, {
+                            type: 'listing_res',
+                            reqId: message.reqId,
+                            result,
+                        });
                     } else if (message.name === "buy" || message.name === "sell" || message.name === "try-sell") {
                         if (socket && isSocketOpen) {
                             const action = message.name === 'try-sell' ? 'try-sell' : message.name;

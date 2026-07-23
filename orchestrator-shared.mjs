@@ -530,6 +530,8 @@ export function applyGoJsonUpdate(itemsBuying, goData) {
     return mergeGoJsonUpdate(itemsBuying, goData);
 }
 
+export { createListingStore } from './items/listing-store.mjs';
+
 /** Сколько ждать success от воркера после старта */
 export const WORKER_READY_TIMEOUT_MS = 120_000;
 
