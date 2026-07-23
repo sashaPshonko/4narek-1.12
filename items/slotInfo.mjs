@@ -229,6 +229,8 @@ function getAllEnchants(item) {
     return [...byName.values()];
 }
 
+export { getAllEnchants };
+
 function catalogCandidates(itemPrices) {
     if (!Array.isArray(itemPrices)) {
         throw new Error(`itemPrices не массив (${typeof itemPrices})`);

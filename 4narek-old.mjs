@@ -15,9 +15,11 @@ import {
     getPriceFromAhItem,
     findMatchingConfigItem,
     getDurabilityPercent,
+    getAllEnchants,
     isBotTradeItem,
     setEnchantRegistry,
 } from './items/slotInfo.mjs';
+import { createListingMemory } from './items/listing-memory.mjs';
 import {
     isUuidBlockedByOther,
     mergeBuyingClaim,
@@ -400,7 +402,7 @@ const config = {
     sellStartedAt: 0,
     needReset: false,
     walkTime: 0,
-    BuyingItem: { id: '', price: 0 },
+    BuyingItem: { id: '', price: 0, enchants: [], durability: null },
     needPrice: 0,
     key: '',
     menu: analysisAH,
@@ -422,6 +424,41 @@ const config = {
 var bot = null;
 /** UUID лотов в очереди: { uuid, username } */
 let itemsBuying = [];
+/** Listing id 0–4 (последняя цифра цены) → чары/прочность до sell. */
+const listingMem = createListingMemory();
+
+function snapshotItemTradeMeta(item) {
+    if (!item) return { enchants: [], durability: null };
+    let enchants = [];
+    try {
+        enchants = getAllEnchants(item) || [];
+    } catch {
+        enchants = [];
+    }
+    let durability = null;
+    try {
+        const d = getDurabilityPercent(item);
+        if (Number.isFinite(d)) durability = Math.round(d * 1000) / 1000;
+    } catch {
+        durability = null;
+    }
+    return { enchants, durability };
+}
+
+function syncListingIdsFromStorageWindow() {
+    const prices = [];
+    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
+        const slot = bot?.currentWindow?.slots?.[i];
+        if (!slot) continue;
+        try {
+            const p = getPriceFromAhItem(slot);
+            if (Number.isFinite(p) && p > 0) prices.push(p);
+        } catch {
+            /* слот без цены */
+        }
+    }
+    listingMem.syncFromStoragePrices(prices);
+}
 
 function claimAhLotUuid(uuid) {
     if (!uuid) return;
@@ -603,7 +640,7 @@ function findStorageSlotToUnlist() {
             return { slot: i, reason: 'мусор (не читается цена)' };
         }
 
-        if (info.sellPrice !== priceOnAH) {
+        if (!listingMem.pricesMatch(priceOnAH, info.sellPrice)) {
             if (priceOrFullSlot === null) {
                 priceOrFullSlot = i;
                 priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
@@ -764,7 +801,14 @@ async function handleChatMessage(text) {
         const known = Number(config.BuyingItem.price);
         const price = known > 0 && Number.isFinite(known) ? known : fromChat;
         const id = config.BuyingItem.id;
-        parentPort.postMessage({ name: 'buy', id, price });
+        parentPort.postMessage({
+            name: 'buy',
+            id,
+            price,
+            enchants: config.BuyingItem.enchants || [],
+            durability: config.BuyingItem.durability,
+        });
+        config.BuyingItem = { id: '', price: 0, enchants: [], durability: null };
         config.needSell = true;
         return;
     }
@@ -772,7 +816,15 @@ async function handleChatMessage(text) {
     if (text.includes('[☃] У Вас купили')) {
         config.enoughItems = false;
         const price = parseChatPrice(text);
-        parentPort.postMessage({ name: 'sell', id: getIdBySellPrice(price), price });
+        const meta = listingMem.takeSold(price);
+        const id = meta?.catalogId || getIdBySellPrice(price);
+        parentPort.postMessage({
+            name: 'sell',
+            id,
+            price,
+            enchants: meta?.enchants || [],
+            durability: meta?.durability ?? null,
+        });
         config.needSell = true;
         return;
     }
@@ -780,7 +832,8 @@ async function handleChatMessage(text) {
     if (text.includes(TRY_SELL_MARKER)) {
         const price = parseTrySellPrice(text);
         if (!Number.isFinite(price)) return;
-        const id = getIdBySellPrice(price) || config.goType;
+        const confirmed = listingMem.confirmPending(price);
+        const id = confirmed?.catalogId || getIdBySellPrice(price) || config.goType;
         if (id) parentPort.postMessage({ name: 'try-sell', id, price });
         finishSellListAck('ok');
         return;
@@ -1216,6 +1269,7 @@ async function main() {
 
             case myItems:
                 config.needReset = false;
+                syncListingIdsFromStorageWindow();
                 if (!bot.currentWindow?.slots[0]) {
                     config.enoughItems = false;
                 }
@@ -1548,7 +1602,27 @@ async function sellItems() {
                             sellPrice = config.needPrice;
                             config.needPrice = 0;
                         }
-                        bot.chat(`/ah sell ${sellPrice}`);
+                        const listingId = listingMem.allocId();
+                        if (listingId == null) {
+                            logWarn(`sellItems slot=${currentSlot} → нет свободного listing id 0–4`);
+                            config.enoughItems = true;
+                            break;
+                        }
+                        const held = bot.inventory.slots[currentSlot];
+                        const meta = snapshotItemTradeMeta(held);
+                        const listPrice = listingMem.priceWithListingId(sellPrice, listingId);
+                        if (!Number.isFinite(listPrice)) {
+                            listingMem.clearPending();
+                            break;
+                        }
+                        listingMem.setPending({
+                            listingId,
+                            catalogId: info.id,
+                            enchants: meta.enchants,
+                            durability: meta.durability,
+                            price: listPrice,
+                        });
+                        bot.chat(`/ah sell ${listPrice}`);
                         let ack = await waitSellListAck();
                         if (!isSellSessionAlive(gen)) return;
                         if (ack === 'timeout') {
@@ -1556,8 +1630,11 @@ async function sellItems() {
                             else if (config.enoughItems) ack = 'full';
                             else if (!slotGone()) ack = 'confirm';
                         }
+                        if (ack !== 'ok') {
+                            listingMem.clearPending();
+                        }
                         if (ack === 'ok') {
-                            logOk(`sellItems slot=${currentSlot} → выставлен`);
+                            logOk(`sellItems slot=${currentSlot} → выставлен id=${listingId} price=${listPrice}`);
                             break;
                         }
                         if (ack === 'empty' || ack === 'skip') {
@@ -1842,6 +1919,9 @@ async function getBestAHSlot() {
 
             config.BuyingItem.id = info.id;
             config.BuyingItem.price = ahPrice;
+            const buyMeta = snapshotItemTradeMeta(slotData);
+            config.BuyingItem.enchants = buyMeta.enchants;
+            config.BuyingItem.durability = buyMeta.durability;
 
             if (currentUUID) claimAhLotUuid(currentUUID);
 

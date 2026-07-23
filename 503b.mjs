@@ -214,6 +214,10 @@ async function runWorker(bot) {
                             const action = message.name === 'try-sell' ? 'try-sell' : message.name;
                             const payload = { action, type: message.id };
                             if (message.price) payload.price = message.price;
+                            if (Array.isArray(message.enchants)) payload.enchants = message.enchants;
+                            if (message.durability != null && Number.isFinite(Number(message.durability))) {
+                                payload.durability = Number(message.durability);
+                            }
                             socket.send(JSON.stringify(payload));
                         }
                     } else if (message.name === "items") {
