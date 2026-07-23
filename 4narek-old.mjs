@@ -721,17 +721,11 @@ function parseChatPrice(text) {
     return Number.isFinite(n) && n > 0 ? n : NaN;
 }
 
-/** Цена только из хвоста после «выставлен на продажу за» (для % 100 → тип предмета). */
+/** Цена только из хвоста после «выставлен на продажу за» (listing id = последняя цифра). */
 function parseTrySellPrice(text) {
     const i = text.indexOf(TRY_SELL_MARKER);
     if (i < 0) return NaN;
     return digitsToInt(text.slice(i + TRY_SELL_MARKER.length));
-}
-
-function getIdBySellPrice(price) {
-    if (!Number.isFinite(price)) return '';
-    const found = config.items.find((item) => item.priceSell % 100 === price % 100);
-    return found?.id ?? '';
 }
 
 /** true — у предмета категории бота (goType) изменилась priceSell с прошлого апдейта Go. */
@@ -817,13 +811,17 @@ async function handleChatMessage(text) {
         config.enoughItems = false;
         const price = parseChatPrice(text);
         const meta = listingMem.takeSold(price);
-        const id = meta?.catalogId || getIdBySellPrice(price);
+        if (!meta?.catalogId) {
+            logWarn(`sell: нет памяти listing id=${Number.isFinite(price) ? price % 10 : '?'} price=${price}`);
+            config.needSell = true;
+            return;
+        }
         parentPort.postMessage({
             name: 'sell',
-            id,
+            id: meta.catalogId,
             price,
-            enchants: meta?.enchants || [],
-            durability: meta?.durability ?? null,
+            enchants: meta.enchants || [],
+            durability: meta.durability ?? null,
         });
         config.needSell = true;
         return;
@@ -833,8 +831,12 @@ async function handleChatMessage(text) {
         const price = parseTrySellPrice(text);
         if (!Number.isFinite(price)) return;
         const confirmed = listingMem.confirmPending(price);
-        const id = confirmed?.catalogId || getIdBySellPrice(price) || config.goType;
-        if (id) parentPort.postMessage({ name: 'try-sell', id, price });
+        if (!confirmed?.catalogId) {
+            logWarn(`try-sell: не подтвердился listing id=${price % 10} price=${price}`);
+            finishSellListAck('ok');
+            return;
+        }
+        parentPort.postMessage({ name: 'try-sell', id: confirmed.catalogId, price });
         finishSellListAck('ok');
         return;
     }
