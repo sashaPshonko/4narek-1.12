@@ -404,7 +404,7 @@ const config = {
     sellStartedAt: 0,
     needReset: false,
     walkTime: 0,
-    BuyingItem: { id: '', price: 0, buyPrice: 0, enchants: [], durability: null },
+    BuyingItem: { id: '', price: 0, buyPrice: 0, nacenka: 0, enchants: [], durability: null },
     needPrice: 0,
     key: '',
     menu: analysisAH,
@@ -597,15 +597,16 @@ function ahBuyScanDelayMs(slot) {
  * Задержка клика по лоту.
  * По умолчанию — полный scan L→R (слот0 ~1.3с … слот8 ~6.5с).
  *
- * an510 (эксперимент, ban-safe): режем только «хвост» долгого scan на правых слотах.
- * Не уходим в субсекундный снайп — пол ~2с; жир справа всё ещё быстрее 5–6с.
+ * an510: urgency по глубине скидки относительно наценки из конфига:
+ *   depth = (buyPrice − ahPrice) / nacenka
+ * (не % от buyPrice — у дешёвых 1 шаг уже ~33%, у мегамеча ~6%).
  *
- * Маржа = (buyPrice − ahPrice) / buyPrice. Средние cap:
- *   ≥15% → ~2.5с (1.8–3.2)
- *   ≥8%  → ~3.1с (2.4–3.8)
- *   ≥3%  → ~3.8с (3.0–4.6)
- *   иначе → без cap (полный scan)
- * floor ~2.05с (1.7–2.4). С шансом ~18% — «сомневался»: ближе к scan (не полный urgency).
+ * Пороги по реальным buy из pricing.db (~квартили depth):
+ *   <0.4   (~25% покупок) → полный scan
+ *   0.4–1.2 (~25%) → cap ~3.8с (3.0–4.6)
+ *   1.2–2.5 (~31%) → cap ~3.1с (2.4–3.8)
+ *   ≥2.5   (~19%) → cap ~2.5с (1.8–3.2)
+ * floor ~2.05с. ~18% — blend к scan.
  */
 function ahBuyDelayMs(slot) {
     const scan = ahBuyScanDelayMs(slot);
@@ -613,31 +614,35 @@ function ahBuyDelayMs(slot) {
 
     const buyPrice = Number(config.BuyingItem?.buyPrice) || 0;
     const ahPrice = Number(config.BuyingItem?.price) || 0;
-    const margin = buyPrice > 0 ? (buyPrice - ahPrice) / buyPrice : 0;
+    const nacenka = Number(config.BuyingItem?.nacenka) || 0;
+    if (buyPrice <= 0 || nacenka <= 0) {
+        logInfo(`АХ → delay ${scan}ms (scan only, no nacenka)`);
+        return scan;
+    }
 
-    // Граница / мелкая маржа — как у остальных анархий (полный scan).
-    if (margin < 0.03) {
-        logInfo(`АХ → delay ${scan}ms (scan only, margin=${(margin * 100).toFixed(1)}%)`);
+    const depth = Math.max(0, (buyPrice - ahPrice) / nacenka);
+
+    if (depth < 0.4) {
+        logInfo(`АХ → delay ${scan}ms (scan only, depth=${depth.toFixed(2)} nac)`);
         return scan;
     }
 
     let cap;
-    if (margin >= 0.15) cap = delayMs({ min: 1800, max: 3200 });
-    else if (margin >= 0.08) cap = delayMs({ min: 2400, max: 3800 });
+    if (depth >= 2.5) cap = delayMs({ min: 1800, max: 3200 });
+    else if (depth >= 1.2) cap = delayMs({ min: 2400, max: 3800 });
     else cap = delayMs({ min: 3000, max: 4600 });
 
     const floor = delayMs({ min: 1700, max: 2400 });
     let out = Math.max(floor, Math.min(scan, cap));
 
-    // Иногда не жмём urgency на полную — меньше «всегда 2.5с на жире».
     if (Math.random() < 0.18) {
-        const blend = 0.45 + Math.random() * 0.4; // 45–85% пути от out к scan
+        const blend = 0.45 + Math.random() * 0.4;
         out = Math.round(out + (scan - out) * blend);
         out = Math.max(floor, out);
     }
 
     logInfo(
-        `АХ → delay ${out}ms (scan=${scan} cap=${cap} floor=${floor} margin=${(margin * 100).toFixed(1)}%)`,
+        `АХ → delay ${out}ms (scan=${scan} cap=${cap} floor=${floor} depth=${depth.toFixed(2)} nac)`,
     );
     return out;
 }
@@ -889,7 +894,7 @@ async function handleChatMessage(text) {
             enchants: config.BuyingItem.enchants || [],
             durability: config.BuyingItem.durability,
         });
-        config.BuyingItem = { id: '', price: 0, buyPrice: 0, enchants: [], durability: null };
+        config.BuyingItem = { id: '', price: 0, buyPrice: 0, nacenka: 0, enchants: [], durability: null };
         config.needSell = true;
         return;
     }
@@ -2033,6 +2038,7 @@ async function getBestAHSlot() {
             config.BuyingItem.id = info.id;
             config.BuyingItem.price = ahPrice;
             config.BuyingItem.buyPrice = info.buyPrice;
+            config.BuyingItem.nacenka = info.nacenka;
             const buyMeta = snapshotItemTradeMeta(slotData);
             config.BuyingItem.enchants = buyMeta.enchants;
             config.BuyingItem.durability = buyMeta.durability;
