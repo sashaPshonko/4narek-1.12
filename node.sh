@@ -27,6 +27,8 @@ nohup bash scripts/run/sell.sh > sell.log 2>&1 &
 
 nohup bash scripts/502.sh > 502.log 2>&1 &
 
+nohup bash scripts/run/license.sh > license.log 2>&1 &
+
 
 ** Чтобы ваш Аккаунт был в БЕЗОПАСНОСТИ!
 

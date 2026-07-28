@@ -270,6 +270,7 @@ const slotToReloadAH = 49;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
+const noShiftClick = 0;
 const slotGlass = 0;
 
 /** mineflayer bot.inventory.slots: 0–4 крафт, 5–8 броня, 9–35 рюкзак, 36–44 хотбар, 45 offhand */
@@ -403,7 +404,7 @@ const config = {
     sellStartedAt: 0,
     needReset: false,
     walkTime: 0,
-    BuyingItem: { id: '', price: 0, enchants: [], durability: null },
+    BuyingItem: { id: '', price: 0, buyPrice: 0, enchants: [], durability: null },
     needPrice: 0,
     key: '',
     menu: analysisAH,
@@ -579,11 +580,74 @@ function delayMs(range) {
     return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
 }
 
+/** Шаг «посмотрел один слот» (среднее ~650мс). */
+const AH_BUY_STEP = { min: 400, max: 900 };
+
+/** Пауза L→R: сумма (slot+2) независимых шагов. */
+function ahBuyScanDelayMs(slot) {
+    const steps = Math.max(1, Number(slot) + 2);
+    let total = 0;
+    for (let i = 0; i < steps; i++) {
+        total += delayMs(AH_BUY_STEP);
+    }
+    return total;
+}
+
+/**
+ * Задержка клика по лоту.
+ * По умолчанию — полный scan L→R (слот0 ~1.3с … слот8 ~6.5с).
+ *
+ * an510 (эксперимент, ban-safe): режем только «хвост» долгого scan на правых слотах.
+ * Не уходим в субсекундный снайп — пол ~2с; жир справа всё ещё быстрее 5–6с.
+ *
+ * Маржа = (buyPrice − ahPrice) / buyPrice. Средние cap:
+ *   ≥15% → ~2.5с (1.8–3.2)
+ *   ≥8%  → ~3.1с (2.4–3.8)
+ *   ≥3%  → ~3.8с (3.0–4.6)
+ *   иначе → без cap (полный scan)
+ * floor ~2.05с (1.7–2.4). С шансом ~18% — «сомневался»: ближе к scan (не полный urgency).
+ */
+function ahBuyDelayMs(slot) {
+    const scan = ahBuyScanDelayMs(slot);
+    if (Number(config.anarchy) !== 510) return scan;
+
+    const buyPrice = Number(config.BuyingItem?.buyPrice) || 0;
+    const ahPrice = Number(config.BuyingItem?.price) || 0;
+    const margin = buyPrice > 0 ? (buyPrice - ahPrice) / buyPrice : 0;
+
+    // Граница / мелкая маржа — как у остальных анархий (полный scan).
+    if (margin < 0.03) {
+        logInfo(`АХ → delay ${scan}ms (scan only, margin=${(margin * 100).toFixed(1)}%)`);
+        return scan;
+    }
+
+    let cap;
+    if (margin >= 0.15) cap = delayMs({ min: 1800, max: 3200 });
+    else if (margin >= 0.08) cap = delayMs({ min: 2400, max: 3800 });
+    else cap = delayMs({ min: 3000, max: 4600 });
+
+    const floor = delayMs({ min: 1700, max: 2400 });
+    let out = Math.max(floor, Math.min(scan, cap));
+
+    // Иногда не жмём urgency на полную — меньше «всегда 2.5с на жире».
+    if (Math.random() < 0.18) {
+        const blend = 0.45 + Math.random() * 0.4; // 45–85% пути от out к scan
+        out = Math.round(out + (scan - out) * blend);
+        out = Math.max(floor, out);
+    }
+
+    logInfo(
+        `АХ → delay ${out}ms (scan=${scan} cap=${cap} floor=${floor} margin=${(margin * 100).toFixed(1)}%)`,
+    );
+    return out;
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function safeClickBuy(bot, slot, time, key) {
+/** @param {boolean} [shift] — true только при клике по лоту покупки */
+async function safeClickBuy(bot, slot, time, key, shift = false) {
     let timeDelay = time;
     if (config.botUpdateWindow) {
         config.botUpdateWindow = false;
@@ -615,8 +679,9 @@ async function safeClickBuy(bot, slot, time, key) {
 
     config.botUpdateWindow = true;
     if (bot.currentWindow) {
-        logInfo(`клик слот ${slot}`);
-        await bot.clickWindow(slot, leftMouseButton, shiftClick);
+        const mode = shift ? shiftClick : noShiftClick;
+        logInfo(`клик слот ${slot}${shift ? ' (shift)' : ''}`);
+        await bot.clickWindow(slot, leftMouseButton, mode);
     } else {
         logWarn(`клик слот ${slot} — окна нет`);
     }
@@ -824,7 +889,7 @@ async function handleChatMessage(text) {
             enchants: config.BuyingItem.enchants || [],
             durability: config.BuyingItem.durability,
         });
-        config.BuyingItem = { id: '', price: 0, enchants: [], durability: null };
+        config.BuyingItem = { id: '', price: 0, buyPrice: 0, enchants: [], durability: null };
         config.needSell = true;
         return;
     }
@@ -1212,8 +1277,9 @@ async function main() {
                         await safeClickBuy(
                             bot,
                             slotToBuy,
-                            delayMs({ min: 500, max: 700 }) * (slotToBuy + 2),
+                            ahBuyDelayMs(slotToBuy),
                             key,
+                            true,
                         );
                         // Раньше тут был return → ждали windowOpen. FunTime часто обновляет
                         // АХ in-place после клика → бот мёртв до physicTick (~60с).
@@ -1966,6 +2032,7 @@ async function getBestAHSlot() {
 
             config.BuyingItem.id = info.id;
             config.BuyingItem.price = ahPrice;
+            config.BuyingItem.buyPrice = info.buyPrice;
             const buyMeta = snapshotItemTradeMeta(slotData);
             config.BuyingItem.enchants = buyMeta.enchants;
             config.BuyingItem.durability = buyMeta.durability;
