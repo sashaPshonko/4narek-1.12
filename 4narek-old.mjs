@@ -580,8 +580,8 @@ function delayMs(range) {
     return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
 }
 
-/** Шаг «посмотрел один слот» (среднее ~650мс). */
-const AH_BUY_STEP = { min: 400, max: 900 };
+/** Шаг «посмотрел один слот» (среднее ~900мс). */
+const AH_BUY_STEP = { min: 700, max: 1100 };
 
 /** Пауза L→R: сумма (slot+2) независимых шагов. */
 function ahBuyScanDelayMs(slot) {
@@ -593,58 +593,9 @@ function ahBuyScanDelayMs(slot) {
     return total;
 }
 
-/**
- * Задержка клика по лоту.
- * По умолчанию — полный scan L→R (слот0 ~1.3с … слот8 ~6.5с).
- *
- * an510: urgency по глубине скидки относительно наценки из конфига:
- *   depth = (buyPrice − ahPrice) / nacenka
- * (не % от buyPrice — у дешёвых 1 шаг уже ~33%, у мегамеча ~6%).
- *
- * Пороги по реальным buy из pricing.db (~квартили depth):
- *   <0.4   (~25% покупок) → полный scan
- *   0.4–1.2 (~25%) → cap ~3.8с (3.0–4.6)
- *   1.2–2.5 (~31%) → cap ~3.1с (2.4–3.8)
- *   ≥2.5   (~19%) → cap ~2.5с (1.8–3.2)
- * floor ~2.05с. ~18% — blend к scan.
- */
+/** Задержка клика по лоту: полный scan L→R (слот0 ~1.8с … слот8 ~9с), все анки включая 510. */
 function ahBuyDelayMs(slot) {
-    const scan = ahBuyScanDelayMs(slot);
-    if (Number(config.anarchy) !== 510) return scan;
-
-    const buyPrice = Number(config.BuyingItem?.buyPrice) || 0;
-    const ahPrice = Number(config.BuyingItem?.price) || 0;
-    const nacenka = Number(config.BuyingItem?.nacenka) || 0;
-    if (buyPrice <= 0 || nacenka <= 0) {
-        logInfo(`АХ → delay ${scan}ms (scan only, no nacenka)`);
-        return scan;
-    }
-
-    const depth = Math.max(0, (buyPrice - ahPrice) / nacenka);
-
-    if (depth < 0.4) {
-        logInfo(`АХ → delay ${scan}ms (scan only, depth=${depth.toFixed(2)} nac)`);
-        return scan;
-    }
-
-    let cap;
-    if (depth >= 2.5) cap = delayMs({ min: 1800, max: 3200 });
-    else if (depth >= 1.2) cap = delayMs({ min: 2400, max: 3800 });
-    else cap = delayMs({ min: 3000, max: 4600 });
-
-    const floor = delayMs({ min: 1700, max: 2400 });
-    let out = Math.max(floor, Math.min(scan, cap));
-
-    if (Math.random() < 0.18) {
-        const blend = 0.45 + Math.random() * 0.4;
-        out = Math.round(out + (scan - out) * blend);
-        out = Math.max(floor, out);
-    }
-
-    logInfo(
-        `АХ → delay ${out}ms (scan=${scan} cap=${cap} floor=${floor} depth=${depth.toFixed(2)} nac)`,
-    );
-    return out;
+    return ahBuyScanDelayMs(slot);
 }
 
 function sleep(ms) {
