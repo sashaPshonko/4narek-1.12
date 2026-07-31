@@ -1687,14 +1687,13 @@ async function sellItems() {
             reportError('sellItems', 'bot не создан');
             canSell = false;
         } else if (!Array.isArray(config.items)) {
-            reportError('sellItems', 'config.items не массив');
-            canSell = false;
+            config.items = [];
+            logWarn('каталог не массив → [] (Go выкл?) — гуляем без выставления');
         } else if (!config.items.length) {
-            logWarn('каталог пуст (Go выкл?) — продажа пропуск, бот жив');
-            canSell = false;
+            logWarn('каталог пуст (Go выкл?) — гуляем без выставления');
         }
 
-        if (!canSell) logWarn('продажа → пропуск (нет бота или каталога)');
+        if (!canSell) logWarn('продажа → пропуск (нет бота)');
 
         if (bot) {
             await closeCurrentWindowSafe();
@@ -1706,12 +1705,9 @@ async function sellItems() {
                 bot.chat(`/warp ${warp}`);
             }
 
-            if (canSell) {
-                await lookAroundSpin(() => !isSellSessionAlive(gen));
-                if (!isSellSessionAlive(gen)) return;
-                await dropTrash();
-            }
-
+            await lookAroundSpin(() => !isSellSessionAlive(gen));
+            if (!isSellSessionAlive(gen)) return;
+            await dropTrash();
         }
 
         if (canSell) {
