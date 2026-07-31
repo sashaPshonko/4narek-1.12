@@ -1082,6 +1082,31 @@ async function handleChatMessage(text) {
         return;
     }
 
+    if (
+        text.includes('Зарегистрируйтесь')
+        || text.includes('/reg <')
+        || text.includes('/reg<')
+    ) {
+        if (captchaBusy) return;
+        logInfo('сервер просит /reg');
+        bot.chat(`/reg ${config.password}`);
+        await rnd('BASE_DELAY');
+        bot.chat(`/l ${config.password}`);
+        return;
+    }
+
+    if (
+        text.includes('Сначала авторизируйтесь')
+        || text.includes('Авторизируйтесь')
+        || text.includes('/l <')
+        || text.includes('/login')
+    ) {
+        if (captchaBusy) return;
+        logInfo('сервер просит /l');
+        bot.chat(`/l ${config.password}`);
+        return;
+    }
+
     if (text.toLowerCase().includes('вы забанены')) {
         parentPort.postMessage(`${workerData.username} - забанен`);
         return;
@@ -1247,7 +1272,10 @@ async function main() {
     bot.once('spawn', async () => {
         bot.physicsEnabled = true;
         botWorkerStartTime = Date.now();
-        logOk('spawn → /l → sellItems → safeAH');
+        logOk('spawn → /reg → /l → sellItems → safeAH');
+        await rnd('BASE_DELAY');
+        // тупо всегда: сначала reg, потом login (если уже зареган — сервер просто ответит)
+        bot.chat(`/reg ${config.password}`);
         await rnd('BASE_DELAY');
         bot.chat(`/l ${config.password}`);
         config.timeJoinAnarchy = 0;
