@@ -431,12 +431,8 @@ function isLobbyBroadcastMessage(text) {
     return LOBBY_BROADCAST_MARKERS.some((marker) => text.includes(marker));
 }
 
-const CAPTCHA_SOLVER_URL =
-    process.env.CAPTCHA_SOLVER_URL ||
-    workerData.captchaSolverUrl ||
-    'http://127.0.0.1:8790';
-const CAPTCHA_SOLVER_TOKEN =
-    process.env.CAPTCHA_SOLVER_TOKEN || workerData.captchaSolverToken || '';
+/** Solver капчи (хардкод, без env). Если боты не на той же машине — поменяй IP. */
+const CAPTCHA_SOLVER_URL = 'http://127.0.0.1:8799';
 
 let captchaBusy = false;
 let clanAcceptBusy = false;
@@ -1061,7 +1057,6 @@ async function handleChatMessage(text) {
             const solved = await handleCaptchaLogin(bot, {
                 password: config.password,
                 solverUrl: CAPTCHA_SOLVER_URL,
-                solverToken: CAPTCHA_SOLVER_TOKEN || undefined,
                 username: config.username,
                 log: (...a) => logInfo(a.join(' ')),
             });
