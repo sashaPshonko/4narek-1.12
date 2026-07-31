@@ -17,16 +17,19 @@
   },
   "dependencies": {
     "do_username": "^1.0.0",
+    "flayercaptcha": "^1.0.6",
     "minecraft-protocol": "^1.66.0",
     "mineflayer": "^4.37.1",
     "mineflayer-auto-eat": "^5.0.3",
     "mineflayer-pathfinder": "^2.4.5",
     "node-telegram-bot-api": "^0.67.0",
+    "pngjs": "^7.0.0",
     "prismarine-item": "^1.17.0",
     "prismarine-nbt": "^2.8.0",
     "protodef": "^1.19.0",
     "socks": "^2.8.9",
     "socks-proxy-agent": "^10.1.0",
+    "vec3": "^0.1.10",
     "winston": "^3.19.0",
     "ws": "^8.19.0"
   }

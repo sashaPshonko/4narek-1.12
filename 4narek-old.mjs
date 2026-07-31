@@ -8,7 +8,7 @@ import { SocksProxyAgent } from 'socks-proxy-agent';
 import prismarineChat from 'prismarine-chat';
 
 const ChatMessage = prismarineChat('1.21.11');
-// dsd
+// dsdё
 import {
     getSlotInfo,
     getItemUUID,
@@ -25,6 +25,8 @@ import {
     isUuidBlockedByOther,
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
+import { handleCaptchaLogin } from '../kapcha-solver/bot/solve-flow.mjs';
+import { attachMapCache } from '../kapcha/lib/capture.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -92,7 +94,69 @@ function chatTextFromRaw(data) {
     );
 }
 
-/** Funtime: title в NBT, тип окна в поле font (minecraft:rtp, …). */
+/** Достаёт run_command из click_event / clickEvent (1.21+ и старый формат). */
+function collectClickCommands(node, out = []) {
+    if (!node || typeof node !== 'object') return out;
+    const click = node.click_event || node.clickEvent || node.json?.click_event || node.json?.clickEvent;
+    if (click && typeof click === 'object') {
+        const action = click.action;
+        const cmd = click.command || click.value;
+        if (
+            (action === 'run_command' || action === 'suggest_command') &&
+            typeof cmd === 'string' &&
+            cmd.trim()
+        ) {
+            out.push(cmd.trim());
+        }
+    }
+    for (const child of node.extra || []) collectClickCommands(child, out);
+    if (node.json) collectClickCommands(node.json, out);
+    for (const child of node.json?.extra || []) collectClickCommands(child, out);
+    if (Array.isArray(node.with)) {
+        for (const child of node.with) collectClickCommands(child, out);
+    }
+    return out;
+}
+
+function findClanAcceptInRaw(raw) {
+    if (raw == null || raw === '') return null;
+    let node = raw;
+    if (typeof raw === 'string') {
+        try {
+            node = JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    }
+    try {
+        const msg = ChatMessage.fromNotch(raw);
+        const hit = collectClickCommands(msg).find((c) => /^\/clan\s+accept\b/i.test(c));
+        if (hit) return hit;
+    } catch {
+        /* raw JSON ниже */
+    }
+    return collectClickCommands(node).find((c) => /^\/clan\s+accept\b/i.test(c)) || null;
+}
+
+function setupChatSafeGuard(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    client.removeAllListeners('playerChat');
+    client.removeAllListeners('systemChat');
+
+    const onPacket = (data) => {
+        const raw = data?.formattedMessage ?? data?.content ?? data?.unsignedContent;
+        const text = chatTextFromRaw(data);
+        if (text) void onBotChatText(text);
+        const accept = findClanAcceptInRaw(raw);
+        if (accept) void handleClanInviteAccept(accept);
+    };
+
+    client.on('playerChat', onPacket);
+    client.on('systemChat', onPacket);
+}
+
 function nbtLeafString(node) {
     if (node == null) return null;
     if (typeof node === 'string') return node;
@@ -131,24 +195,6 @@ function resolveWindowMenu(win) {
         return accept;
     }
     return analysisAH;
-}
-
-function setupChatSafeGuard(bot) {
-    const client = bot._client;
-    if (!client) return;
-
-    client.removeAllListeners('playerChat');
-    client.removeAllListeners('systemChat');
-
-    client.on('playerChat', (data) => {
-        const text = chatTextFromRaw(data);
-        if (text) void onBotChatText(text);
-    });
-
-    client.on('systemChat', (data) => {
-        const text = chatTextFromRaw(data);
-        if (text) void onBotChatText(text);
-    });
 }
 
 function ensureRegistryDimensionStub(bot) {
@@ -383,6 +429,36 @@ function logAfk(msg) {
 
 function isLobbyBroadcastMessage(text) {
     return LOBBY_BROADCAST_MARKERS.some((marker) => text.includes(marker));
+}
+
+const CAPTCHA_SOLVER_URL =
+    process.env.CAPTCHA_SOLVER_URL ||
+    workerData.captchaSolverUrl ||
+    'http://127.0.0.1:8790';
+const CAPTCHA_SOLVER_TOKEN =
+    process.env.CAPTCHA_SOLVER_TOKEN || workerData.captchaSolverToken || '';
+
+let captchaBusy = false;
+let clanAcceptBusy = false;
+
+async function handleClanInviteAccept(acceptCmd) {
+    if (!acceptCmd || clanAcceptBusy || !bot) return;
+    clanAcceptBusy = true;
+    try {
+        // сбрасываем текущий windowOpen-цикл (АХ и т.п.)
+        config.key = generateKey();
+        logOk(`клан → закрываю окно, ${acceptCmd}`);
+        await closeCurrentWindowSafe();
+        await rnd('BASE_DELAY');
+        bot.chat(acceptCmd);
+        await rnd('BASE_DELAY');
+        await sellItems();
+        await safeAH();
+    } catch (err) {
+        reportError('clan accept', err);
+    } finally {
+        clanAcceptBusy = false;
+    }
 }
 
 const config = {
@@ -978,7 +1054,28 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('BotFilter >> Введите номер с картинки в чат')) {
-        parentPort.postMessage(`${workerData.username} - ввести капчу`);
+        if (captchaBusy) return;
+        captchaBusy = true;
+        parentPort.postMessage(`${workerData.username} - решаю капчу`);
+        try {
+            const solved = await handleCaptchaLogin(bot, {
+                password: config.password,
+                solverUrl: CAPTCHA_SOLVER_URL,
+                solverToken: CAPTCHA_SOLVER_TOKEN || undefined,
+                username: config.username,
+                log: (...a) => logInfo(a.join(' ')),
+            });
+            // handleCaptchaLogin: цифры → /reg → /l
+            logOk(`капча ${solved.pred} conf=${solved.conf} ${solved.ms}ms`);
+            parentPort.postMessage(
+                `${workerData.username} - капча ок ${solved.pred}`,
+            );
+        } catch (err) {
+            logWarn(`капча fail: ${err?.message || err}`);
+            parentPort.postMessage(`${workerData.username} - ввести капчу`);
+        } finally {
+            captchaBusy = false;
+        }
         return;
     }
 
@@ -1108,6 +1205,8 @@ async function main() {
         },
     });
     setEnchantRegistry();
+    // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
+    attachMapCache(bot);
 
     setupConfigurationTransferFix(bot);
 
