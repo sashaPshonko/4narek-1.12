@@ -377,11 +377,10 @@ async function startBots() {
         await loadBotsConfig();
 
         if (catalog.length === 0) {
-            console.log('⏳ ждём каталог от Go-server…');
+            console.log('ℹ️ каталог пуст (Go выкл / нет цен) — боты с пустым списком товаров');
             if (socket && isSocketOpen) {
                 socket.send(JSON.stringify({ action: 'info' }));
             }
-            return;
         }
 
         applyPricesToBots({
@@ -528,8 +527,17 @@ function connectWebSocket() {
         });
 
         socket.on('close', () => {
-            console.log('❌ WebSocket отключен');
+            console.log('❌ WebSocket отключен — боты продолжают с пустым списком товаров');
             isSocketOpen = false;
+            catalog = [];
+            lastPrices = {};
+            applyPricesToBots({
+                catalog,
+                prices: lastPrices,
+                bots,
+                workers,
+                safePostMessage,
+            });
             setTimeout(connectWebSocket, 5000);
         });
 
@@ -581,9 +589,8 @@ async function main() {
     await initTelegram();
     await loadBotsConfig();
     connectWebSocket();
-    if (SKIP_TELEGRAM) {
-        console.log('📌 Локальный режим: ждём каталог/цены от Go → боты стартуют сами');
-    }
+    setTimeout(() => scheduleAutoStart('boot'), 1500);
+    console.log('📌 боты стартуют сами (без Go — пустой список товаров)');
 }
 
 main().catch(async (error) => {

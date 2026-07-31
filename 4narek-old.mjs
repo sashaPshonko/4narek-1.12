@@ -1690,7 +1690,7 @@ async function sellItems() {
             reportError('sellItems', 'config.items не массив');
             canSell = false;
         } else if (!config.items.length) {
-            reportError('sellItems', 'каталог пуст — жди price от оркестратора');
+            logWarn('каталог пуст (Go выкл?) — продажа пропуск, бот жив');
             canSell = false;
         }
 

@@ -334,13 +334,14 @@ export function collectPresenceItemCounts(bots, workers, botItems, botInventory)
 }
 
 export function applyPricesToBots({ catalog, prices, bots, workers, safePostMessage }) {
-    if (!prices) return { started: false, anyItems: false };
+    const priceMap = prices && typeof prices === 'object' ? prices : {};
+    const cat = Array.isArray(catalog) ? catalog : [];
 
-    const catalogAll = mergeCatalogWithPrices(catalog, prices);
+    const catalogAll = mergeCatalogWithPrices(cat, priceMap);
     let anyItems = false;
     for (const bot of bots.values()) {
         const goType = resolveGoType(bot);
-        const botItems = itemPricesForBot(catalog, prices, goType);
+        const botItems = itemPricesForBot(cat, priceMap, goType);
         bot.itemPrices = botItems;
         bot.catalogAll = catalogAll;
         if (botItems.length > 0) anyItems = true;
@@ -371,10 +372,7 @@ export function getWorkerRestartDelayMs(code, kickReason = '') {
     if (s.includes('ником уже онлайн') || s.includes('таким-же ником')) {
         return 45000;
     }
-    if (code !== 0) {
-        return 15000;
-    }
-    return 10000;
+    return 5000;
 }
 
 export function terminateWorkerEntry(entry) {
@@ -492,15 +490,17 @@ export async function tryAutoStartBots({
         safePostMessage,
     });
 
+    // Go выключен / ещё нет цен — всё равно стартуем с пустым списком товаров
     if (!catalog?.length || !anyItems) {
-        console.log(`⏳ автозапуск (${reason}): catalog=${catalog?.length ?? 0} anyItems=${anyItems}`);
-        requestInfo?.();
-        return;
+        console.log(
+            `🚀 запуск ботов (${reason}): каталог пуст / нет цен Go — список товаров пустой`,
+        );
+    } else {
+        console.log(`🚀 запуск ботов (${reason})`);
     }
 
     setPending(true);
     try {
-        console.log(`🚀 запуск ботов (${reason})`);
         await startBots();
     } finally {
         setPending(false);
