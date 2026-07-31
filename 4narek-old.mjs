@@ -1059,8 +1059,9 @@ async function handleChatMessage(text) {
                 username: config.username,
                 log: (...a) => logInfo(a.join(' ')),
             });
-            // handleCaptchaLogin: цифры → /reg → /l
-            logOk(`капча ${solved.pred} conf=${solved.conf} ${solved.ms}ms`);
+            logOk(
+                `капча принята ${solved.pred} conf=${solved.conf} try=${solved.attempt}`,
+            );
             parentPort.postMessage(
                 `${workerData.username} - капча ок ${solved.pred}`,
             );
@@ -1069,6 +1070,14 @@ async function handleChatMessage(text) {
             parentPort.postMessage(`${workerData.username} - ввести капчу`);
         } finally {
             captchaBusy = false;
+        }
+        return;
+    }
+
+    // ретрай уже внутри handleCaptchaLogin; тут только не дублируем
+    if (text.toLowerCase().includes('капчу неправильно')) {
+        if (!captchaBusy) {
+            logWarn('капча неправильно (нет активного solve)');
         }
         return;
     }
