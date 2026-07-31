@@ -25,8 +25,7 @@ import {
     isUuidBlockedByOther,
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
-import { handleCaptchaLogin } from '../kapcha-solver/bot/solve-flow.mjs';
-import { attachMapCache } from '../kapcha/lib/capture.mjs';
+import { handleCaptchaLogin, attachMapCache } from './lib/captcha/solve-flow.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
