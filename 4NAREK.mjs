@@ -757,6 +757,17 @@ function getSaveSum() {
     return bestPrice * 5;
 }
 
+/** Баланс «в норме» для Go: ≥ половины saveSum. */
+function maybeRestoreGoPresenceFromBalance() {
+    if (!config._treasuryEmptyReported) return;
+    const saveSum = getSaveSum();
+    if (saveSum == null || config.balance == null || !Number.isFinite(config.balance)) return;
+    if (config.balance < saveSum / 2) return;
+    config._treasuryEmptyReported = false;
+    logOk(`баланс в норме (${config.balance}) → presence active для Go`);
+    parentPort.postMessage({ name: 'treasury_ok' });
+}
+
 function getHeldItemInfo() {
     if (!bot) return null;
     const slot = quickToHotbarSlot(bot.quickBarSlot);
@@ -897,6 +908,7 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        maybeRestoreGoPresenceFromBalance();
         return;
     }
     if (text.includes('[⚔] Ошибка: Баланс казны меньше веденной суммы!')) {
@@ -907,15 +919,6 @@ async function handleChatMessage(text) {
         }
         config.needAdd = true;
         if (!config.hasDangerousTrash) await sellItems();
-        return;
-    }
-    if (
-        text.includes(`Игрок ${config.username} снял $`)
-        && text.includes('из казны')
-    ) {
-        config._treasuryEmptyReported = false;
-        logOk('успешный withdraw → presence active для Go');
-        parentPort.postMessage({ name: 'treasury_ok' });
         return;
     }
     if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
@@ -939,6 +942,7 @@ parentPort.on('message', (data) => {
         if (Array.isArray(data.catalogAll) && data.catalogAll.length) {
             config.catalogAll = data.catalogAll;
         }
+        maybeRestoreGoPresenceFromBalance();
     }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
@@ -1554,9 +1558,12 @@ async function sellItems() {
                         }
                     }
                 }
-                if (saveSum != null && config.balance != null && config.balance < saveSum/2) {
-                    bot.chat(`/clan withdraw ${Math.floor(saveSum/2 - config.balance)}`);
-                    config.needAdd = false;
+                if (saveSum != null && config.balance != null && config.balance < saveSum / 2) {
+                    const withdrawSum = Math.floor(saveSum / 2 - config.balance);
+                    if (withdrawSum > 0) {
+                        bot.chat(`/clan withdraw ${withdrawSum}`);
+                        config.needAdd = false;
+                    }
                 }
             } else {
                 logInfo('sellItems → hasDangerousTrash, safeBalance пропуск');

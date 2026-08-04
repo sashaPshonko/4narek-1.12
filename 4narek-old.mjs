@@ -907,14 +907,18 @@ const CLAN_HELP_MARKER = '[⚔] Помощь по Кланам';
 const CLAN_NO_PERMS_MARKER = '[⚔] У тебя нет полномочий для этой команды!';
 /** FunTime: /clan withdraw при пустой казне */
 const CLAN_TREASURY_LOW = '[⚔] Ошибка: Баланс казны меньше веденной суммы!';
-/** FunTime: `[⚔] Игрок <nick> снял $… из казны клана!` */
-function isOwnClanWithdrawOk(text) {
-    const nick = config.username;
-    return typeof text === 'string'
-        && text.includes(`Игрок ${nick} снял $`)
-        && text.includes('из казны');
-}
 let treasuryEmptyReported = false;
+
+/** Баланс «в норме» для Go: ≥ половины saveSum (не нужен withdraw). */
+function maybeRestoreGoPresenceFromBalance() {
+    if (!treasuryEmptyReported) return;
+    const saveSum = getSaveSum();
+    if (saveSum == null || config.balance == null || !Number.isFinite(config.balance)) return;
+    if (config.balance < saveSum / 2) return;
+    treasuryEmptyReported = false;
+    logOk(`баланс в норме (${config.balance}) → presence active для Go`);
+    parentPort.postMessage({ name: 'treasury_ok' });
+}
 
 async function handleChatMessage(text) {
     if (text.includes(CLAN_HELP_MARKER) || text.includes(CLAN_NO_PERMS_MARKER)) {
@@ -1157,6 +1161,7 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        maybeRestoreGoPresenceFromBalance();
         return;
     }
     if (text.includes(CLAN_TREASURY_LOW)) {
@@ -1168,12 +1173,6 @@ async function handleChatMessage(text) {
         config.needAdd = true;
         if (!config.hasDangerousTrash) await sellItems();
         await safeAH();
-        return;
-    }
-    if (isOwnClanWithdrawOk(text)) {
-        treasuryEmptyReported = false;
-        logOk('успешный withdraw → presence active для Go');
-        parentPort.postMessage({ name: 'treasury_ok' });
         return;
     }
     if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
@@ -1212,6 +1211,7 @@ parentPort.on('message', (data) => {
         if (Array.isArray(data.catalogAll) && data.catalogAll.length) {
             config.catalogAll = data.catalogAll;
         }
+        maybeRestoreGoPresenceFromBalance();
     }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
@@ -1929,9 +1929,12 @@ async function sellItems() {
                         }
                     }
                 }
-                if (saveSum != null && config.balance != null && config.balance < saveSum/2) {
-                    bot.chat(`/clan withdraw ${Math.floor(saveSum/2 - config.balance)}`);
-                    config.needAdd = false;
+                if (saveSum != null && config.balance != null && config.balance < saveSum / 2) {
+                    const withdrawSum = Math.floor(saveSum / 2 - config.balance);
+                    if (withdrawSum > 0) {
+                        bot.chat(`/clan withdraw ${withdrawSum}`);
+                        config.needAdd = false;
+                    }
                 }
             }
         }

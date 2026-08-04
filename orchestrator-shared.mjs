@@ -235,7 +235,7 @@ export function markBotPresenceInactive(username, ctx, reason = 'presence_inacti
     return true;
 }
 
-/** Снять presence-inactive (успешный /clan withdraw) и снова учесть слоты в Go. */
+/** Снять presence-inactive (баланс снова в норме) и снова учесть слоты в Go. */
 export function clearBotPresenceInactive(username, ctx, reason = 'presence_ok') {
     const bot = ctx.bots?.get(username);
     if (!bot?.presenceInactive) return false;
@@ -489,9 +489,9 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (message?.name === 'treasury_ok') {
-        if (clearBotPresenceInactive(username, ctx, 'withdraw_ok')) {
+        if (clearBotPresenceInactive(username, ctx, 'balance_ok')) {
             await ctx.sendAlert?.(
-                `💰 ${username}: успешный withdraw — снова активен для Go`,
+                `💰 ${username}: баланс в норме — снова активен для Go`,
                 username,
             );
         }
@@ -757,7 +757,7 @@ export function ackWorkerReady(bots, workers, username) {
     const bot = bots.get(username);
     if (!bot) return false;
     bot.success = true;
-    // presenceInactive снимается только после успешного /clan withdraw (treasury_ok)
+    // presenceInactive снимается только когда баланс снова ≥ saveSum/2 (treasury_ok)
     const w = workers.get(username);
     if (w?.timeoutId) {
         clearTimeout(w.timeoutId);
