@@ -386,7 +386,6 @@ export function requestFunauthBind(username, ctx) {
             return true;
         }
     }
-    // HTTP на Go (clan-setup / нет сокета)
     const base = process.env.GO_HTTP_URL
         || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
             ? 'http://127.0.0.1:8080'
@@ -397,6 +396,47 @@ export function requestFunauthBind(username, ctx) {
         body: JSON.stringify({ nick: username, password }),
     }).catch((e) => console.warn(`[funauth] HTTP fail: ${e.message}`));
     console.log(`[funauth] queued via HTTP → ${username}`);
+    return true;
+}
+
+/** После FunAuth: ok → поднять воркер; no_accounts → тоже поднять позже, чтобы снова поймать хуйню и ретрайнуть bind. */
+export async function handleFunauthGoMessage(dataObj, ctx) {
+    if (!dataObj || typeof dataObj !== 'object') return false;
+    const action = dataObj.action;
+    if (action !== 'funauth_result' && action !== 'funauth_no_accounts') return false;
+
+    const nick = String(dataObj.nick || '').trim();
+    if (!nick) return true;
+    const bot = ctx.bots?.get(nick);
+    if (!bot) return true;
+
+    if (action === 'funauth_no_accounts' || dataObj.error === 'no_accounts') {
+        console.log(`[funauth] no_accounts → ${nick}, рестарт через 45с`);
+        await ctx.sendAlert?.(
+            `🚨 FunAuth: нет TG-аккаунтов для ${nick} — воркер встанет через 45с и сможет ретрайнуть`,
+            nick,
+        );
+        setTimeout(() => {
+            if (bot.isManualStop && !ctx.workers?.get(nick)) {
+                bot.isManualStop = false;
+                console.log(`[funauth] рестарт после no_accounts → ${nick}`);
+                ctx.runWorker?.(bot);
+            }
+        }, 45_000);
+        return true;
+    }
+
+    if (dataObj.ok) {
+        console.log(`[funauth] ok → рестарт ${nick}`);
+        bot.isManualStop = false;
+        if (!ctx.workers?.get(nick)) {
+            ctx.runWorker?.(bot);
+        }
+        return true;
+    }
+
+    // другой fail — воркер остаётся выключенным
+    console.log(`[funauth] fail ${nick}: ${dataObj.error || '?'} — без авторестарта`);
     return true;
 }
 
@@ -423,8 +463,11 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
+        // bind один раз (Go сам не дублирует); воркер гасим до результата FunAuth
         requestFunauthBind(username, ctx);
-        return false; // алерт «хуйня неведомая» всё ещё уйдёт в TG
+        await ctx.sendAlert?.(message, username);
+        await stopWorkerNoRestart(username, ctx);
+        return true;
     }
     return false;
 }

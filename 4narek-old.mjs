@@ -1126,8 +1126,12 @@ async function handleChatMessage(text) {
         parentPort.postMessage(`${workerData.username} - забанен`);
         return;
     }
-    if (text.toLowerCase().includes('чтобы двигаться')) {
+    if (
+        text.toLowerCase().includes('чтобы двигаться')
+    ) {
         parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
+        // оркестратор шлёт FunAuth + стопает воркер; сами гасим сессию
+        setTimeout(() => process.exit(0), 500);
         return;
     }
     if (text.includes('Отключите VPN и Proxy и повторите попытку входа')) {

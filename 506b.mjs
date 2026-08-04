@@ -24,6 +24,7 @@ import {
     buildTelegramAlertText,
     formatOrchestratorPing,
     handleWorkerStatusMessage,
+    handleFunauthGoMessage,
     applyWorkerBuyingClaim,
     buyingUuidForGo,
     applyGoJsonUpdate,
@@ -85,6 +86,7 @@ function workerStatusCtx() {
             socket.send(JSON.stringify(payload));
             return true;
         },
+        runWorker,
     };
 }
 
@@ -527,6 +529,8 @@ function connectWebSocket() {
                         safePostMessage(username, { type: 'items_buying', data: merged });
                     }
                     itemsBuying = merged;
+                } else if (dataObj.action === 'funauth_result' || dataObj.action === 'funauth_no_accounts') {
+                    await handleFunauthGoMessage(dataObj, workerStatusCtx());
                 } else if (dataObj.prices) {
                     handleServerPriceMessage(dataObj);
                 }

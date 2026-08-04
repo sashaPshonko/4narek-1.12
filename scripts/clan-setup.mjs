@@ -1,12 +1,11 @@
 /**
- * Владелец клана: логин → капча → /an → create → invite → права в /clan menu.
+ * Владелец клана: логин → капча → /an → create → (если есть myNick: /clan info + kick чужих)
+ * → invite → права в /clan menu.
  * Крутится сам до цели (кик/прокси/ошибка → пауза 5с → снова). Цель → exit 0.
  *
  *   node scripts/clan-setup.mjs <anarchy> [myNick]
  *   node scripts/clan-setup.mjs 504              # только боты из {an}b.json
- *   node scripts/clan-setup.mjs 504 ТвойНик      # + основной аккаунт
- *
- * CAPTCHA_SOLVER_URL (default http://127.0.0.1:8799)
+ *   node scripts/clan-setup.mjs 504 ТвойНик      # + основной аккаунт; чужих кикает по /clan info
  */
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
@@ -32,6 +31,9 @@ const LMB = 0;
 const SHIFT = 1;
 const MEMBERS_MENU_SLOT = 11;
 const RIGHTS_SLOTS = [11, 12, 13, 14];
+const KICK_CONFIRM_SLOT = 0;
+const CLAN_MEMBERS_MARKER = 'Участники:';
+const MEMBER_NAME_RE = /\][\s]*([a-zA-Z0-9_]{3,16})/g;
 const SOLVER_URL = process.env.CAPTCHA_SOLVER_URL || 'http://127.0.0.1:8799';
 const GO_HTTP = process.env.GO_HTTP_URL
     || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
@@ -124,6 +126,25 @@ function randomClanName() {
 
 function nickIn(text, nick) {
     return String(text).toLowerCase().includes(String(nick).toLowerCase());
+}
+
+/** «Участники: [Лидер]nick, [Участник]nick2» → lowercase nicks */
+function parseClanMembersFromChat(text) {
+    if (!text?.includes(CLAN_MEMBERS_MARKER)) return null;
+    const idx = text.indexOf(CLAN_MEMBERS_MARKER);
+    const tail = text.slice(idx + CLAN_MEMBERS_MARKER.length);
+    const names = [];
+    let m;
+    MEMBER_NAME_RE.lastIndex = 0;
+    while ((m = MEMBER_NAME_RE.exec(tail)) !== null) {
+        names.push(m[1].toLowerCase());
+    }
+    return names.length ? names : null;
+}
+
+function findClanIntruders(members, allowedLower) {
+    const allowed = new Set(allowedLower.map((n) => String(n).toLowerCase()));
+    return members.filter((m) => !allowed.has(m));
 }
 
 function ensureRegistryDimensionStub(bot) {
@@ -246,7 +267,7 @@ function buildProxyConnect(proxyString) {
     return { agent, connect, label: `${proxyHost}:${proxyPort}` };
 }
 
-async function runSession({ anarchy, me, owner, proxyString, inviteNicks }) {
+async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowedNicks }) {
     let sessionReject = null;
     let finishedOk = false;
     const failSession = (msg) => {
@@ -275,6 +296,8 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks }) {
         inviteOffline: false,
         menu: null,
         guiBusy: false,
+        clanMembersSnapshot: null,
+        kickDone: false,
     };
 
     const proxy = buildProxyConnect(proxyString);
@@ -401,6 +424,12 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks }) {
                 log(`invite skip (офлайн) → ${nick}`);
             }
         }
+
+        const members = parseClanMembersFromChat(text);
+        if (members != null) {
+            state.clanMembersSnapshot = members;
+            log(`clan info: ${members.join(', ')}`);
+        }
     };
 
     bot.on('messagestr', (msg) => {
@@ -476,6 +505,11 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks }) {
         }
         if (!state.createOk && !state.alreadyInClan) {
             throw new Error('не удалось создать клан');
+        }
+
+        // С основным ником — сначала вычищаем чужих из клана
+        if (me) {
+            await purgeIntruders(bot, state, allowedNicks);
         }
 
         for (const nick of inviteNicks) {
@@ -571,10 +605,23 @@ async function main() {
     pushNick(me);
     for (const b of bots) pushNick(b.username);
 
+    const allowedNicks = [
+        owner.username,
+        me,
+        ...bots.map((b) => b?.username),
+    ].filter(Boolean);
+
     for (let n = 1; ; n++) {
         log(`═══ сессия #${n} ═══`);
         try {
-            await runSession({ anarchy, me, owner, proxyString, inviteNicks });
+            await runSession({
+                anarchy,
+                me,
+                owner,
+                proxyString,
+                inviteNicks,
+                allowedNicks,
+            });
             log('готово — выход');
             process.exit(0);
         } catch (e) {
@@ -584,10 +631,93 @@ async function main() {
     }
 }
 
+async function safeClanInfo(bot, state, waitMs = 25_000) {
+    state.clanMembersSnapshot = null;
+    const deadline = Date.now() + waitMs;
+    while (state.clanMembersSnapshot == null && Date.now() < deadline) {
+        await closeWindow(bot);
+        log('/clan info…');
+        bot.chat('/clan info');
+        await sleep(3500);
+        if (state.clanMembersSnapshot == null) {
+            await antiAfkIfNeeded(bot, state, log);
+        }
+    }
+    return state.clanMembersSnapshot;
+}
+
+async function kickFromClan(bot, state, nick, deadline) {
+    const cmd = `/clan kick ${nick}`;
+    while (Date.now() < deadline) {
+        state.kickDone = false;
+        state.menu = 'clan_kick';
+        await closeWindow(bot);
+        log(cmd);
+        bot.chat(cmd);
+
+        const roundEnd = Math.min(deadline, Date.now() + 12_000);
+        while (Date.now() < roundEnd && !state.kickDone) {
+            await sleep(400);
+            if (!bot.currentWindow) await antiAfkIfNeeded(bot, state, log);
+        }
+
+        if (state.kickDone) {
+            await sleep(800);
+            await closeWindow(bot);
+            state.menu = null;
+            return true;
+        }
+        log('kick — повтор');
+        await sleep(1500);
+    }
+    state.menu = null;
+    return false;
+}
+
+/** /clan info → kick всех, кого нет в JSON и кто не основной ник / не владелец */
+async function purgeIntruders(bot, state, allowedNicks) {
+    const allowed = allowedNicks.map((n) => String(n).toLowerCase());
+    log(`purge: оставляем ${allowed.join(', ')}`);
+    const deadline = Date.now() + 180_000;
+
+    while (Date.now() < deadline) {
+        await antiAfkIfNeeded(bot, state, log);
+        const members = await safeClanInfo(bot, state);
+        if (!members?.length) {
+            log('clan info — нет участников, повтор');
+            await sleep(2000);
+            continue;
+        }
+
+        const intruders = findClanIntruders(members, allowed);
+        if (!intruders.length) {
+            log(`clan info: чужих нет (${members.length} уч.)`);
+            return;
+        }
+
+        for (const name of intruders) {
+            if (Date.now() >= deadline) return;
+            log(`лишний ${name} — kick`);
+            await kickFromClan(bot, state, name, Math.min(deadline, Date.now() + 30_000));
+            await sleep(1200);
+        }
+    }
+    log('purge: таймаут');
+}
+
 async function onWindowOpen(bot, state) {
     if (!bot?.currentWindow || state.menu == null || state.guiBusy) return;
     state.guiBusy = true;
     try {
+        if (state.menu === 'clan_kick') {
+            await rnd(600, 1200);
+            if (!bot.currentWindow) return;
+            log(`kick confirm слот ${KICK_CONFIRM_SLOT}`);
+            state.menu = null;
+            state.kickDone = true;
+            await bot.clickWindow(KICK_CONFIRM_SLOT, LMB, 0);
+            return;
+        }
         if (state.menu === 'clan_menu') {
             await rnd(800, 1600);
             if (!bot.currentWindow) return;
