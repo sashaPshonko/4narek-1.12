@@ -490,6 +490,7 @@ const config = {
     needSendAH: true,
     needAdd: false,
     timeActive: Date.now(),
+    lastClanInvestAt: 0,
     ip: workerData.ip,
     role: workerData.role,
 };
@@ -779,6 +780,8 @@ const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
 /** Ждём ответ чата дольше — «слишком дорого» приходит не за 300мс. */
 const SELL_LIST_ACK_TIMEOUT_MS = 2500;
 const SELL_SLOT_MAX_ATTEMPTS = 5;
+/** FunTime: /clan invest не чаще раза в 15 минут */
+const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 /** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
 const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
 
@@ -902,6 +905,16 @@ async function onBotChatText(text) {
 const CLAN_HELP_MARKER = '[⚔] Помощь по Кланам';
 /** FunTime: в клане, но нет прав на команду (withdraw/invest и т.п.) */
 const CLAN_NO_PERMS_MARKER = '[⚔] У тебя нет полномочий для этой команды!';
+/** FunTime: /clan withdraw при пустой казне */
+const CLAN_TREASURY_LOW = '[⚔] Ошибка: Баланс казны меньше веденной суммы!';
+/** FunTime: `[⚔] Игрок <nick> снял $… из казны клана!` */
+function isOwnClanWithdrawOk(text) {
+    const nick = config.username;
+    return typeof text === 'string'
+        && text.includes(`Игрок ${nick} снял $`)
+        && text.includes('из казны');
+}
+let treasuryEmptyReported = false;
 
 async function handleChatMessage(text) {
     if (text.includes(CLAN_HELP_MARKER) || text.includes(CLAN_NO_PERMS_MARKER)) {
@@ -1144,6 +1157,23 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        return;
+    }
+    if (text.includes(CLAN_TREASURY_LOW)) {
+        if (!treasuryEmptyReported) {
+            treasuryEmptyReported = true;
+            logWarn('казна пуста → presence inactive для Go');
+            parentPort.postMessage({ name: 'treasury_empty' });
+        }
+        config.needAdd = true;
+        if (!config.hasDangerousTrash) await sellItems();
+        await safeAH();
+        return;
+    }
+    if (isOwnClanWithdrawOk(text)) {
+        treasuryEmptyReported = false;
+        logOk('успешный withdraw → presence active для Go');
+        parentPort.postMessage({ name: 'treasury_ok' });
         return;
     }
     if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
@@ -1887,8 +1917,16 @@ async function sellItems() {
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
                     const investSum = config.balance - saveSum;
                     if (investSum > 5_000_000) {
-                        await rnd('AH_CMD');
-                        bot.chat(`/clan invest ${investSum}`);
+                        const since = Date.now() - (config.lastClanInvestAt || 0);
+                        if (since < CLAN_INVEST_COOLDOWN_MS) {
+                            logInfo(
+                                `clan invest cooldown ещё ${Math.ceil((CLAN_INVEST_COOLDOWN_MS - since) / 1000)}с`,
+                            );
+                        } else {
+                            await rnd('AH_CMD');
+                            bot.chat(`/clan invest ${investSum}`);
+                            config.lastClanInvestAt = Date.now();
+                        }
                     }
                 }
                 if (saveSum != null && config.balance != null && config.balance < saveSum/2) {

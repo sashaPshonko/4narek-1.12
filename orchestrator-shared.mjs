@@ -200,21 +200,49 @@ export function buildPresencePayload(bots, workers, botItems, botInventory) {
 
 export function collectActiveTypes(bots, workers) {
     const types = new Set();
-    for (const [username, workerData] of workers) {
-        if (!workerData?.worker || workerData.worker.terminated) continue;
+    for (const username of workers.keys()) {
+        if (!isBotAliveForPresence(username, bots, workers)) continue;
         const bot = bots.get(username);
-        if (!bot?.success) continue;
         const goType = resolveGoType(bot);
         if (goType) types.add(goType);
     }
     return [...types];
 }
 
-/** Бот считается «живым» для presence и active_types */
+/** Бот считается «живым» для presence, active_types и слотов в ценообразовании */
 export function isBotAliveForPresence(username, bots, workers) {
     const workerData = workers.get(username);
     const bot = bots.get(username);
-    return !!(workerData?.worker && !workerData.worker.terminated && bot?.success);
+    return !!(
+        workerData?.worker
+        && !workerData.worker.terminated
+        && bot?.success
+        && !bot.presenceInactive
+    );
+}
+
+/**
+ * Мягко убрать бота из Go presence (слоты/типы), не останавливая воркер.
+ * Как бан для ценообразования; снимается только через clearBotPresenceInactive.
+ */
+export function markBotPresenceInactive(username, ctx, reason = 'presence_inactive') {
+    const bot = ctx.bots?.get(username);
+    if (!bot || bot.presenceInactive) return false;
+    bot.presenceInactive = true;
+    clearBotPresence(username, ctx.botItems, ctx.botInventory);
+    ctx.pushPresenceToGo?.();
+    console.log(`[presence] ${username} inactive (${reason}) — слоты не в ценообразовании`);
+    return true;
+}
+
+/** Снять presence-inactive (успешный /clan withdraw) и снова учесть слоты в Go. */
+export function clearBotPresenceInactive(username, ctx, reason = 'presence_ok') {
+    const bot = ctx.bots?.get(username);
+    if (!bot?.presenceInactive) return false;
+    bot.presenceInactive = false;
+    ctx.pushPresenceToGo?.();
+    console.log(`[presence] ${username} active again (${reason})`);
+    return true;
 }
 
 export function clearBotPresence(username, botItems, botInventory) {
@@ -449,6 +477,24 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
             reason: message.reason || 'clan',
             username,
         }, ctx);
+        return true;
+    }
+    if (message?.name === 'treasury_empty') {
+        if (markBotPresenceInactive(username, ctx, 'treasury_empty')) {
+            await ctx.sendAlert?.(
+                `💸 ${username}: казна пуста — как бан для Go, слоты вне ценообразования`,
+                username,
+            );
+        }
+        return true;
+    }
+    if (message?.name === 'treasury_ok') {
+        if (clearBotPresenceInactive(username, ctx, 'withdraw_ok')) {
+            await ctx.sendAlert?.(
+                `💰 ${username}: успешный withdraw — снова активен для Go`,
+                username,
+            );
+        }
         return true;
     }
     if (message?.name === 'funauth_bind') {
@@ -711,6 +757,7 @@ export function ackWorkerReady(bots, workers, username) {
     const bot = bots.get(username);
     if (!bot) return false;
     bot.success = true;
+    // presenceInactive снимается только после успешного /clan withdraw (treasury_ok)
     const w = workers.get(username);
     if (w?.timeoutId) {
         clearTimeout(w.timeoutId);

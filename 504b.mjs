@@ -263,7 +263,7 @@ async function runWorker(bot) {
                         }
                     } else if (message.name === 'ah_market_floor') {
                         marketFloorTracker.mergeFromWorker(message);
-                    } else if (message.name === 'clan_setup') {
+                    } else if (message.name === 'clan_setup' || message.name === 'treasury_empty' || message.name === 'treasury_ok') {
                         await handleWorkerStatusMessage(message, username, workerStatusCtx());
                     } else if (typeof message === 'string') {
                         const handled = await handleWorkerStatusMessage(message, username, workerStatusCtx());

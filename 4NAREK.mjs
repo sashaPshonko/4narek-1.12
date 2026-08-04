@@ -292,6 +292,8 @@ function configurationTransferAgeMs() {
 
 const STORAGE_AH_SLOTS = 5;
 const CLAN_STORAGE_TARGET = 10;
+/** FunTime: /clan invest не чаще раза в 15 минут */
+const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 
 const firstAHSlot = 0;
 const lastAHSlot = 17;
@@ -438,6 +440,7 @@ const config = {
     needSendAH: true,
     needAdd: false,
     timeActive: Date.now(),
+    lastClanInvestAt: 0,
     ip: workerData.ip,
     role: workerData.role,
 };
@@ -894,6 +897,25 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        return;
+    }
+    if (text.includes('[⚔] Ошибка: Баланс казны меньше веденной суммы!')) {
+        if (!config._treasuryEmptyReported) {
+            config._treasuryEmptyReported = true;
+            logWarn('казна пуста → presence inactive для Go');
+            parentPort.postMessage({ name: 'treasury_empty' });
+        }
+        config.needAdd = true;
+        if (!config.hasDangerousTrash) await sellItems();
+        return;
+    }
+    if (
+        text.includes(`Игрок ${config.username} снял $`)
+        && text.includes('из казны')
+    ) {
+        config._treasuryEmptyReported = false;
+        logOk('успешный withdraw → presence active для Go');
+        parentPort.postMessage({ name: 'treasury_ok' });
         return;
     }
     if (text.includes('[✘] Ошибка! У Вас не хватает Монет!')) {
@@ -1520,8 +1542,16 @@ async function sellItems() {
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
                     const investSum = config.balance - saveSum;
                     if (investSum > 5_000_000) {
-                        await rnd('AH_CMD');
-                        bot.chat(`/clan invest ${investSum}`);
+                        const since = Date.now() - (config.lastClanInvestAt || 0);
+                        if (since < CLAN_INVEST_COOLDOWN_MS) {
+                            logInfo(
+                                `clan invest cooldown ещё ${Math.ceil((CLAN_INVEST_COOLDOWN_MS - since) / 1000)}с`,
+                            );
+                        } else {
+                            await rnd('AH_CMD');
+                            bot.chat(`/clan invest ${investSum}`);
+                            config.lastClanInvestAt = Date.now();
+                        }
                     }
                 }
                 if (saveSum != null && config.balance != null && config.balance < saveSum/2) {
