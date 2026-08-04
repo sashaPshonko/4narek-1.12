@@ -1,6 +1,6 @@
 /**
  * Владелец клана: логин → капча → /an → create → (если есть myNick: /clan info + kick чужих)
- * → invite → права в /clan menu.
+ * → invite только тех, кого ещё нет в clan info → права в /clan menu (всем).
  * Крутится сам до цели (кик/прокси/ошибка → пауза 5с → снова). Цель → exit 0.
  *
  *   node scripts/clan-setup.mjs <anarchy> [myNick]
@@ -513,7 +513,23 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             await purgeIntruders(bot, state, allowedNicks);
         }
 
+        // Кто уже в clan info — не инвайтим; права всё равно проверим всем ниже
+        let alreadyIn = new Set(
+            (state.clanMembersSnapshot || []).map((n) => String(n).toLowerCase()),
+        );
+        if (!alreadyIn.size) {
+            const members = await safeClanInfo(bot, state);
+            alreadyIn = new Set((members || []).map((n) => String(n).toLowerCase()));
+        }
+        if (alreadyIn.size) {
+            log(`уже в клане (invite skip): ${[...alreadyIn].join(', ')}`);
+        }
+
         for (const nick of inviteNicks) {
+            if (alreadyIn.has(String(nick).toLowerCase())) {
+                log(`⊘ invite skip ${nick} — уже в clan info`);
+                continue;
+            }
             state.lastInvite = nick;
             state.inviteOk = false;
             state.inviteOtherClan = false;
