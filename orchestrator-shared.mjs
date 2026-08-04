@@ -1,8 +1,85 @@
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
 
 const execFileAsync = promisify(execFile);
+
+const ORCH_ROOT = dirname(fileURLToPath(import.meta.url));
+const CLAN_SETUP_SCRIPT = join(ORCH_ROOT, 'scripts', 'clan-setup.mjs');
+/** Не чаще одного запуска на анархию раз в 3 минуты (от предыдущего start) */
+const CLAN_SETUP_COOLDOWN_MS = 3 * 60 * 1000;
+/** anarchy → { child?, startedAt?, finishedAt? } */
+const clanSetupByAnarchy = new Map();
+
+/**
+ * Запуск scripts/clan-setup.mjs <an> без основного ника (только боты из {an}b.json).
+ * Дедуп: один процесс на анархию + не чаще раза в 3 мин.
+ */
+export function requestClanSetup({ anarchy, reason, username }, ctx) {
+    const an = String(anarchy ?? '').replace(/\D/g, '').slice(0, 3);
+    if (!/^\d{3}$/.test(an)) {
+        console.warn(`[clan-setup] bad anarchy from ${username}: ${anarchy}`);
+        return false;
+    }
+    const now = Date.now();
+    const cur = clanSetupByAnarchy.get(an);
+    if (cur?.child && cur.child.exitCode == null && !cur.child.killed) {
+        console.log(`[clan-setup] an${an} уже запущен (триггер ${username}, reason=${reason})`);
+        return false;
+    }
+    if (cur?.startedAt && now - cur.startedAt < CLAN_SETUP_COOLDOWN_MS) {
+        const left = Math.ceil((CLAN_SETUP_COOLDOWN_MS - (now - cur.startedAt)) / 1000);
+        console.log(`[clan-setup] an${an} cooldown ещё ${left}с (триггер ${username})`);
+        return false;
+    }
+
+    console.log(`[clan-setup] start an${an} reason=${reason} trigger=${username}`);
+    try {
+        ctx?.sendAlert?.(
+            `⚔ clan-setup an${an}: ${reason} ← ${username}`,
+            username,
+        );
+    } catch {
+        /* ignore */
+    }
+
+    const child = spawn(process.execPath, [CLAN_SETUP_SCRIPT, an], {
+        cwd: ORCH_ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
+    });
+    clanSetupByAnarchy.set(an, { child, startedAt: now });
+
+    const prefix = `[clan-setup an${an}]`;
+    const pipe = (stream, write) => {
+        let buf = '';
+        stream?.on('data', (chunk) => {
+            buf += String(chunk);
+            const parts = buf.split('\n');
+            buf = parts.pop() || '';
+            for (const line of parts) {
+                if (line) write(`${prefix} ${line}`);
+            }
+        });
+        stream?.on('end', () => {
+            if (buf) write(`${prefix} ${buf}`);
+        });
+    };
+    pipe(child.stdout, console.log);
+    pipe(child.stderr, console.error);
+
+    child.on('error', (err) => {
+        console.error(`${prefix} spawn error: ${err.message}`);
+        clanSetupByAnarchy.set(an, { startedAt: now, finishedAt: Date.now() });
+    });
+    child.on('exit', (code, signal) => {
+        console.log(`${prefix} exit code=${code} signal=${signal || '-'}`);
+        clanSetupByAnarchy.set(an, { startedAt: now, finishedAt: Date.now() });
+    });
+    return true;
+}
 
 /**
  * Общая логика оркестраторов: каталог с Go, активные типы, цены.
@@ -22,7 +99,7 @@ export const MARKET_FLOOR_CHECK_MS = 30 * 1000;
 /** Допуск на джиттер таймеров (воркер / оркестратор / сеть) */
 export const MARKET_FLOOR_WINDOW_SLACK_MS = 5000;
 
-export const GO_WS_URL_REMOTE = 'ws://85.198.86.42:8080/ws';
+export const GO_WS_URL_REMOTE = 'ws://212.8.229.76:8080/ws';
 export const GO_WS_URL_LOCAL = 'ws://127.0.0.1:8080/ws';
 
 /** Go WebSocket: GO_WS_URL env > LOCAL_MODE > VPS по умолчанию */
@@ -293,8 +370,50 @@ export async function markBotBanned(username, ctx) {
     await ctx.sendAlert(`🚫 ${username} забанен`, username);
 }
 
+/** FunAuth bind через Go WS (или HTTP fallback). */
+export function requestFunauthBind(username, ctx) {
+    const bot = ctx.bots?.get(username);
+    const password = bot?.password;
+    if (!username || !password) {
+        console.warn(`[funauth] нет пароля для ${username}`);
+        return false;
+    }
+    const payload = { action: 'funauth_bind', nick: username, password };
+    if (typeof ctx.sendToGo === 'function') {
+        const ok = ctx.sendToGo(payload);
+        if (ok) {
+            console.log(`[funauth] queued via WS → ${username}`);
+            return true;
+        }
+    }
+    // HTTP на Go (clan-setup / нет сокета)
+    const base = process.env.GO_HTTP_URL
+        || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
+            ? 'http://127.0.0.1:8080'
+            : 'http://212.8.229.76:8080');
+    fetch(`${base}/api/funauth/bind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: username, password }),
+    }).catch((e) => console.warn(`[funauth] HTTP fail: ${e.message}`));
+    console.log(`[funauth] queued via HTTP → ${username}`);
+    return true;
+}
+
 /** true — обработано, не слать как обычный лог */
 export async function handleWorkerStatusMessage(message, username, ctx) {
+    if (message?.name === 'clan_setup') {
+        requestClanSetup({
+            anarchy: message.anarchy,
+            reason: message.reason || 'clan',
+            username,
+        }, ctx);
+        return true;
+    }
+    if (message?.name === 'funauth_bind') {
+        requestFunauthBind(message.username || username, ctx);
+        return true;
+    }
     if (message?.name === 'banned') {
         await markBotBanned(username, ctx);
         return true;
@@ -302,6 +421,10 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {
         await markBotBanned(username, ctx);
         return true;
+    }
+    if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
+        requestFunauthBind(username, ctx);
+        return false; // алерт «хуйня неведомая» всё ещё уйдёт в TG
     }
     return false;
 }

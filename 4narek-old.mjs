@@ -898,7 +898,22 @@ async function onBotChatText(text) {
     await handleChatMessage(text);
 }
 
+/** FunTime: /clan * без членства */
+const CLAN_HELP_MARKER = '[⚔] Помощь по Кланам';
+/** FunTime: в клане, но нет прав на команду (withdraw/invest и т.п.) */
+const CLAN_NO_PERMS_MARKER = '[⚔] У тебя нет полномочий для этой команды!';
+
 async function handleChatMessage(text) {
+    if (text.includes(CLAN_HELP_MARKER) || text.includes(CLAN_NO_PERMS_MARKER)) {
+        const reason = text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms';
+        logWarn(`clan → ${reason} → clan-setup an${config.anarchy}`);
+        parentPort.postMessage({
+            name: 'clan_setup',
+            anarchy: config.anarchy,
+            reason,
+        });
+        return;
+    }
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
         config.needReset = false;

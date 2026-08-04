@@ -12,6 +12,7 @@
     "start:508": "node 508b.mjs",
     "start:509": "node 509b.mjs",
     "start:510": "node 510b.mjs",
+    "clan-setup": "node scripts/clan-setup.mjs",
     "xray": "node xray.mjs",
     "xray:check": "node xray-check.mjs"
   },

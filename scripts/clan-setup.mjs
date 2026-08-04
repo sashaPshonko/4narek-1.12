@@ -1,0 +1,680 @@
+/**
+ * Владелец клана: логин → капча → /an → create → invite → права в /clan menu.
+ * Крутится сам до цели (кик/прокси/ошибка → пауза 5с → снова). Цель → exit 0.
+ *
+ *   node scripts/clan-setup.mjs <anarchy> [myNick]
+ *   node scripts/clan-setup.mjs 504              # только боты из {an}b.json
+ *   node scripts/clan-setup.mjs 504 ТвойНик      # + основной аккаунт
+ *
+ * CAPTCHA_SOLVER_URL (default http://127.0.0.1:8799)
+ */
+import { readFileSync, existsSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+import mineflayer from 'mineflayer';
+import { SocksClient } from 'socks';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import { handleCaptchaLogin, attachMapCache, isCaptchaChat } from '../lib/captcha/solve-flow.mjs';
+import { antiAfkIfNeeded, lookAroundSpin } from '../lib/afk-look.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+
+const CLAN_CREATE_OK = '[⚔] Супер! Вы успешно создали клан:';
+const CLAN_ALREADY = '[⚔] Ошибка: Ты уже состоишь в клане!';
+const CLAN_OTHER = '[⚔] Ошибка: Игрок состоит в другом клане!'; // FunTime: и чужой клан, и уже наш
+const CLAN_INVITE_OK = '[⚔] Вы отправили приглашение в клан игроку';
+const CLAN_OFFLINE_HEAD = '[⚔] Ошибка: Игрок';
+const CLAN_OFFLINE_TAIL = ' не в сети!';
+const AFK_MARKER = 'Данная команда недоступна в режиме AFK';
+
+const LMB = 0;
+const SHIFT = 1;
+const MEMBERS_MENU_SLOT = 11;
+const RIGHTS_SLOTS = [11, 12, 13, 14];
+const SOLVER_URL = process.env.CAPTCHA_SOLVER_URL || 'http://127.0.0.1:8799';
+const GO_HTTP = process.env.GO_HTTP_URL
+    || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
+        ? 'http://127.0.0.1:8080'
+        : 'http://212.8.229.76:8080');
+
+function requestFunauthBindHttp(nick, password) {
+    if (!nick || !password) return;
+    fetch(`${GO_HTTP}/api/funauth/bind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick, password }),
+    }).catch((e) => console.warn(`[clan-setup] funauth: ${e.message}`));
+}
+
+const CONFIG_BLOCKED = new Set([
+    'position', 'look', 'position_look', 'flying',
+    'chat', 'chat_command', 'chat_command_signed', 'chat_message',
+    'window_click', 'close_window',
+    'arm_animation', 'entity_action',
+    'held_item_slot', 'set_creative_slot',
+]);
+
+function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
+function rnd(min, max) {
+    return sleep(min + Math.floor(Math.random() * (max - min + 1)));
+}
+
+function log(msg) {
+    console.log(`[clan-setup] ${msg}`);
+}
+
+function parseArgs(argv) {
+    let anarchy = null;
+    let me = null;
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === '--anarchy' || a === '-a') anarchy = argv[++i];
+        else if (a === '--me' || a === '--nick' || a === '-m') me = argv[++i];
+        else if (/^\d{3}$/.test(a) && !anarchy) anarchy = a;
+        else if (!a.startsWith('-') && !me) me = a;
+    }
+    if (!anarchy) {
+        console.error('usage: node scripts/clan-setup.mjs <anarchy> [myNick]');
+        process.exit(2);
+    }
+    return { anarchy: String(anarchy), me: me ? String(me) : null };
+}
+
+function loadJson(path) {
+    return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function flattenChat(raw) {
+    if (raw == null) return '';
+    if (typeof raw === 'string') {
+        try {
+            return flattenChat(JSON.parse(raw));
+        } catch {
+            return raw;
+        }
+    }
+    if (typeof raw !== 'object') return String(raw);
+    let out = raw.text ?? raw.translate ?? '';
+    if (Array.isArray(raw.extra)) {
+        for (const p of raw.extra) out += flattenChat(p);
+    }
+    if (Array.isArray(raw.with)) {
+        for (const p of raw.with) out += flattenChat(p);
+    }
+    return out;
+}
+
+function packetToText(data) {
+    if (data?.plainMessage) return String(data.plainMessage);
+    return flattenChat(data?.formattedMessage ?? data?.content ?? data?.unsignedContent ?? data);
+}
+
+function randomClanName() {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let s = '';
+    for (let i = 0; i < 5; i++) {
+        s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return s;
+}
+
+function nickIn(text, nick) {
+    return String(text).toLowerCase().includes(String(nick).toLowerCase());
+}
+
+function ensureRegistryDimensionStub(bot) {
+    if (Array.isArray(bot.registry.dimensionsArray) && bot.registry.dimensionsArray.length > 0) {
+        return;
+    }
+    const fallback = { name: 'minecraft:overworld', minY: -64, height: 384 };
+    bot.registry.dimensionsArray = Array.from({ length: 16 }, () => fallback);
+    bot.registry.dimensionsByName ??= { overworld: fallback };
+}
+
+function setupConfigurationTransferFix(bot) {
+    const client = bot._client;
+    if (!client) return;
+
+    const origLoad = bot.registry.loadDimensionCodec.bind(bot.registry);
+    bot.registry.loadDimensionCodec = (codec) => {
+        try {
+            origLoad(codec);
+        } catch {
+            ensureRegistryDimensionStub(bot);
+        }
+    };
+
+    client.prependListener('login', () => ensureRegistryDimensionStub(bot));
+    client.prependListener('respawn', () => ensureRegistryDimensionStub(bot));
+
+    const PACK_ACCEPTED = 3;
+    const PACK_LOADED = 0;
+    let blockSelectKnownPacksWrite = false;
+    const origWrite = client.write.bind(client);
+    client.write = (name, params) => {
+        if (client.state === 'configuration' && CONFIG_BLOCKED.has(name)) return;
+        if (blockSelectKnownPacksWrite && name === 'select_known_packs') return;
+        return origWrite(name, params);
+    };
+
+    client.on('start_configuration', () => {
+        blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = false;
+        log('transfer → configuration');
+    });
+    client.on('finish_configuration', () => {
+        blockSelectKnownPacksWrite = false;
+        bot.physicsEnabled = true;
+        log('transfer → configuration ok');
+    });
+    client.on('cookie_request', (data) => {
+        if (client.state !== 'configuration') return;
+        origWrite('cookie_response', { key: data.cookie });
+    });
+    client.prependListener('add_resource_pack', (data) => {
+        if (client.state !== 'configuration') return;
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_ACCEPTED });
+        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_LOADED });
+    });
+    client.prependListener('select_known_packs', (data) => {
+        if (client.state !== 'configuration') return;
+        const packs = (data.packs ?? []).map((p) => ({
+            namespace: p.namespace,
+            id: p.id,
+            version: p.version,
+        }));
+        blockSelectKnownPacksWrite = true;
+        try {
+            origWrite('select_known_packs', { packs });
+        } finally {
+            blockSelectKnownPacksWrite = false;
+        }
+    });
+}
+
+async function closeWindow(bot) {
+    const win = bot?.currentWindow;
+    if (!win) return;
+    try {
+        await bot.closeWindow(win);
+    } catch {
+        /* ignore */
+    }
+    await sleep(300);
+}
+
+function buildProxyConnect(proxyString) {
+    const url = new URL(proxyString);
+    const proxyHost = url.hostname;
+    const proxyPort = Number(url.port);
+    const proxyUsername = url.username || undefined;
+    const proxyPassword = url.password || undefined;
+    const agent = new SocksProxyAgent({
+        protocol: 'socks5:',
+        host: proxyHost,
+        port: proxyPort,
+        username: proxyUsername,
+        password: proxyPassword,
+    });
+    const connect = (client) => {
+        SocksClient.createConnection(
+            {
+                proxy: {
+                    host: proxyHost,
+                    port: proxyPort,
+                    type: 5,
+                    userId: proxyUsername,
+                    password: proxyPassword,
+                },
+                command: 'connect',
+                destination: { host: 'mc.funtime.su', port: 25565 },
+            },
+            (err, info) => {
+                if (err) {
+                    client.emit('error', err);
+                    return;
+                }
+                client.setSocket(info.socket);
+                client.emit('connect');
+            },
+        );
+    };
+    return { agent, connect, label: `${proxyHost}:${proxyPort}` };
+}
+
+async function runSession({ anarchy, me, owner, proxyString, inviteNicks }) {
+    let sessionReject = null;
+    let finishedOk = false;
+    const failSession = (msg) => {
+        if (finishedOk) return;
+        console.error(`[clan-setup] ${msg}`);
+        if (sessionReject) {
+            const rej = sessionReject;
+            sessionReject = null;
+            rej(new Error(msg));
+        }
+    };
+
+    log(`owner=${owner.username} an=${anarchy} me=${me || '(нет — только боты)'}`);
+    log(`invite: ${inviteNicks.join(', ') || '(пусто)'}`);
+    log(`solver: ${SOLVER_URL}`);
+
+    const state = {
+        afk: false,
+        timeJoinAnarchy: 0,
+        captchaBusy: false,
+        createOk: false,
+        alreadyInClan: false,
+        lastInvite: null,
+        inviteOk: false,
+        inviteOtherClan: false,
+        inviteOffline: false,
+        menu: null,
+        guiBusy: false,
+    };
+
+    const proxy = buildProxyConnect(proxyString);
+    log(`прокси ${proxy.label}`);
+
+    const bot = mineflayer.createBot({
+        username: owner.username,
+        password: owner.password,
+        host: 'mc.funtime.su',
+        port: 25565,
+        version: '1.21.11',
+        physicsEnabled: false,
+        hideErrors: true,
+        logErrors: false,
+        agent: proxy.agent,
+        connect: proxy.connect,
+    });
+
+    const dead = new Promise((_, reject) => {
+        sessionReject = reject;
+    });
+
+    attachMapCache(bot);
+    setupConfigurationTransferFix(bot);
+
+    bot.on('scoreboardCreated', (scoreboard) => {
+        if (JSON.stringify(scoreboard).includes(String(anarchy))) {
+            state.timeJoinAnarchy = Date.now();
+            log(`на анархии ${anarchy}`);
+        }
+    });
+
+    bot.on('kicked', (reason) => {
+        failSession(`kicked ${JSON.stringify(reason)}`);
+    });
+    bot.on('error', (err) => {
+        failSession(`error ${err.message}`);
+    });
+    bot.on('end', () => {
+        failSession('connection end');
+    });
+
+    const onChatText = async (text) => {
+        if (!text) return;
+        console.log(`[clan-setup] 💬 ${text}`);
+
+        if (text.includes(AFK_MARKER)) {
+            state.afk = true;
+            log('AFK');
+            return;
+        }
+
+        if (isCaptchaChat(text)) {
+            if (state.captchaBusy) return;
+            state.captchaBusy = true;
+            try {
+                log('капча…');
+                await handleCaptchaLogin(bot, {
+                    password: owner.password,
+                    solverUrl: SOLVER_URL,
+                    username: owner.username,
+                    infinite: true,
+                    log: (...a) => log(a.join(' ')),
+                });
+                log('капча ок → /reg /l');
+            } catch (e) {
+                console.error('[clan-setup] captcha:', e.message, '— жду следующую капчу');
+            } finally {
+                state.captchaBusy = false;
+            }
+            return;
+        }
+
+        if (
+            text.includes('Зарегистрируйтесь')
+            || text.includes('/reg <')
+            || text.includes('/reg<')
+        ) {
+            bot.chat(`/reg ${owner.password}`);
+            await rnd(400, 800);
+            bot.chat(`/l ${owner.password}`);
+            return;
+        }
+        if (
+            text.includes('Сначала авторизируйтесь')
+            || text.includes('Авторизируйтесь')
+        ) {
+            bot.chat(`/l ${owner.password}`);
+            return;
+        }
+
+        if (text.toLowerCase().includes('чтобы двигаться')) {
+            log('хуйня неведомая → FunAuth bind');
+            requestFunauthBindHttp(owner.username, owner.password);
+            return;
+        }
+
+        if (text.includes(CLAN_CREATE_OK)) {
+            state.createOk = true;
+            log('клан создан');
+        }
+        if (text.includes(CLAN_ALREADY)) {
+            state.alreadyInClan = true;
+            log('уже в клане — create stop');
+        }
+
+        if (state.lastInvite) {
+            const nick = state.lastInvite;
+            if (text.includes(CLAN_INVITE_OK) && nickIn(text, nick)) {
+                state.inviteOk = true;
+                log(`invite ok → ${nick}`);
+            }
+            // FunTime: и «уже в нашем», и «в чужом» → одна строка
+            if (text.includes(CLAN_OTHER)) {
+                state.inviteOtherClan = true;
+                log(`invite skip (уже в клане / другой клан) → ${nick}`);
+            }
+            if (
+                text.includes(CLAN_OFFLINE_HEAD)
+                && text.includes(CLAN_OFFLINE_TAIL)
+                && nickIn(text, nick)
+            ) {
+                state.inviteOffline = true;
+                log(`invite skip (офлайн) → ${nick}`);
+            }
+        }
+    };
+
+    bot.on('messagestr', (msg) => {
+        void onChatText(String(msg || ''));
+    });
+    bot._client?.on('systemChat', (data) => {
+        void onChatText(packetToText(data));
+    });
+    bot._client?.on('playerChat', (data) => {
+        void onChatText(packetToText(data));
+    });
+
+    bot.on('windowOpen', () => {
+        void onWindowOpen(bot, state);
+    });
+
+    const work = (async () => {
+        await new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error('spawn timeout')), 90_000);
+            bot.once('spawn', () => {
+                clearTimeout(t);
+                resolve();
+            });
+        });
+
+        bot.physicsEnabled = true;
+        log('spawn → /reg → /l');
+        await rnd(800, 1600);
+        bot.chat(`/reg ${owner.password}`);
+        await rnd(600, 1200);
+        bot.chat(`/l ${owner.password}`);
+        await rnd(1500, 2500);
+
+        for (let i = 0; i < 40 && !state.timeJoinAnarchy; i++) {
+            if (bot._client?.state === 'configuration') {
+                await sleep(500);
+                continue;
+            }
+            await antiAfkIfNeeded(bot, state, log);
+            log(`/an${anarchy}…`);
+            bot.physicsEnabled = false;
+            bot.chat(`/an${anarchy}`);
+            await sleep(4000);
+        }
+        if (!state.timeJoinAnarchy) {
+            throw new Error(`не вошли на анархию ${anarchy}`);
+        }
+        await sleep(11_000);
+        bot.physicsEnabled = true;
+        await lookAroundSpin(bot, log);
+
+        const createDeadline = Date.now() + 180_000;
+        while (!state.createOk && !state.alreadyInClan && Date.now() < createDeadline) {
+            await antiAfkIfNeeded(bot, state, log);
+            if (state.afk) {
+                await sleep(1000);
+                continue;
+            }
+            const name = randomClanName();
+            const cmd = `/clan create "${name}"`;
+            log(cmd);
+            await closeWindow(bot);
+            bot.chat(cmd);
+            const waitUntil = Date.now() + 8_000;
+            while (
+                Date.now() < waitUntil
+                && !state.createOk
+                && !state.alreadyInClan
+            ) {
+                await antiAfkIfNeeded(bot, state, log);
+                await sleep(400);
+            }
+        }
+        if (!state.createOk && !state.alreadyInClan) {
+            throw new Error('не удалось создать клан');
+        }
+
+        for (const nick of inviteNicks) {
+            state.lastInvite = nick;
+            state.inviteOk = false;
+            state.inviteOtherClan = false;
+            state.inviteOffline = false;
+            const deadline = Date.now() + 90_000;
+            while (
+                Date.now() < deadline
+                && !state.inviteOk
+                && !state.inviteOtherClan
+                && !state.inviteOffline
+            ) {
+                await antiAfkIfNeeded(bot, state, log);
+                if (state.afk) {
+                    await sleep(1000);
+                    continue;
+                }
+                await closeWindow(bot);
+                log(`/clan invite ${nick}`);
+                bot.chat(`/clan invite ${nick}`);
+                const waitUntil = Date.now() + 6_000;
+                while (
+                    Date.now() < waitUntil
+                    && !state.inviteOk
+                    && !state.inviteOtherClan
+                    && !state.inviteOffline
+                ) {
+                    await antiAfkIfNeeded(bot, state, log);
+                    await sleep(400);
+                }
+            }
+            if (state.inviteOk) log(`✓ invite ${nick}`);
+            else if (state.inviteOtherClan) log(`⊘ ${nick} уже в клане / другой клан`);
+            else if (state.inviteOffline) log(`⊘ ${nick} офлайн`);
+            else log(`? invite timeout ${nick}`);
+            await rnd(800, 1500);
+        }
+
+        log('ждём 10с перед /clan menu');
+        await sleep(10_000);
+
+        await grantAllRights(bot, state);
+        log('цель достигнута');
+        finishedOk = true;
+        sessionReject = null;
+    })();
+
+    try {
+        await Promise.race([work, dead]);
+    } finally {
+        finishedOk = true;
+        sessionReject = null;
+        try {
+            bot.removeAllListeners();
+            bot.quit();
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
+async function main() {
+    const { anarchy, me } = parseArgs(process.argv.slice(2));
+    const owners = loadJson(join(ROOT, 'clan-owners.json'));
+    const owner = owners[anarchy];
+    if (!owner) {
+        console.error(`нет владельца в clan-owners.json для ${anarchy}`);
+        process.exit(2);
+    }
+
+    const ipJson = loadJson(join(ROOT, 'ip.json'));
+    const proxyString = ipJson[owner.ip || anarchy];
+    if (!proxyString) {
+        console.error(`нет прокси в ip.json для ${anarchy}`);
+        process.exit(2);
+    }
+
+    const botsPath = join(ROOT, 'bots', `${anarchy}b.json`);
+    const bots = existsSync(botsPath) ? loadJson(botsPath) : [];
+    const inviteNicks = [];
+    const seen = new Set();
+    const pushNick = (n) => {
+        const nick = String(n || '').trim();
+        if (!nick) return;
+        const key = nick.toLowerCase();
+        if (seen.has(key)) return;
+        if (key === String(owner.username).toLowerCase()) return;
+        seen.add(key);
+        inviteNicks.push(nick);
+    };
+    pushNick(me);
+    for (const b of bots) pushNick(b.username);
+
+    for (let n = 1; ; n++) {
+        log(`═══ сессия #${n} ═══`);
+        try {
+            await runSession({ anarchy, me, owner, proxyString, inviteNicks });
+            log('готово — выход');
+            process.exit(0);
+        } catch (e) {
+            log(`сбой: ${e.message} — через 5с снова (можно с любого шага)`);
+            await sleep(5000);
+        }
+    }
+}
+
+async function onWindowOpen(bot, state) {
+    if (!bot?.currentWindow || state.menu == null || state.guiBusy) return;
+    state.guiBusy = true;
+    try {
+        if (state.menu === 'clan_menu') {
+            await rnd(800, 1600);
+            if (!bot.currentWindow) return;
+            log(`клик слот ${MEMBERS_MENU_SLOT} (members)`);
+            state.menu = 'clan_members';
+            state.guiBusy = false;
+            await bot.clickWindow(MEMBERS_MENU_SLOT, LMB, 0);
+            return;
+        }
+        if (state.menu === 'clan_members') {
+            await rnd(800, 1600);
+            state.menu = 'granting';
+            await grantRightsInMembersWindow(bot, state);
+            state.menu = null;
+        }
+    } finally {
+        state.guiBusy = false;
+    }
+}
+
+async function grantRightsInMembersWindow(bot, state) {
+    for (const slot of RIGHTS_SLOTS) {
+        for (let attempt = 0; attempt < 8; attempt++) {
+            const item = bot.currentWindow?.slots?.[slot];
+            if (!item) {
+                log(`слот ${slot}: пусто — skip`);
+                break;
+            }
+            const dump = JSON.stringify(item);
+            if (!dump.includes('Нет')) {
+                log(`слот ${slot}: прав нет «Нет» — ok`);
+                break;
+            }
+            log(`слот ${slot}: shift-клик (есть «Нет») #${attempt + 1}`);
+            await rnd(700, 1400);
+            if (!bot.currentWindow) {
+                log('окно закрылось');
+                return;
+            }
+            await bot.clickWindow(slot, LMB, SHIFT);
+            await sleep(600);
+        }
+    }
+    await rnd(800, 1500);
+    await closeWindow(bot);
+    log('права выданы');
+}
+
+async function grantAllRights(bot, state) {
+    const deadline = Date.now() + 120_000;
+    let done = false;
+    while (Date.now() < deadline && !done) {
+        state.menu = 'clan_menu';
+        await closeWindow(bot);
+        log('/clan menu');
+        bot.chat('/clan menu');
+        const roundEnd = Date.now() + 25_000;
+        while (Date.now() < roundEnd) {
+            await sleep(400);
+            if (state.menu === null) {
+                done = true;
+                break;
+            }
+            if (!bot.currentWindow) await antiAfkIfNeeded(bot, state, log);
+            // members уже открыты, но windowOpen мог не прийти — грантим вручную
+            if (state.menu === 'clan_members' && bot.currentWindow && !state.guiBusy) {
+                state.guiBusy = true;
+                try {
+                    state.menu = 'granting';
+                    await grantRightsInMembersWindow(bot, state);
+                    state.menu = null;
+                    done = true;
+                } finally {
+                    state.guiBusy = false;
+                }
+                break;
+            }
+        }
+        if (!done) {
+            log('права — повтор /clan menu');
+            await sleep(2000);
+        }
+    }
+    if (!done) throw new Error('не удалось выдать права');
+}
+
+main().catch((e) => {
+    console.error('[clan-setup] fatal:', e.message);
+    process.exit(1);
+});

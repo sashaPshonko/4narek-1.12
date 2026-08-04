@@ -79,7 +79,14 @@ let autoStartPending = false;
 let startBotsRunning = false;
 
 function workerStatusCtx() {
-    return { bots, workers, pendingRestarts, botItems, botInventory, terminateWorkerEntry, pushPresenceToGo, sendAlert };
+    return {
+        bots, workers, pendingRestarts, botItems, botInventory, terminateWorkerEntry, pushPresenceToGo, sendAlert,
+        sendToGo: (payload) => {
+            if (!socket || !isSocketOpen) return false;
+            socket.send(JSON.stringify(payload));
+            return true;
+        },
+    };
 }
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
@@ -255,6 +262,8 @@ async function runWorker(bot) {
                         }
                     } else if (message.name === 'ah_market_floor') {
                         marketFloorTracker.mergeFromWorker(message);
+                    } else if (message.name === 'clan_setup') {
+                        await handleWorkerStatusMessage(message, username, workerStatusCtx());
                     } else if (typeof message === 'string') {
                         const handled = await handleWorkerStatusMessage(message, username, workerStatusCtx());
                         if (!handled && typeof message === 'string') {
