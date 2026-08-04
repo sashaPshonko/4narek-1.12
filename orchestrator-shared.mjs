@@ -14,7 +14,8 @@ const CLAN_SETUP_COOLDOWN_MS = 3 * 60 * 1000;
 const clanSetupByAnarchy = new Map();
 
 /**
- * Запуск scripts/clan-setup.mjs <an> без основного ника (только боты из {an}b.json).
+ * Запуск scripts/clan-setup.mjs <an>.
+ * myNick берётся из clan-owners.json (корневой myNick / per-an myNick).
  * Дедуп: один процесс на анархию + не чаще раза в 3 мин.
  */
 export function requestClanSetup({ anarchy, reason, username }, ctx) {

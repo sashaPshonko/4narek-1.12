@@ -4,8 +4,9 @@
  * Крутится сам до цели (кик/прокси/ошибка → пауза 5с → снова). Цель → exit 0.
  *
  *   node scripts/clan-setup.mjs <anarchy> [myNick]
- *   node scripts/clan-setup.mjs 504              # только боты из {an}b.json
- *   node scripts/clan-setup.mjs 504 ТвойНик      # + основной аккаунт; чужих кикает по /clan info
+ *   node scripts/clan-setup.mjs 504
+ *
+ * myNick: CLI > clan-owners.json[an].myNick > clan-owners.json.myNick
  */
 import { readFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
@@ -574,13 +575,22 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
 }
 
 async function main() {
-    const { anarchy, me } = parseArgs(process.argv.slice(2));
+    const { anarchy, me: meArg } = parseArgs(process.argv.slice(2));
     const owners = loadJson(join(ROOT, 'clan-owners.json'));
     const owner = owners[anarchy];
-    if (!owner) {
+    if (!owner || typeof owner !== 'object') {
         console.error(`нет владельца в clan-owners.json для ${anarchy}`);
         process.exit(2);
     }
+
+    const me = String(
+        meArg
+        || owner.myNick
+        || owners.myNick
+        || '',
+    ).trim() || null;
+    if (me) log(`myNick: ${me}`);
+    else log('myNick: нет — purge чужих выключен');
 
     const ipJson = loadJson(join(ROOT, 'ip.json'));
     const proxyString = ipJson[owner.ip || anarchy];
