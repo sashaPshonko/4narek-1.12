@@ -490,7 +490,8 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 continue;
             }
             const name = randomClanName();
-            const cmd = `/clan create "${name}"`;
+            // без кавычек: FunTime считает "hdblz" за >5 символов
+            const cmd = `/clan create ${name}`;
             log(cmd);
             await closeWindow(bot);
             bot.chat(cmd);
