@@ -434,14 +434,15 @@ export function getPriceFromAhItem(item) {
             const score =
                 (s.includes('$') ? 4 : 0) +
                 (/\d,\d{3}/.test(s) ? 2 : 0) +
-                (num > 20000 ? 1 : 0);
+                (num > 150000 ? 1 : 0);
             candidates.push({ num, score });
         }
         if (!candidates.length) continue;
 
         candidates.sort((a, b) => b.score - a.score || b.num - a.num);
         const best = candidates[0].num;
-        if (best > 20000) return best;
+        // Ниже мин. допустимой выставки на FunTime = ловушка; игрок так не выставит.
+        if (best > 150000) return best;
         throw new Error(`подозрительная цена ${best} для ${item?.name ?? '?'}`);
     }
 

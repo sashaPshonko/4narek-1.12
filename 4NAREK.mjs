@@ -21,6 +21,15 @@ import {
     isUuidBlockedByOther,
     mergeBuyingClaim,
 } from './items-buying-coord.mjs';
+import {
+    ahBuyDelayMs,
+    ahBuyScanBaseMs,
+    ahGlassDelayMs,
+    pickProfitableCandidateIndex,
+    shouldSkipLotEntirely,
+    pickAhBrowseAction,
+    pickAhReloadSlot,
+} from './lib/ah-buy-tempo.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -297,7 +306,6 @@ const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 
 const firstAHSlot = 0;
 const lastAHSlot = 17;
-const slotToReloadAH = 49;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
@@ -463,9 +471,7 @@ function claimAhLotUuid(uuid) {
     parentPort.postMessage({ name: 'buying', data: claim, username: config.username });
 }
 
-function ahBuyDelayMs(slot) {
-    return delayMs({ min: 500, max: 700 }) * (slot + 2);
-}
+/** Темп покупки — lib/ah-buy-tempo.mjs (базовый скан + редкий extra/skip). */
 
 function clearAhBuySession() {
     ahBuySession = null;
@@ -1119,9 +1125,14 @@ async function main() {
                 if (slotToBuy === null || config.needReloadAH) {
                     clearAhBuySession();
                     if (config.needReloadAH) config.needReloadAH = false;
-                    logInfo(`АХ → reload 49 (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                    const browse = pickAhBrowseAction();
+                    logInfo(
+                        browse.type === 'page'
+                            ? `АХ → страница вперёд (${browse.slot}) лот=${slotToBuy}`
+                            : `АХ → reload ${browse.slot}${browse.slot === 49 ? ' (промах)' : ''} лот=${slotToBuy}`,
+                    );
                     windowActionTaken = true;
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                    await safeClickBuy(bot, browse.slot, delayMs({ min: 1500, max: 4500 }), key);
                 } else if (slotToBuy < 9) {
                     logInfo(`АХ → купить слот ${slotToBuy}`);
                     windowActionTaken = true;
@@ -1135,16 +1146,21 @@ async function main() {
                     await runAhBuySession(key);
                 } else {
                     clearAhBuySession();
-                    logInfo(`АХ → reload 49 (слот ${slotToBuy} вне диапазона)`);
+                    const browse = pickAhBrowseAction();
+                    logInfo(
+                        browse.type === 'page'
+                            ? `АХ → страница вперёд (${browse.slot})`
+                            : `АХ → reload ${browse.slot}${browse.slot === 49 ? ' (промах)' : ''}`,
+                    );
                     windowActionTaken = true;
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                    await safeClickBuy(bot, browse.slot, delayMs({ min: 1500, max: 4500 }), key);
                 }
 
                 if (config.key !== key) return;
                 await rnd('WINDOW_DELAY');
                 if (config.key !== key) return;
                 if (config.menu === analysisAH && !windowActionTaken) {
-                    await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                    await safeClickBuy(bot, pickAhReloadSlot(), delayMs({ min: 1500, max: 4500 }), key);
                 }
                 return;
             }
@@ -1239,7 +1255,7 @@ async function main() {
               
             case accept:
                 logInfo('окно → подтверждение покупки (клик glass)');
-                await safeClickBuy(bot, slotGlass, delayMs({ min: 400, max: 1000 }), key);
+                await safeClickBuy(bot, slotGlass, ahGlassDelayMs(), key);
                 return;
         
             case clan:
@@ -1846,12 +1862,12 @@ async function runAhBuySession(key) {
             const newSlot = await getBestAHSlot();
             if (newSlot === null || newSlot >= 9) {
                 clearAhBuySession();
-                logInfo('АХ → reload 49 (после recheck нет лота)');
-                await safeClickBuy(bot, slotToReloadAH, delayMs({ min: 1500, max: 4500 }), key);
+                logInfo('АХ → reload после recheck нет лота');
+                await safeClickBuy(bot, pickAhReloadSlot(), delayMs({ min: 1500, max: 4500 }), key);
                 return;
             }
             ahBuySession.slot = newSlot;
-            ahBuySession.totalDelay = ahBuyDelayMs(newSlot);
+            ahBuySession.totalDelay = ahBuyScanBaseMs(newSlot);
         }
     }
 
@@ -1872,13 +1888,13 @@ async function runAhBuySession(key) {
 }
 
 /**
- * Лучший слот на аукционе для покупки (0–17).
- * Ставит config.BuyingItem, шлёт buying с UUID, возвращает номер слота или null.
+ * Выгодный слот на АХ. Иногда не первый слева.
  */
 async function getBestAHSlot() {
     try {
         if (!bot?.currentWindow?.slots) return null;
 
+        const candidates = [];
         for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
             const slotData = bot.currentWindow.slots[slot];
             if (!slotData) continue;
@@ -1908,15 +1924,30 @@ async function getBestAHSlot() {
 
             if (ahPrice >= info.buyPrice) continue;
 
-            config.BuyingItem.id = info.id;
-            config.BuyingItem.price = ahPrice;
-
-            if (currentUUID) claimAhLotUuid(currentUUID);
-
-            return slot;
+            candidates.push({ slot, info, ahPrice, currentUUID });
         }
 
-        return null;
+        if (!candidates.length) return null;
+
+        if (shouldSkipLotEntirely()) {
+            logInfo(`АХ → скип лота(ов) (${candidates.length} выгодных) → browse`);
+            return null;
+        }
+
+        const idx = pickProfitableCandidateIndex(candidates.length);
+        const chosen = candidates[idx];
+        if (idx > 0) {
+            logInfo(
+                `АХ → не первый выгодный (из ${candidates.length}, слот ${chosen.slot}, первый был ${candidates[0].slot})`,
+            );
+        }
+
+        config.BuyingItem.id = chosen.info.id;
+        config.BuyingItem.price = chosen.ahPrice;
+
+        if (chosen.currentUUID) claimAhLotUuid(chosen.currentUUID);
+
+        return chosen.slot;
     } catch (err) {
         reportError('getBestAHSlot', err);
         return null;
