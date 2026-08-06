@@ -397,8 +397,9 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         }
 
         if (text.toLowerCase().includes('чтобы двигаться')) {
-            log('хуйня неведомая → FunAuth bind');
+            log('хуйня неведомая → FunAuth bind → убиваем сессию');
             requestFunauthBindHttp(owner.username, owner.password);
+            failSession('хуйня неведомая (funauth)');
             return;
         }
 
@@ -491,7 +492,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         if (!state.timeJoinAnarchy) {
             throw new Error(`не вошли на анархию ${anarchy}`);
         }
-        await sleep(11_000);
+        // без паузы 11с — это только для АХ; клану она не нужна
         bot.physicsEnabled = true;
         await lookAroundSpin(bot, log);
 
@@ -675,8 +676,11 @@ async function main() {
             log('готово — выход');
             process.exit(0);
         } catch (e) {
-            log(`сбой: ${e.message} — через 5с снова (можно с любого шага)`);
-            await sleep(5000);
+            const msg = String(e?.message || e);
+            // FunAuth через TG не мгновенный — даём время добить bind до рестарта
+            const waitMs = /хуйня|funauth/i.test(msg) ? 45_000 : 5_000;
+            log(`сбой: ${msg} — через ${Math.round(waitMs / 1000)}с снова`);
+            await sleep(waitMs);
         }
     }
 }
