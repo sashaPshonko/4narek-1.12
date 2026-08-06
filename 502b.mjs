@@ -16,6 +16,7 @@ import {
     tryAutoStartBots,
     shouldRestartWorkerOnExit,
     getWorkerRestartDelayMs,
+    handleWorkerKicked,
     terminateWorkerEntry,
     createMarketFloorTracker,
     sendMarketFloorsToGo,
@@ -125,9 +126,15 @@ async function loadBotsConfig() {
             process.exit(1);
         }
         
-        const prevSuccess = new Map();
+        const prevRuntime = new Map();
         for (const [name, b] of bots) {
-            if (b.success) prevSuccess.set(name, true);
+            prevRuntime.set(name, {
+                success: !!b.success,
+                banned: !!b.banned,
+                bannedAt: b.bannedAt || null,
+                banReason: b.banReason || '',
+                presenceInactive: !!b.presenceInactive,
+            });
         }
         bots.clear();
         for (const bot of loadedBots) {
@@ -135,14 +142,19 @@ async function loadBotsConfig() {
             if (!goType) {
                 console.warn(`⚠️ ${bot.username}: нет goType (добавь goType или item в bots.json)`);
             }
+            const prev = prevRuntime.get(bot.username) || {};
             bots.set(bot.username, {
                 ...bot,
                 goType,
                 itemPrices: [],
                 msgID: 0,
                 msgTime: null,
-                isManualStop: false,
-                success: prevSuccess.get(bot.username) ?? false,
+                isManualStop: !!prev.banned,
+                success: prev.banned ? false : (prev.success ?? false),
+                banned: !!prev.banned,
+                bannedAt: prev.bannedAt || null,
+                banReason: prev.banReason || '',
+                presenceInactive: !!prev.presenceInactive,
             });
         }
         
@@ -252,7 +264,7 @@ async function runWorker(bot) {
                             socket.send(JSON.stringify({ action: "add", json_data: goUuid }));
                         }
                     } else if (message.name === 'kicked') {
-                        bot.lastKickReason = message.reason || '';
+                        await handleWorkerKicked(username, message.reason || '', workerStatusCtx());
                     } else if (message.name === "set_min_price" || message.name === "set_max_price") {
                         if (socket && isSocketOpen) {
                             socket.send(JSON.stringify({ 

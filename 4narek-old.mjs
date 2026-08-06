@@ -1299,7 +1299,11 @@ async function main() {
     });
 
     bot.on('kicked', (reason) => {
-        console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${JSON.stringify(reason)}`);
+        const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
+        console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${text}`);
+        try {
+            parentPort.postMessage({ name: 'kicked', reason: text });
+        } catch { /* parent gone */ }
         process.exit(1);
     });
     bot.on('end', (reason) => {

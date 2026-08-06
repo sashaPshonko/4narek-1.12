@@ -195,7 +195,59 @@ export function buildPresencePayload(bots, workers, botItems, botInventory) {
         inventory: presence.inventory,
         active_types: collectActiveTypes(bots, workers),
         bots_per_type: collectBotsPerType(bots, workers),
+        banned: collectBannedBots(bots),
     };
+}
+
+/** Забаненные аккаунты для Go /fleet (ник + анархия). */
+export function collectBannedBots(bots) {
+    const out = [];
+    if (!bots) return out;
+    for (const bot of bots.values()) {
+        if (!bot?.banned) continue;
+        out.push({
+            username: bot.username,
+            anarchy: bot.anarchy ?? null,
+            go_type: resolveGoType(bot) || bot.goType || '',
+            role: bot.role || '',
+            banned_at: bot.bannedAt || null,
+            reason: bot.banReason || '',
+        });
+    }
+    out.sort((a, b) => {
+        const aa = Number(a.anarchy) || 0;
+        const ba = Number(b.anarchy) || 0;
+        if (aa !== ba) return aa - ba;
+        return String(a.username).localeCompare(String(b.username));
+    });
+    return out;
+}
+
+/** Кик с экрана дисконнекта: бан / blacklist, а не «ник уже онлайн». */
+export function isBanKickReason(reason) {
+    const s = String(reason || '').toLowerCase();
+    if (!s) return false;
+    if (s.includes('ником уже онлайн') || s.includes('таким-же ником') || s.includes('already online')) {
+        return false;
+    }
+    return (
+        s.includes('забанен')
+        || s.includes('заблокирован')
+        || s.includes('banned')
+        || s.includes('blacklist')
+        || s.includes('blacklisted')
+        || /\bban\b/.test(s)
+    );
+}
+
+export async function handleWorkerKicked(username, reason, ctx) {
+    const bot = ctx.bots?.get(username);
+    if (bot) bot.lastKickReason = String(reason || '');
+    if (isBanKickReason(reason)) {
+        await markBotBanned(username, ctx, reason);
+        return true;
+    }
+    return false;
 }
 
 export function collectActiveTypes(bots, workers) {
@@ -388,15 +440,18 @@ export async function stopWorkerNoRestart(username, ctx) {
     ctx.pushPresenceToGo?.();
 }
 
-export async function markBotBanned(username, ctx) {
+export async function markBotBanned(username, ctx, reason = '') {
     const bot = ctx.bots.get(username);
     if (bot) {
         bot.banned = true;
         bot.success = false;
         bot.isManualStop = true;
+        if (!bot.bannedAt) bot.bannedAt = new Date().toISOString();
+        if (reason) bot.banReason = String(reason).slice(0, 500);
     }
     await stopWorkerNoRestart(username, ctx);
-    await ctx.sendAlert(`🚫 ${username} забанен`, username);
+    const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
+    await ctx.sendAlert(`🚫 ${username}${anarchy} забанен`, username);
 }
 
 /** FunAuth bind через Go WS (или HTTP fallback). */
