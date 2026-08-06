@@ -26,6 +26,10 @@ const CLAN_OTHER = '[⚔] Ошибка: Игрок состоит в друго�
 const CLAN_INVITE_OK = '[⚔] Вы отправили приглашение в клан игроку';
 const CLAN_OFFLINE_HEAD = '[⚔] Ошибка: Игрок';
 const CLAN_OFFLINE_TAIL = ' не в сети!';
+/** «[⚔] Игрок nick присоединился к клану!» */
+const CLAN_JOINED_RE = /Игрок\s+(\S+)\s+присоединился к клану/i;
+/** Сколько ждать принятия инвайта после «приглашение отправлено». */
+const JOIN_WAIT_MS = 60_000;
 const AFK_MARKER = 'Данная команда недоступна в режиме AFK';
 
 const LMB = 0;
@@ -295,6 +299,8 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         inviteOk: false,
         inviteOtherClan: false,
         inviteOffline: false,
+        /** lowercase nicks that sent «присоединился к клану» */
+        joinedNicks: new Set(),
         menu: null,
         guiBusy: false,
         clanMembersSnapshot: null,
@@ -424,6 +430,13 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 state.inviteOffline = true;
                 log(`invite skip (офлайн) → ${nick}`);
             }
+        }
+
+        const joined = text.match(CLAN_JOINED_RE);
+        if (joined) {
+            const who = joined[1];
+            state.joinedNicks.add(String(who).toLowerCase());
+            log(`joined → ${who}`);
         }
 
         const members = parseClanMembersFromChat(text);
@@ -561,15 +574,25 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                     await sleep(400);
                 }
             }
-            if (state.inviteOk) log(`✓ invite ${nick}`);
-            else if (state.inviteOtherClan) log(`⊘ ${nick} уже в клане / другой клан`);
-            else if (state.inviteOffline) log(`⊘ ${nick} офлайн`);
-            else log(`? invite timeout ${nick}`);
+            if (state.inviteOk) {
+                log(`✓ invite ${nick} — ждём «присоединился» до ${JOIN_WAIT_MS / 1000}с`);
+                const joinDeadline = Date.now() + JOIN_WAIT_MS;
+                const key = String(nick).toLowerCase();
+                while (Date.now() < joinDeadline && !state.joinedNicks.has(key)) {
+                    await antiAfkIfNeeded(bot, state, log);
+                    await sleep(400);
+                }
+                if (state.joinedNicks.has(key)) log(`✓ joined ${nick}`);
+                else log(`? join timeout ${nick} — идём дальше`);
+            } else if (state.inviteOtherClan) {
+                log(`⊘ ${nick} уже в клане / другой клан`);
+            } else if (state.inviteOffline) {
+                log(`⊘ ${nick} офлайн`);
+            } else {
+                log(`? invite timeout ${nick}`);
+            }
             await rnd(800, 1500);
         }
-
-        log('ждём 10с перед /clan menu');
-        await sleep(10_000);
 
         await grantAllRights(bot, state);
         log('цель достигнута');
