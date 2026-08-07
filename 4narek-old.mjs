@@ -1133,6 +1133,9 @@ async function handleChatMessage(text) {
     }
     if (
         text.toLowerCase().includes('чтобы двигаться')
+        || text.toLowerCase().includes('подтвердите вход через')
+        || (text.toLowerCase().includes('личные сообщения')
+            && text.toLowerCase().includes('подтвердите'))
     ) {
         parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
         // оркестратор шлёт FunAuth + стопает воркер; сами гасим сессию

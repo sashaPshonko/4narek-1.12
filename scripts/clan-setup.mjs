@@ -54,6 +54,15 @@ function requestFunauthBindHttp(nick, password) {
     }).catch((e) => console.warn(`[clan-setup] funauth: ${e.message}`));
 }
 
+/** FunTime: нужен TG/ВК confirm или /2fa через FunAuthBot. */
+function isVkTgLoginConfirm(text) {
+    const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+    return (
+        s.includes('подтвердите вход через')
+        || (s.includes('личные сообщения') && s.includes('подтвердите'))
+    );
+}
+
 const CONFIG_BLOCKED = new Set([
     'position', 'look', 'position_look', 'flying',
     'chat', 'chat_command', 'chat_command_signed', 'chat_message',
@@ -305,6 +314,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         guiBusy: false,
         clanMembersSnapshot: null,
         kickDone: false,
+        funauthRequested: false,
     };
 
     const proxy = buildProxyConnect(proxyString);
@@ -383,20 +393,37 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             || text.includes('/reg <')
             || text.includes('/reg<')
         ) {
+            if (state.funauthRequested) return;
             bot.chat(`/reg ${owner.password}`);
             await rnd(400, 800);
             bot.chat(`/l ${owner.password}`);
+            return;
+        }
+        if (text.includes('Вы уже авторизованы')) {
             return;
         }
         if (
             text.includes('Сначала авторизируйтесь')
             || text.includes('Авторизируйтесь')
         ) {
+            // пока ждём ВК/ТГ — /l только спамит «уже авторизованы»
+            if (state.funauthRequested) return;
             bot.chat(`/l ${owner.password}`);
             return;
         }
 
+        if (isVkTgLoginConfirm(text)) {
+            if (state.funauthRequested) return;
+            state.funauthRequested = true;
+            log('ВК/ТГ confirm → FunAuth bind+/2fa → убиваем сессию (ждём TG)');
+            requestFunauthBindHttp(owner.username, owner.password);
+            failSession('vk/tg confirm (funauth)');
+            return;
+        }
+
         if (text.toLowerCase().includes('чтобы двигаться')) {
+            if (state.funauthRequested) return;
+            state.funauthRequested = true;
             log('хуйня неведомая → FunAuth bind → убиваем сессию');
             requestFunauthBindHttp(owner.username, owner.password);
             failSession('хуйня неведомая (funauth)');
@@ -678,7 +705,7 @@ async function main() {
         } catch (e) {
             const msg = String(e?.message || e);
             // FunAuth через TG не мгновенный — даём время добить bind до рестарта
-            const waitMs = /хуйня|funauth/i.test(msg) ? 45_000 : 5_000;
+            const waitMs = /хуйня|funauth|vk\/tg|confirm/i.test(msg) ? 45_000 : 5_000;
             log(`сбой: ${msg} — через ${Math.round(waitMs / 1000)}с снова`);
             await sleep(waitMs);
         }
