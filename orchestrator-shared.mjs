@@ -187,7 +187,12 @@ export function collectBotsPerType(bots, workers) {
     return counts;
 }
 
-export function buildPresencePayload(bots, workers, botItems, botInventory, extraBanned = []) {
+export function buildPresencePayload(bots, workers, botItems, botInventory, extraOrOpts = []) {
+    const opts = Array.isArray(extraOrOpts)
+        ? { extraBanned: extraOrOpts, clanOwners: [] }
+        : (extraOrOpts && typeof extraOrOpts === 'object' ? extraOrOpts : {});
+    const extraBanned = opts.extraBanned || [];
+    const clanOwners = opts.clanOwners || [];
     const presence = collectPresenceItemCounts(bots, workers, botItems, botInventory);
     return {
         action: 'presence',
@@ -196,6 +201,7 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
         active_types: collectActiveTypes(bots, workers),
         bots_per_type: collectBotsPerType(bots, workers),
         banned: collectBannedBots(bots, extraBanned),
+        clan_owners: clanOwners,
     };
 }
 

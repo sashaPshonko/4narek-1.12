@@ -514,7 +514,10 @@ function sendFleetToGo() {
 
 function pushPresenceToGo() {
     if (!socket || !isSocketOpen) return;
-    socket.send(JSON.stringify(buildPresencePayload(bots, workers, botItems, botInventory, clanOwnerWatch.getBannedForPresence())));
+    socket.send(JSON.stringify(buildPresencePayload(bots, workers, botItems, botInventory, {
+        extraBanned: clanOwnerWatch.getBannedForPresence(),
+        clanOwners: clanOwnerWatch.getOwnerForPresence(),
+    })));
 }
 
 // ========== WEBSOCKET ==========
