@@ -187,7 +187,7 @@ export function collectBotsPerType(bots, workers) {
     return counts;
 }
 
-export function buildPresencePayload(bots, workers, botItems, botInventory) {
+export function buildPresencePayload(bots, workers, botItems, botInventory, extraBanned = []) {
     const presence = collectPresenceItemCounts(bots, workers, botItems, botInventory);
     return {
         action: 'presence',
@@ -195,23 +195,35 @@ export function buildPresencePayload(bots, workers, botItems, botInventory) {
         inventory: presence.inventory,
         active_types: collectActiveTypes(bots, workers),
         bots_per_type: collectBotsPerType(bots, workers),
-        banned: collectBannedBots(bots),
+        banned: collectBannedBots(bots, extraBanned),
     };
 }
 
 /** Забаненные аккаунты для Go /fleet (ник + анархия). */
-export function collectBannedBots(bots) {
+export function collectBannedBots(bots, extraBanned = []) {
     const out = [];
-    if (!bots) return out;
-    for (const bot of bots.values()) {
-        if (!bot?.banned) continue;
+    if (bots) {
+        for (const bot of bots.values()) {
+            if (!bot?.banned) continue;
+            out.push({
+                username: bot.username,
+                anarchy: bot.anarchy ?? null,
+                go_type: resolveGoType(bot) || bot.goType || '',
+                role: bot.role || '',
+                banned_at: bot.bannedAt || null,
+                reason: bot.banReason || '',
+            });
+        }
+    }
+    for (const b of extraBanned || []) {
+        if (!b?.username) continue;
         out.push({
-            username: bot.username,
-            anarchy: bot.anarchy ?? null,
-            go_type: resolveGoType(bot) || bot.goType || '',
-            role: bot.role || '',
-            banned_at: bot.bannedAt || null,
-            reason: bot.banReason || '',
+            username: b.username,
+            anarchy: b.anarchy ?? null,
+            go_type: b.go_type || '',
+            role: b.role || 'clan_owner',
+            banned_at: b.banned_at || b.bannedAt || null,
+            reason: b.reason || b.banReason || '',
         });
     }
     out.sort((a, b) => {

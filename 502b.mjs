@@ -36,6 +36,7 @@ import {
     WORKER_READY_TIMEOUT_MS,
     createListingStore,
 } from './orchestrator-shared.mjs';
+import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
     onFlush(floors, meta) {
@@ -49,6 +50,8 @@ marketFloorTracker.start();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const listingStore = createListingStore(join(__dirname, 'listings-state'));
+
+const clanOwnerWatch = createClanOwnerBanWatch({ anarchy: 502, rootDir: __dirname });
 
 const LOCAL_MODE = true;
 const SKIP_TELEGRAM = false;
@@ -511,7 +514,7 @@ function sendFleetToGo() {
 
 function pushPresenceToGo() {
     if (!socket || !isSocketOpen) return;
-    socket.send(JSON.stringify(buildPresencePayload(bots, workers, botItems, botInventory)));
+    socket.send(JSON.stringify(buildPresencePayload(bots, workers, botItems, botInventory, clanOwnerWatch.getBannedForPresence())));
 }
 
 // ========== WEBSOCKET ==========
@@ -614,6 +617,7 @@ async function main() {
     await initTelegram();
     await loadBotsConfig();
     connectWebSocket();
+    clanOwnerWatch.start({ pushPresenceToGo, sendAlert });
     setTimeout(() => scheduleAutoStart('boot'), 1500);
     console.log('📌 боты стартуют сами (без Go — пустой список товаров)');
 }
