@@ -51,7 +51,17 @@ function requestFunauthBindHttp(nick, password) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nick, password }),
-    }).catch((e) => console.warn(`[clan-setup] funauth: ${e.message}`));
+    }).catch((e) => console.warn(`[clan-setup] funauth bind: ${e.message}`));
+}
+
+/** Только `/2fa` с TG, к которому ник уже привязан (без /bind). */
+function requestFunauthTwoFaHttp(nick) {
+    if (!nick) return;
+    fetch(`${GO_HTTP}/api/funauth/2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick }),
+    }).catch((e) => console.warn(`[clan-setup] funauth 2fa: ${e.message}`));
 }
 
 /** FunTime: нужен TG/ВК confirm или /2fa через FunAuthBot. */
@@ -415,9 +425,9 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         if (isVkTgLoginConfirm(text)) {
             if (state.funauthRequested) return;
             state.funauthRequested = true;
-            log('ВК/ТГ confirm → FunAuth bind+/2fa → убиваем сессию (ждём TG)');
-            requestFunauthBindHttp(owner.username, owner.password);
-            failSession('vk/tg confirm (funauth)');
+            log('ВК/ТГ confirm → FunAuth /2fa (без bind) → убиваем сессию');
+            requestFunauthTwoFaHttp(owner.username);
+            failSession('vk/tg confirm (funauth 2fa)');
             return;
         }
 

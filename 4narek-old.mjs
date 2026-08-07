@@ -1131,14 +1131,19 @@ async function handleChatMessage(text) {
         parentPort.postMessage(`${workerData.username} - забанен`);
         return;
     }
+    if (text.toLowerCase().includes('чтобы двигаться')) {
+        parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
+        // оркестратор шлёт FunAuth bind + стопает воркер
+        setTimeout(() => process.exit(0), 500);
+        return;
+    }
     if (
-        text.toLowerCase().includes('чтобы двигаться')
-        || text.toLowerCase().includes('подтвердите вход через')
+        text.toLowerCase().includes('подтвердите вход через')
         || (text.toLowerCase().includes('личные сообщения')
             && text.toLowerCase().includes('подтвердите'))
     ) {
-        parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
-        // оркестратор шлёт FunAuth + стопает воркер; сами гасим сессию
+        parentPort.postMessage({ name: 'funauth_2fa', username: workerData.username });
+        parentPort.postMessage(`${workerData.username} - нужен 2fa (ВК/ТГ)`);
         setTimeout(() => process.exit(0), 500);
         return;
     }

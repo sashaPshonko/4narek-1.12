@@ -501,6 +501,33 @@ export function requestFunauthBind(username, ctx) {
     return true;
 }
 
+/** Только /2fa с TG-акка, к которому ник уже привязан. */
+export function requestFunauthTwoFa(username, ctx) {
+    if (!username) {
+        console.warn('[funauth] 2fa: пустой nick');
+        return false;
+    }
+    const payload = { action: 'funauth_2fa', nick: username };
+    if (typeof ctx.sendToGo === 'function') {
+        const ok = ctx.sendToGo(payload);
+        if (ok) {
+            console.log(`[funauth] 2fa queued via WS → ${username}`);
+            return true;
+        }
+    }
+    const base = process.env.GO_HTTP_URL
+        || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
+            ? 'http://127.0.0.1:8080'
+            : 'http://212.8.229.76:8080');
+    fetch(`${base}/api/funauth/2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: username }),
+    }).catch((e) => console.warn(`[funauth] 2fa HTTP fail: ${e.message}`));
+    console.log(`[funauth] 2fa queued via HTTP → ${username}`);
+    return true;
+}
+
 /** После FunAuth: ok → поднять воркер; no_accounts → тоже поднять позже, чтобы снова поймать хуйню и ретрайнуть bind. */
 export async function handleFunauthGoMessage(dataObj, ctx) {
     if (!dataObj || typeof dataObj !== 'object') return false;
@@ -572,6 +599,11 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (message?.name === 'funauth_bind') {
         requestFunauthBind(message.username || username, ctx);
+        return true;
+    }
+    if (message?.name === 'funauth_2fa') {
+        requestFunauthTwoFa(message.username || username, ctx);
+        await stopWorkerNoRestart(username, ctx);
         return true;
     }
     if (message?.name === 'banned') {
