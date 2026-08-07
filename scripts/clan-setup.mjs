@@ -331,6 +331,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         grantOk: false,
         grantMemberSlot: null,
         shift2At: 0,
+        grantScanOnly: false,
     };
 
     const proxy = buildProxyConnect(proxyString);
@@ -638,7 +639,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             await rnd(800, 1500);
         }
 
-        await grantAllRights(bot, state, inviteNicks);
+        await grantAllRights(bot, state, inviteNicks, owner.username);
         log('цель достигнута');
         finishedOk = true;
         sessionReject = null;
@@ -824,20 +825,23 @@ async function onWindowOpen(bot, state) {
             await bot.clickWindow(MEMBERS_MENU_SLOT, LMB, 0);
             return;
         }
-        // участники → shift×1 по голове нужного ника → окно прав
+        // участники → shift×1 по слоту головы → окно прав
         if (state.menu === 'clan_members') {
             await rnd(700, 1400);
             if (!bot.currentWindow) return;
-            const nick = state.grantCurrent;
-            const slot = findSlotWithNick(bot, nick);
-            if (slot < 0) {
-                log(`участник ${nick}: слот не найден — dump голов`);
+            // только смотрим головы (discover) — кликать не надо
+            if (state.grantScanOnly) {
+                return;
+            }
+            const slot = Number(state.grantMemberSlot);
+            if (!Number.isInteger(slot) || slot < 0 || !bot.currentWindow.slots?.[slot]) {
+                log(`слот головы ${slot}: пусто — dump`);
                 dumpMemberSlots(bot);
                 state.menu = 'grant_miss';
                 return;
             }
-            log(`shift×1 слот ${slot} (${nick}) → окно прав`);
-            state.grantMemberSlot = slot;
+            const label = itemLabel(bot.currentWindow.slots[slot]) || `slot${slot}`;
+            log(`shift×1 слот ${slot} (${label}) → окно прав`);
             state.menu = 'clan_shift2';
             state.shift2At = Date.now() + 700;
             state.guiBusy = false;
@@ -863,26 +867,68 @@ function itemDump(item) {
     }
 }
 
+/** Все строки из item (1.21 components часто прячут ник не в одном поле). */
+function collectStrings(node, out = []) {
+    if (node == null) return out;
+    if (typeof node === 'string') {
+        if (node.trim()) out.push(node);
+        return out;
+    }
+    if (typeof node === 'number' || typeof node === 'boolean') return out;
+    if (Array.isArray(node)) {
+        for (const x of node) collectStrings(x, out);
+        return out;
+    }
+    if (typeof node === 'object') {
+        for (const v of Object.values(node)) collectStrings(v, out);
+    }
+    return out;
+}
+
+function itemLabel(item) {
+    if (!item) return '';
+    const parts = collectStrings(item)
+        .map((s) => s.replace(/\u00a7./g, '').trim())
+        .filter(Boolean);
+    // предпочитаем кусок похожий на ник
+    const nickish = parts.find((s) => /^[A-Za-z0-9_]{3,16}$/.test(s));
+    if (nickish) return nickish;
+    return parts.slice(0, 3).join(' | ').slice(0, 80);
+}
+
 function findSlotWithNick(bot, nick) {
     const want = String(nick || '').toLowerCase();
     if (!want || !bot.currentWindow?.slots) return -1;
     const slots = bot.currentWindow.slots;
-    for (let i = 0; i < Math.min(slots.length, 54); i++) {
+    for (let i = 0; i < Math.min(slots.length, 27); i++) {
         const item = slots[i];
         if (!item) continue;
-        if (itemDump(item).toLowerCase().includes(want)) return i;
+        const blob = collectStrings(item).join(' ').toLowerCase();
+        if (blob.includes(want)) return i;
     }
     return -1;
 }
 
-function dumpMemberSlots(bot) {
+/** Головы участников в верхнем GUI (type 1235 на FunTime 1.21). */
+function listMemberHeadSlots(bot) {
     const slots = bot.currentWindow?.slots || [];
-    for (let i = 0; i < Math.min(slots.length, 54); i++) {
+    const out = [];
+    for (let i = 0; i < Math.min(slots.length, 27); i++) {
         const item = slots[i];
         if (!item) continue;
-        const dump = itemDump(item);
-        const short = dump.replace(/\s+/g, ' ').slice(0, 160);
-        log(`  slot ${i}: ${short}`);
+        // player head / skull в этом GUI
+        if (item.type === 1235) out.push(i);
+    }
+    return out;
+}
+
+function dumpMemberSlots(bot) {
+    const slots = bot.currentWindow?.slots || [];
+    for (let i = 0; i < Math.min(slots.length, 27); i++) {
+        const item = slots[i];
+        if (!item) continue;
+        const label = itemLabel(item);
+        log(`  slot ${i}: type=${item.type} label=${label || '?'}`);
     }
 }
 
@@ -891,7 +937,7 @@ function rightsWindowStillHasNo(bot) {
     for (let i = 0; i < Math.min(slots.length, 54); i++) {
         const item = slots[i];
         if (!item) continue;
-        if (itemDump(item).includes('Нет')) return true;
+        if (collectStrings(item).some((s) => s.includes('Нет'))) return true;
     }
     return false;
 }
@@ -899,14 +945,13 @@ function rightsWindowStillHasNo(bot) {
 async function doRightsShift2(bot, state) {
     if (state.menu !== 'clan_shift2' || !bot?.currentWindow) return false;
     state.shift2At = 0;
-    log(`shift×2 (права ${state.grantCurrent})`);
+    log(`shift×2 (права slot ${state.grantMemberSlot})`);
 
     const pickSlot = () => {
         const slots = bot.currentWindow?.slots || [];
-        // сначала слот с «Нет» (невыданные права), иначе 11 как sellbot
         for (let i = 0; i < Math.min(slots.length, 54); i++) {
             const item = slots[i];
-            if (item && itemDump(item).includes('Нет')) return i;
+            if (item && collectStrings(item).some((s) => s.includes('Нет'))) return i;
         }
         if (state.grantMemberSlot != null && bot.currentWindow.slots?.[state.grantMemberSlot]) {
             return state.grantMemberSlot;
@@ -931,40 +976,92 @@ async function doRightsShift2(bot, state) {
 }
 
 /**
- * Как sellbot: /clan menu → клик участники → shift по голове ника → shift в окне прав.
- * Повторяем для каждого ника из grantNicks.
+ * /clan menu → участники → shift по каждой голове в GUI → shift в окне прав.
+ * Ники не из clan info — skip (не в клане / другой клан).
  */
-async function grantAllRights(bot, state, grantNicks) {
-    const nicks = [...new Set(
-        (grantNicks || []).map((n) => String(n || '').trim()).filter(Boolean),
-    )];
-    if (!nicks.length) {
-        log('права: некого грантить');
-        return;
-    }
-    log(`права: ${nicks.join(', ')}`);
+async function grantAllRights(bot, state, grantNicks, ownerUsername) {
+    const ownerKey = String(ownerUsername || '').toLowerCase();
+    const members = (await safeClanInfo(bot, state)) || state.clanMembersSnapshot || [];
+    const inClan = new Set(members.map((m) => String(m).toLowerCase()));
 
-    for (const nick of nicks) {
-        const ok = await grantOneMemberRights(bot, state, nick);
-        if (!ok) throw new Error(`не выдал права ${nick}`);
-        log(`✓ права ${nick}`);
+    for (const n of grantNicks || []) {
+        const key = String(n || '').toLowerCase();
+        if (!key || key === ownerKey) continue;
+        if (!inClan.has(key)) {
+            log(`права skip ${n} — нет в clan info (не вступил / другой клан)`);
+        }
+    }
+
+    // открываем members один раз — собираем слоты голов
+    const headSlots = await discoverMemberHeadSlots(bot, state);
+    if (!headSlots.length) {
+        throw new Error('в /clan members нет голов участников');
+    }
+    log(`права по слотам голов: ${headSlots.map((s) => `${s.slot}:${s.label}`).join(', ')}`);
+
+    for (const { slot, label } of headSlots) {
+        if (label && label.toLowerCase() === ownerKey) {
+            log(`skip лидер ${label}`);
+            continue;
+        }
+        const ok = await grantOneMemberSlot(bot, state, slot, label);
+        if (!ok) throw new Error(`не выдал права slot ${slot} (${label || '?'})`);
+        log(`✓ права ${label || `slot${slot}`}`);
         await rnd(800, 1500);
     }
     log('права выданы');
 }
 
-async function grantOneMemberRights(bot, state, nick) {
+async function discoverMemberHeadSlots(bot, state) {
+    const deadline = Date.now() + 40_000;
+    while (Date.now() < deadline) {
+        state.menu = 'clan_menu';
+        state.grantMemberSlot = null;
+        state.grantOk = false;
+        state.grantScanOnly = true;
+        await closeWindow(bot);
+        log('/clan menu → список голов');
+        bot.chat('/clan menu');
+        const roundEnd = Date.now() + 15_000;
+        while (Date.now() < roundEnd) {
+            await sleep(300);
+            if (!bot.currentWindow) await antiAfkIfNeeded(bot, state, log);
+            if (bot.currentWindow && state.menu === 'clan_members') {
+                await sleep(500);
+                const slots = listMemberHeadSlots(bot);
+                if (slots.length) {
+                    const out = slots.map((slot) => ({
+                        slot,
+                        label: itemLabel(bot.currentWindow.slots[slot]),
+                    }));
+                    state.grantScanOnly = false;
+                    await closeWindow(bot);
+                    state.menu = null;
+                    return out;
+                }
+                dumpMemberSlots(bot);
+            }
+        }
+        log('головы не нашли — повтор меню');
+        await sleep(1500);
+    }
+    state.grantScanOnly = false;
+    return [];
+}
+
+async function grantOneMemberSlot(bot, state, slot, label) {
     const deadline = Date.now() + 90_000;
     let openedAt = 0;
 
     while (Date.now() < deadline) {
-        state.grantCurrent = nick;
+        state.grantCurrent = label || `slot${slot}`;
+        state.grantMemberSlot = slot;
         state.grantOk = false;
-        state.grantMemberSlot = null;
         state.shift2At = 0;
+        state.grantScanOnly = false;
         state.menu = 'clan_menu';
         await closeWindow(bot);
-        log(`/clan menu → права ${nick}`);
+        log(`/clan menu → права ${state.grantCurrent} (slot ${slot})`);
         bot.chat('/clan menu');
         openedAt = Date.now();
 
@@ -972,7 +1069,6 @@ async function grantOneMemberRights(bot, state, nick) {
             await sleep(300);
             if (!bot.currentWindow) await antiAfkIfNeeded(bot, state, log);
 
-            // shift×2 без windowOpen (как sellbot)
             if (
                 state.menu === 'clan_shift2'
                 && bot.currentWindow
@@ -990,17 +1086,16 @@ async function grantOneMemberRights(bot, state, nick) {
             }
 
             if (state.menu === 'grant_miss') {
-                log(`права ${nick}: нет слота — повтор меню`);
+                log(`права ${state.grantCurrent}: слот пропал — повтор`);
                 break;
             }
 
-            // зависли на clan_menu без окна
             if (
                 state.menu === 'clan_menu'
                 && !bot.currentWindow
                 && Date.now() - openedAt > 12_000
             ) {
-                log(`права ${nick}: меню не открылось — повтор`);
+                log(`права ${state.grantCurrent}: меню не открылось — повтор`);
                 break;
             }
         }
