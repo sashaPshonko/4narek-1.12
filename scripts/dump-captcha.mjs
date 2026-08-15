@@ -1,7 +1,7 @@
 /**
  * Один заход → waitForCaptcha (как у воркеров) → PNG на диск.
  * Usage: node scripts/dump-captcha.mjs [an] [username]
- * Default: 504 / depression12
+ * Default: 504 / depression13
  */
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -13,7 +13,7 @@ import { attachMapCache, waitForCaptcha, isCaptchaChat } from '../lib/captcha/so
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const an = String(process.argv[2] || '504');
-const wantUser = process.argv[3] || 'depression12';
+const wantUser = process.argv[3] || 'depression13';
 const OUT_DIR = join(ROOT, 'tmp');
 const OUT_PNG = join(OUT_DIR, `captcha-${wantUser}-${Date.now()}.png`);
 
