@@ -566,10 +566,13 @@ export async function handleFunauthGoMessage(dataObj, ctx) {
     const bot = ctx.bots?.get(nick);
     if (!bot) return true;
 
-    if (action === 'funauth_no_accounts' || dataObj.error === 'no_accounts') {
-        console.log(`[funauth] no_accounts → ${nick}, рестарт через 45с`);
+    if (action === 'funauth_no_accounts' || dataObj.error === 'no_accounts' || dataObj.error === 'all_on_other_anarchies') {
+        const errHint = dataObj.error === 'all_on_other_anarchies'
+            ? ` (все TG на других анках${dataObj.anarchy ? ', нужен an' + dataObj.anarchy : ''})`
+            : '';
+        console.log(`[funauth] no_accounts${errHint} → ${nick}, рестарт через 45с`);
         await ctx.sendAlert?.(
-            `🚨 FunAuth: нет TG-аккаунтов для ${nick} — воркер встанет через 45с и сможет ретрайнуть`,
+            `🚨 FunAuth: нет TG для ${nick}${errHint} — воркер встанет через 45с`,
             nick,
         );
         setTimeout(() => {
