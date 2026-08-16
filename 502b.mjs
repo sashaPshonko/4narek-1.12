@@ -35,6 +35,8 @@ import {
     isWorkerReady,
     WORKER_READY_TIMEOUT_MS,
     createListingStore,
+    createWarpCoordinator,
+    handleWorkerWarpPick,
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 
@@ -50,6 +52,7 @@ marketFloorTracker.start();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const listingStore = createListingStore(join(__dirname, 'listings-state'));
+const warpCoord = createWarpCoordinator();
 
 const clanOwnerWatch = createClanOwnerBanWatch({ anarchy: 502, rootDir: __dirname });
 
@@ -241,6 +244,8 @@ async function runWorker(bot) {
                             reqId: message.reqId,
                             result,
                         });
+                    } else if (handleWorkerWarpPick(warpCoord, message, username, safePostMessage)) {
+                        /* warp pick */
                     } else if (message.name === "buy" || message.name === "sell" || message.name === "try-sell") {
                         if (socket && isSocketOpen) {
                             const action = message.name === 'try-sell' ? 'try-sell' : message.name;
@@ -299,6 +304,7 @@ async function runWorker(bot) {
             });
 
             worker.on('exit', (code) => {
+                warpCoord.release(username);
                 if (!shouldRestartWorkerOnExit(username, worker, workers)) {
                     return;
                 }

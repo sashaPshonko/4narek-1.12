@@ -47,22 +47,22 @@ const GO_HTTP = process.env.GO_HTTP_URL
         ? 'http://127.0.0.1:8080'
         : 'http://212.8.229.76:8080');
 
-function requestFunauthBindHttp(nick, password) {
+function requestFunauthBindHttp(nick, password, anarchy) {
     if (!nick || !password) return;
     fetch(`${GO_HTTP}/api/funauth/bind`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nick, password }),
+        body: JSON.stringify({ nick, password, anarchy }),
     }).catch((e) => console.warn(`[clan-setup] funauth bind: ${e.message}`));
 }
 
 /** Только `/2fa` с TG, к которому ник уже привязан (без /bind). */
-function requestFunauthTwoFaHttp(nick) {
+function requestFunauthTwoFaHttp(nick, anarchy) {
     if (!nick) return;
     fetch(`${GO_HTTP}/api/funauth/2fa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nick }),
+        body: JSON.stringify({ nick, anarchy }),
     }).catch((e) => console.warn(`[clan-setup] funauth 2fa: ${e.message}`));
 }
 
@@ -433,7 +433,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             if (state.funauthRequested) return;
             state.funauthRequested = true;
             log('ВК/ТГ confirm → FunAuth /2fa (без bind) → убиваем сессию');
-            requestFunauthTwoFaHttp(owner.username);
+            requestFunauthTwoFaHttp(owner.username, Number(anarchy));
             failSession('vk/tg confirm (funauth 2fa)');
             return;
         }
@@ -442,7 +442,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             if (state.funauthRequested) return;
             state.funauthRequested = true;
             log('хуйня неведомая → FunAuth bind → убиваем сессию');
-            requestFunauthBindHttp(owner.username, owner.password);
+            requestFunauthBindHttp(owner.username, owner.password, Number(anarchy));
             failSession('хуйня неведомая (funauth)');
             return;
         }

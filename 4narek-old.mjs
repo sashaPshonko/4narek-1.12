@@ -33,6 +33,7 @@ import {
     shouldSkipLotEntirely,
     pickAhBrowseAction,
 } from './lib/ah-buy-tempo.mjs';
+import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -336,7 +337,6 @@ const botInventoryTrackLastSlot = 40;
 /** Порог «инвентарь забит» — 27 из 32 слотов заняты предметами go-типа бота. */
 const botInventoryFullThreshold = 27;
 const offhandSlot = 45;
-const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
 
 function isStorageSlot(slot) {
     return slot >= firstInventorySlot && slot <= lastInventorySlot;
@@ -471,6 +471,7 @@ const config = {
     goType: workerData.goType,
     timeJoinAnarchy: 0,
     lastWarpTime: 0,
+    lastWarp: null,
     enoughItems: false,
     items: workerData.itemPrices ?? [],
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
@@ -507,6 +508,42 @@ let itemsBuying = [];
 
 const listingWait = new Map();
 let listingReqSeq = 0;
+
+const warpPickWait = new Map();
+let warpPickReqSeq = 0;
+
+/** Оркестратор разводит ботов по варпам; при таймауте — локальный pick. */
+function warpPickOp(payload = {}, timeoutMs = 4000) {
+    return new Promise((resolve, reject) => {
+        const reqId = ++warpPickReqSeq;
+        const timer = setTimeout(() => {
+            warpPickWait.delete(reqId);
+            reject(new Error('warp_pick timeout'));
+        }, timeoutMs);
+        warpPickWait.set(reqId, (warp) => {
+            clearTimeout(timer);
+            resolve(warp);
+        });
+        parentPort.postMessage({
+            name: 'warp_pick',
+            reqId,
+            anarchy: config.anarchy,
+            ...payload,
+        });
+    });
+}
+
+async function pickWarpForSession() {
+    try {
+        return await warpPickOp({ lastWarp: config.lastWarp ?? null });
+    } catch {
+        return pickWarp({
+            username: config.username,
+            anarchy: config.anarchy,
+            lastWarp: config.lastWarp ?? null,
+        });
+    }
+}
 
 /** RPC в оркестратор: listing memory (alloc / confirm / takeSold / sync). */
 function listingOp(op, payload = {}, timeoutMs = 8000) {
@@ -1197,6 +1234,14 @@ parentPort.on('message', (data) => {
         }
         return;
     }
+    if (data?.type === 'warp_pick_res') {
+        const cb = warpPickWait.get(data.reqId);
+        if (cb) {
+            warpPickWait.delete(data.reqId);
+            cb(data.warp);
+        }
+        return;
+    }
     if (data.type === 'price') {
         const nextItems = data.data;
         if (hasBotCategoryPriceChanged(config.items, nextItems)) {
@@ -1449,9 +1494,7 @@ async function main() {
 
                     const browse = pickAhBrowseAction();
                     logInfo(
-                        browse.type === 'page'
-                            ? `АХ → страница вперёд (${browse.slot})`
-                            : `АХ → reload ${browse.slot}${browse.slot === 49 ? ' (промах)' : ''}`,
+                        `АХ → reload ${browse.slot}${browse.slot === 49 ? ' (промах)' : ''}`,
                     );
 
                     const contentBefore = ahWindowContentKey(bot.currentWindow);
@@ -1754,11 +1797,24 @@ async function sellItems() {
         if (bot) {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
-            if (config.lastWarpTime < Date.now() - 120000) {
-                const warp = warps[Math.floor(Math.random() * warps.length)];
-                await rnd('BASE_DELAY');
-                if (!isSellSessionAlive(gen)) return;
-                bot.chat(`/warp ${warp}`);
+            if (
+                shouldAttemptWarp(
+                    config.username,
+                    config.lastWarpTime || 0,
+                    botWorkerStartTime,
+                )
+            ) {
+                const warp = await pickWarpForSession();
+                if (warp && isSellSessionAlive(gen)) {
+                    await rnd('BASE_DELAY');
+                    if (!isSellSessionAlive(gen)) return;
+                    logInfo(
+                        `warp → ${warp}${config.lastWarp ? ` (был ${config.lastWarp})` : ''}`,
+                    );
+                    bot.chat(`/warp ${warp}`);
+                    config.lastWarp = warp;
+                    config.lastWarpTime = Date.now();
+                }
             }
 
             await lookAroundSpin(() => !isSellSessionAlive(gen));

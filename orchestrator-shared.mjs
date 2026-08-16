@@ -476,15 +476,16 @@ export async function markBotBanned(username, ctx, reason = '') {
 export function requestFunauthBind(username, ctx) {
     const bot = ctx.bots?.get(username);
     const password = bot?.password;
+    const anarchy = bot?.anarchy ?? null;
     if (!username || !password) {
         console.warn(`[funauth] нет пароля для ${username}`);
         return false;
     }
-    const payload = { action: 'funauth_bind', nick: username, password };
+    const payload = { action: 'funauth_bind', nick: username, password, anarchy };
     if (typeof ctx.sendToGo === 'function') {
         const ok = ctx.sendToGo(payload);
         if (ok) {
-            console.log(`[funauth] queued via WS → ${username}`);
+            console.log(`[funauth] queued via WS → ${username} an${anarchy ?? '?'}`);
             return true;
         }
     }
@@ -495,9 +496,9 @@ export function requestFunauthBind(username, ctx) {
     fetch(`${base}/api/funauth/bind`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nick: username, password }),
+        body: JSON.stringify({ nick: username, password, anarchy }),
     }).catch((e) => console.warn(`[funauth] HTTP fail: ${e.message}`));
-    console.log(`[funauth] queued via HTTP → ${username}`);
+    console.log(`[funauth] queued via HTTP → ${username} an${anarchy ?? '?'}`);
     return true;
 }
 
@@ -507,7 +508,9 @@ export function requestFunauthTwoFa(username, ctx) {
         console.warn('[funauth] 2fa: пустой nick');
         return false;
     }
-    const payload = { action: 'funauth_2fa', nick: username };
+    const bot = ctx.bots?.get(username);
+    const anarchy = bot?.anarchy ?? null;
+    const payload = { action: 'funauth_2fa', nick: username, anarchy };
     if (typeof ctx.sendToGo === 'function') {
         const ok = ctx.sendToGo(payload);
         if (ok) {
@@ -522,9 +525,9 @@ export function requestFunauthTwoFa(username, ctx) {
     fetch(`${base}/api/funauth/2fa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nick: username }),
+        body: JSON.stringify({ nick: username, anarchy }),
     }).catch((e) => console.warn(`[funauth] 2fa HTTP fail: ${e.message}`));
-    console.log(`[funauth] 2fa queued via HTTP → ${username}`);
+    console.log(`[funauth] 2fa queued via HTTP → ${username} an${anarchy ?? '?'}`);
     return true;
 }
 
@@ -849,6 +852,23 @@ export function applyGoJsonUpdate(itemsBuying, goData) {
 }
 
 export { createListingStore } from './items/listing-store.mjs';
+export { createWarpCoordinator } from './lib/warp-coord.mjs';
+
+/** Запрос варпа от воркера → ответ с наименее занятым. */
+export function handleWorkerWarpPick(warpCoord, message, username, safePostMessage) {
+    if (message?.name !== 'warp_pick') return false;
+    const warp = warpCoord.handlePick({
+        username,
+        anarchy: message.anarchy,
+        lastWarp: message.lastWarp ?? null,
+    });
+    safePostMessage(username, {
+        type: 'warp_pick_res',
+        reqId: message.reqId,
+        warp,
+    });
+    return true;
+}
 
 /** Сколько ждать success от воркера после старта */
 export const WORKER_READY_TIMEOUT_MS = 120_000;
