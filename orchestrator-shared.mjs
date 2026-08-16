@@ -472,6 +472,30 @@ export async function markBotBanned(username, ctx, reason = '') {
     await ctx.sendAlert(`🚫 ${username}${anarchy} забанен`, username);
 }
 
+/** FunAuth game-verified: 5с на анке без «чтобы двигаться». */
+export function requestFunauthVerified(username, anarchy, ctx) {
+    if (!username) return false;
+    const payload = { action: 'funauth_verified', nick: username, anarchy };
+    if (typeof ctx.sendToGo === 'function') {
+        const ok = ctx.sendToGo(payload);
+        if (ok) {
+            console.log(`[funauth] verified via WS → ${username} an${anarchy ?? '?'}`);
+            return true;
+        }
+    }
+    const base = process.env.GO_HTTP_URL
+        || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
+            ? 'http://127.0.0.1:8080'
+            : 'http://212.8.229.76:8080');
+    fetch(`${base}/api/funauth/verified`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: username, anarchy }),
+    }).catch((e) => console.warn(`[funauth] verified HTTP fail: ${e.message}`));
+    console.log(`[funauth] verified via HTTP → ${username} an${anarchy ?? '?'}`);
+    return true;
+}
+
 /** FunAuth bind через Go WS (или HTTP fallback). */
 export function requestFunauthBind(username, ctx) {
     const bot = ctx.bots?.get(username);
@@ -607,6 +631,15 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     if (message?.name === 'funauth_2fa') {
         requestFunauthTwoFa(message.username || username, ctx);
         await stopWorkerNoRestart(username, ctx);
+        return true;
+    }
+    if (message?.name === 'funauth_verified') {
+        const bot = ctx.bots?.get(username);
+        requestFunauthVerified(
+            message.username || username,
+            message.anarchy ?? bot?.anarchy ?? null,
+            ctx,
+        );
         return true;
     }
     if (message?.name === 'banned') {

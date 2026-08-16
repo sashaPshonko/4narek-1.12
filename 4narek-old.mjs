@@ -605,8 +605,38 @@ function claimAhLotUuid(uuid) {
     parentPort.postMessage({ name: 'buying', data: claim, username: config.username });
 }
 
+const FUNAUTH_VERIFY_MS = 5000;
+let funauthVerifyTimer = null;
+let funauthBindRequired = false;
+let funauthGameVerified = false;
+
+function cancelFunauthVerifyTimer() {
+    if (funauthVerifyTimer) {
+        clearTimeout(funauthVerifyTimer);
+        funauthVerifyTimer = null;
+    }
+}
+
+function scheduleFunauthVerify() {
+    cancelFunauthVerifyTimer();
+    if (funauthGameVerified || funauthBindRequired) return;
+    funauthVerifyTimer = setTimeout(() => {
+        funauthVerifyTimer = null;
+        if (funauthBindRequired || funauthGameVerified) return;
+        funauthGameVerified = true;
+        logOk('FunAuth уже привязан — 5с на анке без «чтобы двигаться»');
+        parentPort.postMessage({
+            name: 'funauth_verified',
+            username: config.username,
+            anarchy: config.anarchy,
+        });
+    }, FUNAUTH_VERIFY_MS);
+}
+
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
+    funauthBindRequired = false;
+    scheduleFunauthVerify();
     logOk(`анархия ${config.anarchy} — вход`);
     parentPort.postMessage({ name: 'success', username: config.username });
     logOk(`на анархии an${config.anarchy} → success`);
@@ -1169,6 +1199,8 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.toLowerCase().includes('чтобы двигаться')) {
+        funauthBindRequired = true;
+        cancelFunauthVerifyTimer();
         parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
         // оркестратор шлёт FunAuth bind + стопает воркер
         setTimeout(() => process.exit(0), 500);
@@ -1219,6 +1251,8 @@ async function handleChatMessage(text) {
         const preview = text.trim().length > 50 ? `${text.trim().slice(0, 50)}…` : text.trim();
         logWarn(`лобби «${preview}» → sellItems`);
         abortSellSession('лобби');
+        cancelFunauthVerifyTimer();
+        funauthBindRequired = false;
         config.timeJoinAnarchy = 0;
         await sellItems();
         return;
