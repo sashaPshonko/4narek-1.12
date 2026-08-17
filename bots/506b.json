@@ -1,35 +1,32 @@
 [
-    {
-        "username": "zavtravseu4e",
-        "password": "gggggg",
-        "anarchy": 506,
-        "type": "4narek-old",
-        "item": "netherite pickaxe",
-        "goType": "netherite_pickaxe-1.21",
-        "role": "buyer",
-        "clanBalanceLimit": 10,
-        "ip": "506"
-    },
-    {
-        "username": "pillsbefore",
-        "password": "ggggg",
-        "anarchy": 506,
-        "type": "4narek-old",
-        "item": "netherite pickaxe",
-        "goType": "netherite_pickaxe-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 10,
-        "ip": "506"
-    },
-    {
-        "username": "skuchnodoma14",
-        "password": "ggggg",
-        "anarchy": 506,
-        "type": "4narek-old",
-        "item": "netherite pickaxe",
-        "goType": "netherite_pickaxe-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 10,
-        "ip": "506"
-    }
+  {
+    "username": "zavtravseu4e",
+    "password": "gggggg",
+    "anarchy": 506,
+    "type": "4narek-old",
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "506"
+  },
+  {
+    "username": "pillsbefore",
+    "password": "ggggg",
+    "anarchy": 506,
+    "type": "4narek-old",
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "506"
+  },
+  {
+    "username": "skuchnodoma14",
+    "password": "ggggg",
+    "anarchy": 506,
+    "type": "4narek-old",
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "506"
+  }
 ]

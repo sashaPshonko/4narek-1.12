@@ -1,35 +1,32 @@
 [
-    {
-        "username": "helpmymompls13",
-        "password": "ggggg",
-        "anarchy": 508,
-        "type": "4narek-old",
-        "item": "netherite chestplate",
-        "goType": "netherite_chestplate-1.21",
-        "role": "buyer",
-        "clanBalanceLimit": 10,
-        "ip": "508"
-    },
-    {
-        "username": "golovaushla9",
-        "password": "ggggg",
-        "anarchy": 508,
-        "type": "4narek-old",
-        "item": "netherite chestplate",
-        "goType": "netherite_chestplate-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 10,
-        "ip": "508"
-    },
-    {
-        "username": "bolshedeneg11",
-        "password": "ggggg",
-        "anarchy": 508,
-        "type": "4narek-old",
-        "item": "netherite chestplate",
-        "goType": "netherite_chestplate-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 10,
-        "ip": "508"
-    }
+  {
+    "username": "helpmymompls13",
+    "password": "ggggg",
+    "anarchy": 508,
+    "type": "4narek-old",
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "508"
+  },
+  {
+    "username": "golovaushla9",
+    "password": "ggggg",
+    "anarchy": 508,
+    "type": "4narek-old",
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "508"
+  },
+  {
+    "username": "bolshedeneg11",
+    "password": "ggggg",
+    "anarchy": 508,
+    "type": "4narek-old",
+    "item": "netherite chestplate",
+    "goType": "netherite_chestplate-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "508"
+  }
 ]

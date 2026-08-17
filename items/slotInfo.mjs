@@ -3,6 +3,7 @@ import {
     refreshFuntimeEnchantNames,
     resolveFuntimeEnchantId,
 } from './funtime-enchants.mjs';
+import { catalogTypeMatchesGoType } from '../lib/go-type.mjs';
 
 /** Запрещённые чары по minecraft-типу (name в каталоге). Исключения — forbidden_effects у id в items_config.json */
 const forbiddenEnchantsByType = {
@@ -280,7 +281,7 @@ export function findBestMatchingConfigItem(item, catalogAll) {
 export function findMatchingConfigItemResult(item, catalogAll, ownerGoType) {
     const best = findBestMatchingConfigItem(item, catalogAll);
     if (!best) return null;
-    if (ownerGoType && best.type !== ownerGoType) {
+    if (ownerGoType && !catalogTypeMatchesGoType(best.type, ownerGoType)) {
         return { cfg: best, foreign: true };
     }
     return { cfg: best, foreign: false };

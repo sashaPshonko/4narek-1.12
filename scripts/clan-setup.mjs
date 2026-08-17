@@ -16,6 +16,7 @@ import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { handleCaptchaLogin, attachMapCache, isCaptchaChat } from '../lib/captcha/solve-flow.mjs';
 import { antiAfkIfNeeded, lookAroundSpin } from '../lib/afk-look.mjs';
+import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -661,12 +662,13 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
 
 async function main() {
     const { anarchy, me: meArg } = parseArgs(process.argv.slice(2));
-    const owners = loadJson(join(ROOT, 'clan-owners.json'));
-    const owner = owners[anarchy];
-    if (!owner || typeof owner !== 'object') {
-        console.error(`нет владельца в clan-owners.json для ${anarchy}`);
+    const session = loadClanOwnerSession(ROOT, anarchy);
+    if (!session) {
+        console.error(`нет владельца/прокси для ${anarchy} (clan-owners.json + owner-ip.json)`);
         process.exit(2);
     }
+    const { owner, proxyString } = session;
+    const owners = loadJson(join(ROOT, 'clan-owners.json'));
 
     const me = String(
         meArg
@@ -676,13 +678,6 @@ async function main() {
     ).trim() || null;
     if (me) log(`myNick: ${me}`);
     else log('myNick: нет — purge чужих выключен');
-
-    const ipJson = loadJson(join(ROOT, 'ip.json'));
-    const proxyString = ipJson[owner.ip || anarchy];
-    if (!proxyString) {
-        console.error(`нет прокси в ip.json для ${anarchy}`);
-        process.exit(2);
-    }
 
     const botsPath = join(ROOT, 'bots', `${anarchy}b.json`);
     const bots = existsSync(botsPath) ? loadJson(botsPath) : [];

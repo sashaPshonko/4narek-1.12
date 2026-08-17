@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
+import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -86,12 +87,10 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
  * Общая логика оркестраторов: каталог с Go, активные типы, цены.
  *
  * Старая/новая броня в одном items_config.json:
- * — старые предметы: type "netherite_chestplate-1.21"
- * — отдельные линейки: напр. "позорная-броня-1.21" (prot4/unb4, без шипов)
- * — в bots.json у новых трёх ботов: goType "netherite_chestplate-new-1.21"
- * — у старых ботов остаётся goType "netherite_chestplate-1.21"
- * Бот в getBestAHSlot покупает только catalog.type === bot.goType.
- * Матч лота: лучший id по num по всему каталогу; если type !== goType бота — не покупаем.
+ * — отдельные piece-типы: netherite_helmet-1.21, …
+ * — позорная: "позорная-броня-1.21"
+ * — an503: goType "netherite_armor-1.21" — все piece-типы кроме позорной
+ * Матч: catalogTypeMatchesGoType(catalog.type, bot.goType).
  */
 
 /** Окно сбора мин. цен на АХ перед отправкой в Go */
@@ -160,7 +159,7 @@ export function mergeCatalogWithPrices(catalog, prices) {
 /** Предметы для воркера: только его go-тип */
 export function itemPricesForBot(catalog, prices, goType) {
     if (!goType) return [];
-    return mergeCatalogWithPrices(catalog, prices).filter((item) => item.type === goType);
+    return mergeCatalogWithPrices(catalog, prices).filter((item) => catalogTypeMatchesGoType(item.type, goType));
 }
 
 /** Успешные воркеры → типы для Go (без id предметов) */
@@ -215,7 +214,6 @@ export function collectBannedBots(bots, extraBanned = []) {
                 username: bot.username,
                 anarchy: bot.anarchy ?? null,
                 go_type: resolveGoType(bot) || bot.goType || '',
-                role: bot.role || '',
                 banned_at: bot.bannedAt || null,
                 reason: bot.banReason || '',
             });
@@ -227,7 +225,6 @@ export function collectBannedBots(bots, extraBanned = []) {
             username: b.username,
             anarchy: b.anarchy ?? null,
             go_type: b.go_type || '',
-            role: b.role || 'clan_owner',
             banned_at: b.banned_at || b.bannedAt || null,
             reason: b.reason || b.banReason || '',
         });

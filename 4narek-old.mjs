@@ -20,6 +20,7 @@ import {
     setEnchantRegistry,
 } from './items/slotInfo.mjs';
 import { pricesMatch } from './items/listing-memory.mjs';
+import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
 
 import {
     isUuidBlockedByOther,
@@ -29,8 +30,6 @@ import { handleCaptchaLogin, attachMapCache } from './lib/captcha/solve-flow.mjs
 import {
     ahBuyDelayMs,
     ahGlassDelayMs,
-    pickProfitableCandidateIndex,
-    shouldSkipLotEntirely,
     pickAhBrowseAction,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
@@ -317,8 +316,9 @@ function configurationTransferAgeMs() {
 const STORAGE_AH_SLOTS = 5;
 
 const firstAHSlot = 0;
-/** Только верхняя строка лотов АХ (0–8). */
-const lastAHSlot = 8;
+/** Две строки лотов АХ: 0–8 и 9–17. */
+const lastAHSlot = 17;
+const lastBuyableAHSlot = 17;
 const slotToStorage = 46;
 const leftMouseButton = 0;
 const shiftClick = 1;
@@ -499,7 +499,6 @@ const config = {
     timeActive: Date.now(),
     lastClanInvestAt: 0,
     ip: workerData.ip,
-    role: workerData.role,
 };
 
 var bot = null;
@@ -928,7 +927,7 @@ function getSaveSum() {
     let bestPrice = 0;
     for (const entry of config.items) {
         if (!entry?.id?.endsWith('1.21')) continue;
-        if (config.goType && entry.type !== config.goType) continue;
+        if (config.goType && !catalogTypeMatchesGoType(entry.type, config.goType)) continue;
 
         const unitPrice = entry.priceSell;
         if (typeof unitPrice !== 'number' || !Number.isFinite(unitPrice) || unitPrice <= 0) continue;
@@ -1485,7 +1484,7 @@ async function main() {
                     const slotToBuy = await getBestAHSlot();
                     if (config.key !== key) return;
 
-                    if (slotToBuy !== null && slotToBuy < 9) {
+                    if (slotToBuy !== null && slotToBuy <= lastBuyableAHSlot) {
                         logInfo(`АХ → купить слот ${slotToBuy}`);
                         const contentBeforeBuy = ahWindowContentKey(bot.currentWindow);
                         await safeClickBuy(
@@ -1527,9 +1526,7 @@ async function main() {
                     }
 
                     const browse = pickAhBrowseAction();
-                    logInfo(
-                        `АХ → reload ${browse.slot}${browse.slot === 49 ? ' (промах)' : ''}`,
-                    );
+                    logInfo(`АХ → reload ${browse.slot}`);
 
                     const contentBefore = ahWindowContentKey(bot.currentWindow);
                     await safeClickBuy(bot, browse.slot, delayMs({ min: 1500, max: 4500 }), key);
@@ -2233,13 +2230,12 @@ async function safeBalance() {
 
 
 /**
- * Выгодный слот на АХ. Иногда не первый слева — чтобы клики не всегда в 0–1.
+ * Первый выгодный слот слева направо (0–17).
  */
 async function getBestAHSlot() {
     try {
         if (!bot?.currentWindow?.slots) return null;
 
-        const candidates = [];
         for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
             const slotData = bot.currentWindow.slots[slot];
             if (!slotData) continue;
@@ -2269,35 +2265,20 @@ async function getBestAHSlot() {
 
             if (ahPrice >= info.buyPrice) continue;
 
-            candidates.push({ slot, info, ahPrice, currentUUID, slotData });
+            config.BuyingItem.id = info.id;
+            config.BuyingItem.price = ahPrice;
+            config.BuyingItem.buyPrice = info.buyPrice;
+            config.BuyingItem.nacenka = info.nacenka;
+            const buyMeta = snapshotItemTradeMeta(slotData);
+            config.BuyingItem.enchants = buyMeta.enchants;
+            config.BuyingItem.durability = buyMeta.durability;
+
+            if (currentUUID) claimAhLotUuid(currentUUID);
+
+            return slot;
         }
 
-        if (!candidates.length) return null;
-
-        if (shouldSkipLotEntirely()) {
-            logInfo(`АХ → скип лота(ов) (${candidates.length} выгодных) → browse`);
-            return null;
-        }
-
-        const idx = pickProfitableCandidateIndex(candidates.length);
-        const chosen = candidates[idx];
-        if (idx > 0) {
-            logInfo(
-                `АХ → не первый выгодный (из ${candidates.length}, слот ${chosen.slot}, первый был ${candidates[0].slot})`,
-            );
-        }
-
-        config.BuyingItem.id = chosen.info.id;
-        config.BuyingItem.price = chosen.ahPrice;
-        config.BuyingItem.buyPrice = chosen.info.buyPrice;
-        config.BuyingItem.nacenka = chosen.info.nacenka;
-        const buyMeta = snapshotItemTradeMeta(chosen.slotData);
-        config.BuyingItem.enchants = buyMeta.enchants;
-        config.BuyingItem.durability = buyMeta.durability;
-
-        if (chosen.currentUUID) claimAhLotUuid(chosen.currentUUID);
-
-        return chosen.slot;
+        return null;
     } catch (err) {
         reportError('getBestAHSlot', err);
         return null;

@@ -1,35 +1,32 @@
 [
-    {
-        "username": "odinokvse16",
-        "password": "ggggg",
-        "anarchy": 510,
-        "type": "4narek-old",
-        "item": "netherite armour",
-        "goType": "позорная-броня-1.21",
-        "role": "buyer",
-        "clanBalanceLimit": 30,
-        "ip": "510"
-    },
-    {
-        "username": "NAHNENYT15",
-        "password": "ggggg",
-        "anarchy": 510,
-        "type": "4narek-old",
-        "item": "netherite armour",
-        "goType": "позорная-броня-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 20,
-        "ip": "510"
-    },
-    {
-        "username": "pokavse16",
-        "password": "ggggg",
-        "anarchy": 510,
-        "type": "4narek-old",
-        "item": "netherite armour",
-        "goType": "позорная-броня-1.21",
-        "role": "seller",
-        "clanBalanceLimit": 20,
-        "ip": "510"
-    }
+  {
+    "username": "odinokvse16",
+    "password": "ggggg",
+    "anarchy": 510,
+    "type": "4narek-old",
+    "item": "netherite armour",
+    "goType": "позорная-броня-1.21",
+    "clanBalanceLimit": 30,
+    "ip": "510"
+  },
+  {
+    "username": "NAHNENYT15",
+    "password": "ggggg",
+    "anarchy": 510,
+    "type": "4narek-old",
+    "item": "netherite armour",
+    "goType": "позорная-броня-1.21",
+    "clanBalanceLimit": 20,
+    "ip": "510"
+  },
+  {
+    "username": "pokavse16",
+    "password": "ggggg",
+    "anarchy": 510,
+    "type": "4narek-old",
+    "item": "netherite armour",
+    "goType": "позорная-броня-1.21",
+    "clanBalanceLimit": 20,
+    "ip": "510"
+  }
 ]
