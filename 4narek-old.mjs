@@ -927,7 +927,7 @@ function getSaveSum() {
     let bestPrice = 0;
     for (const entry of config.items) {
         if (!entry?.id?.endsWith('1.21')) continue;
-        if (config.goType && !catalogTypeMatchesGoType(entry.type, config.goType)) continue;
+        if (config.goType && !catalogTypeMatchesGoType(entry.type, config.goType, entry.name)) continue;
 
         const unitPrice = entry.priceSell;
         if (typeof unitPrice !== 'number' || !Number.isFinite(unitPrice) || unitPrice <= 0) continue;
@@ -1201,7 +1201,6 @@ async function handleChatMessage(text) {
         funauthBindRequired = true;
         cancelFunauthVerifyTimer();
         parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
-        // оркестратор шлёт FunAuth bind + стопает воркер
         setTimeout(() => process.exit(0), 500);
         return;
     }

@@ -281,7 +281,7 @@ export function findBestMatchingConfigItem(item, catalogAll) {
 export function findMatchingConfigItemResult(item, catalogAll, ownerGoType) {
     const best = findBestMatchingConfigItem(item, catalogAll);
     if (!best) return null;
-    if (ownerGoType && !catalogTypeMatchesGoType(best.type, ownerGoType)) {
+    if (ownerGoType && !catalogTypeMatchesGoType(best.type, ownerGoType, best.name)) {
         return { cfg: best, foreign: true };
     }
     return { cfg: best, foreign: false };

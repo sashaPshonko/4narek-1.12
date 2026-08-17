@@ -159,7 +159,7 @@ export function mergeCatalogWithPrices(catalog, prices) {
 /** Предметы для воркера: только его go-тип */
 export function itemPricesForBot(catalog, prices, goType) {
     if (!goType) return [];
-    return mergeCatalogWithPrices(catalog, prices).filter((item) => catalogTypeMatchesGoType(item.type, goType));
+    return mergeCatalogWithPrices(catalog, prices).filter((item) => catalogTypeMatchesGoType(item.type, goType, item.name));
 }
 
 /** Успешные воркеры → типы для Go (без id предметов) */
@@ -563,10 +563,17 @@ export async function handleFunauthGoMessage(dataObj, ctx) {
     const bot = ctx.bots?.get(nick);
     if (!bot) return true;
 
-    if (action === 'funauth_no_accounts' || dataObj.error === 'no_accounts' || dataObj.error === 'all_on_other_anarchies') {
+    if (
+        action === 'funauth_no_accounts'
+        || dataObj.error === 'no_accounts'
+        || dataObj.error === 'all_on_other_anarchies'
+        || dataObj.error === 'all_accounts_busy'
+    ) {
         const errHint = dataObj.error === 'all_on_other_anarchies'
             ? ` (все TG на других анках${dataObj.anarchy ? ', нужен an' + dataObj.anarchy : ''})`
-            : '';
+            : dataObj.error === 'all_accounts_busy'
+              ? ' (все TG уже заняты другими MC)'
+              : '';
         console.log(`[funauth] no_accounts${errHint} → ${nick}, рестарт через 45с`);
         await ctx.sendAlert?.(
             `🚨 FunAuth: нет TG для ${nick}${errHint} — воркер встанет через 45с`,
@@ -630,7 +637,6 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (message?.name === 'funauth_2fa') {
         requestFunauthTwoFa(message.username || username, ctx);
-        await stopWorkerNoRestart(username, ctx);
         return true;
     }
     if (message?.name === 'funauth_verified') {
@@ -651,10 +657,9 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
-        // bind один раз (Go сам не дублирует); воркер гасим до результата FunAuth
         requestFunauthBind(username, ctx);
         await ctx.sendAlert?.(message, username);
-        await stopWorkerNoRestart(username, ctx);
+        // воркер сам exit → оркестратор перезапустит по exit handler
         return true;
     }
     return false;
