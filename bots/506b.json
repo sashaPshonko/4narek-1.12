@@ -1,32 +1,32 @@
 [
   {
-    "username": "zavtravseu4e",
-    "password": "gggggg",
-    "anarchy": 506,
-    "type": "4narek-old",
-    "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21",
-    "clanBalanceLimit": 10,
-    "ip": "506"
-  },
-  {
-    "username": "pillsbefore",
+    "username": "rzhavshit16",
     "password": "ggggg",
     "anarchy": 506,
     "type": "4narek-old",
-    "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21",
+    "item": "netherite armour",
+    "goType": "netherite_armor-1.21",
     "clanBalanceLimit": 10,
-    "ip": "506"
+    "ip": "506-1"
   },
   {
-    "username": "skuchnodoma14",
+    "username": "nogavbrone14",
     "password": "ggggg",
     "anarchy": 506,
     "type": "4narek-old",
-    "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21",
+    "item": "netherite armour",
+    "goType": "netherite_armor-1.21",
     "clanBalanceLimit": 10,
-    "ip": "506"
+    "ip": "506-2"
+  },
+  {
+    "username": "stydnoysh13",
+    "password": "ggggg",
+    "anarchy": 506,
+    "type": "4narek-old",
+    "item": "netherite armour",
+    "goType": "позорная-броня-1.21",
+    "clanBalanceLimit": 20,
+    "ip": "506-3"
   }
 ]
