@@ -995,6 +995,10 @@ async function handleChatMessage(text) {
         const known = Number(config.BuyingItem.price);
         const price = known > 0 && Number.isFinite(known) ? known : fromChat;
         const id = config.BuyingItem.id;
+        if (!id) {
+            logWarn(`buy confirm без BuyingItem (price=${price}) — дубль чата, skip`);
+            return;
+        }
         parentPort.postMessage({
             name: 'buy',
             id,
