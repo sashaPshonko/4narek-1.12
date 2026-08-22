@@ -6,6 +6,7 @@ import { platform } from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import net from 'net';
+import https from 'https';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const execFileAsync = promisify(execFile);
@@ -81,11 +82,18 @@ async function main() {
     console.log('=== Telegram через SOCKS ===');
     try {
         const agent = new SocksProxyAgent(`socks5h://127.0.0.1:${SOCKS_PORT}`);
-        const res = await fetch('https://api.telegram.org', {
-            agent,
-            signal: AbortSignal.timeout(12_000),
+        const status = await new Promise((resolve, reject) => {
+            const req = https.get('https://api.telegram.org/', { agent, timeout: 12_000 }, (res) => {
+                res.resume();
+                resolve(res.statusCode);
+            });
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('timeout'));
+            });
+            req.on('error', reject);
         });
-        console.log(`http_status=${res.status}`);
+        console.log(`http_status=${status}`);
     } catch (e) {
         console.log(`failed: ${e.message}`);
     }

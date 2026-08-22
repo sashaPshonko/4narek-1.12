@@ -26,6 +26,7 @@ import {
     readVlessFromRepoFile,
     readVlessFromEnvFile,
 } from './lib/vless.mjs';
+import https from 'https';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const execFileAsync = promisify(execFile);
@@ -212,17 +213,20 @@ async function isPortOpen(port, host = '127.0.0.1', timeoutMs = 2000) {
     });
 }
 
-async function isTelegramApiOkViaProxy(proxyUrl) {
-    try {
+/** Node fetch() игнорирует `agent` (undici) — проверка шла в обход SOCKS и врала «OK». */
+function isTelegramApiOkViaProxy(proxyUrl) {
+    return new Promise((resolve) => {
         const agent = new SocksProxyAgent(proxyUrl);
-        const res = await fetch('https://api.telegram.org', {
-            agent,
-            signal: AbortSignal.timeout(12_000),
+        const req = https.get('https://api.telegram.org/', { agent, timeout: 12_000 }, (res) => {
+            res.resume();
+            resolve(res.statusCode > 0);
         });
-        return res.status > 0;
-    } catch {
-        return false;
-    }
+        req.on('timeout', () => {
+            req.destroy();
+            resolve(false);
+        });
+        req.on('error', () => resolve(false));
+    });
 }
 
 async function main() {
