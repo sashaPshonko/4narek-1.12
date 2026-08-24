@@ -38,3 +38,5 @@ nohup bash scripts/run/solver.sh > solver.log 2>&1 &
 
 wget https://raw.githubusercontent.com/ndatg/xray-vless-reality-installer/main/xray-install.sh
 sudo bash xray-install.sh
+
+node scripts/clan-setup.mjs 502
