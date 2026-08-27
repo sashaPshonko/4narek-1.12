@@ -433,11 +433,6 @@ async function startBots() {
             await runWorker(bot);
         }
 
-        setTimeout(() => {
-            if (socket && isSocketOpen) {
-                socket.send(JSON.stringify({ action: 'info' }));
-            }
-        }, 1000);
     } catch (error) {
         await sendAlert(`❌ Ошибка запуска ботов: ${error.message}`);
     } finally {

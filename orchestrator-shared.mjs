@@ -822,6 +822,8 @@ export function createMarketFloorTracker({
     };
 }
 
+let autoStartCompleted = false;
+
 export async function tryAutoStartBots({
     reason,
     workers,
@@ -837,9 +839,15 @@ export async function tryAutoStartBots({
     isStartBotsRunning,
 }) {
     if (isShuttingDown) return;
-    if (workers.size > 0) return;
+    if (workers.size > 0) {
+        autoStartCompleted = true;
+        return;
+    }
     if (isPending()) return;
     if (isStartBotsRunning?.()) return;
+    // ws-prices прилетает часто; если воркеры так и не поднялись — не крутить
+    // startBots → info(+1с) → цены → startBots каждую секунду.
+    if (autoStartCompleted && reason === 'ws-prices') return;
 
     const { anyItems } = applyPricesToBots({
         catalog,
@@ -861,6 +869,7 @@ export async function tryAutoStartBots({
     setPending(true);
     try {
         await startBots();
+        autoStartCompleted = true;
     } finally {
         setPending(false);
     }
