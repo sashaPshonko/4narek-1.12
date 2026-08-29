@@ -1,9 +1,11 @@
 import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
+import { proxyHostFromString } from './lib/proxy-host.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -204,7 +206,26 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
     };
 }
 
-/** Забаненные аккаунты для Go /fleet (ник + анархия). */
+export function botProxyHost(bot, rootDir = ORCH_ROOT) {
+    if (!bot) return '';
+    if (bot.proxyHost) return String(bot.proxyHost);
+    if (bot.proxy) {
+        const h = proxyHostFromString(bot.proxy);
+        if (h) return h;
+    }
+    const slot = bot.ip;
+    if (slot == null || slot === '') return '';
+    const p = join(rootDir, 'ip.json');
+    if (!existsSync(p)) return '';
+    try {
+        const map = JSON.parse(readFileSync(p, 'utf8'));
+        return proxyHostFromString(map[slot]);
+    } catch {
+        return '';
+    }
+}
+
+/** Забаненные аккаунты для Go /fleet (ник + анархия + IP прокси). */
 export function collectBannedBots(bots, extraBanned = []) {
     const out = [];
     if (bots) {
@@ -216,6 +237,7 @@ export function collectBannedBots(bots, extraBanned = []) {
                 go_type: resolveGoType(bot) || bot.goType || '',
                 banned_at: bot.bannedAt || null,
                 reason: bot.banReason || '',
+                ip: botProxyHost(bot),
             });
         }
     }
@@ -227,6 +249,7 @@ export function collectBannedBots(bots, extraBanned = []) {
             go_type: b.go_type || '',
             banned_at: b.banned_at || b.bannedAt || null,
             reason: b.reason || b.banReason || '',
+            ip: b.ip || '',
         });
     }
     out.sort((a, b) => {

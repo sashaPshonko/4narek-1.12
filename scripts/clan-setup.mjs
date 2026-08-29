@@ -19,6 +19,7 @@ import { antiAfkIfNeeded, lookAroundSpin } from '../lib/afk-look.mjs';
 import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
 import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
 import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
+import { proxyHostFromString } from '../lib/proxy-host.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -372,12 +373,27 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                     anarchy,
                     status: 'ok',
                     banned: false,
+                    ip: proxyHostFromString(proxyString),
                 });
             }
         }
     });
 
     bot.on('kicked', (reason) => {
+        const text = flattenChat(reason) || JSON.stringify(reason);
+        if (isBanChatText(text)) {
+            const banReason = extractBanReason(text) || 'ВЫ ЗАБАНЕНЫ!';
+            reportClanOwnerToGo({
+                username: owner.username,
+                anarchy,
+                status: 'banned',
+                banned: true,
+                reason: banReason,
+                ip: proxyHostFromString(proxyString),
+            });
+            failSession(`banned: ${banReason.slice(0, 220)}`);
+            return;
+        }
         failSession(`kicked ${JSON.stringify(reason)}`);
     });
     bot.on('error', (err) => {
@@ -399,6 +415,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 status: 'banned',
                 banned: true,
                 reason,
+                ip: proxyHostFromString(proxyString),
             });
             failSession(`banned: ${reason.slice(0, 220)}`);
             return;
