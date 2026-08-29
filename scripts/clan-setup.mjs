@@ -17,6 +17,8 @@ import { SocksProxyAgent } from 'socks-proxy-agent';
 import { handleCaptchaLogin, attachMapCache, isCaptchaChat } from '../lib/captcha/solve-flow.mjs';
 import { antiAfkIfNeeded, lookAroundSpin } from '../lib/afk-look.mjs';
 import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
+import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
+import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -333,6 +335,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         grantMemberSlot: null,
         shift2At: 0,
         grantScanOnly: false,
+        ownerOkReported: false,
     };
 
     const proxy = buildProxyConnect(proxyString);
@@ -362,6 +365,15 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         if (JSON.stringify(scoreboard).includes(String(anarchy))) {
             state.timeJoinAnarchy = Date.now();
             log(`на анархии ${anarchy}`);
+            if (!state.ownerOkReported) {
+                state.ownerOkReported = true;
+                reportClanOwnerToGo({
+                    username: owner.username,
+                    anarchy,
+                    status: 'ok',
+                    banned: false,
+                });
+            }
         }
     });
 
@@ -378,6 +390,19 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
     const onChatText = async (text) => {
         if (!text) return;
         console.log(`[clan-setup] 💬 ${text}`);
+
+        if (isBanChatText(text)) {
+            const reason = extractBanReason(text) || 'ВЫ ЗАБАНЕНЫ!';
+            reportClanOwnerToGo({
+                username: owner.username,
+                anarchy,
+                status: 'banned',
+                banned: true,
+                reason,
+            });
+            failSession(`banned: ${reason.slice(0, 220)}`);
+            return;
+        }
 
         if (text.includes(AFK_MARKER)) {
             state.afk = true;
