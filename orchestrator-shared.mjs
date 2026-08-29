@@ -261,30 +261,14 @@ export function collectBannedBots(bots, extraBanned = []) {
     return out;
 }
 
-/** Кик с экрана дисконнекта: бан / blacklist, а не «ник уже онлайн». */
-export function isBanKickReason(reason) {
-    const s = String(reason || '').toLowerCase();
-    if (!s) return false;
-    if (s.includes('ником уже онлайн') || s.includes('таким-же ником') || s.includes('already online')) {
-        return false;
-    }
-    return (
-        s.includes('забанен')
-        || s.includes('заблокирован')
-        || s.includes('banned')
-        || s.includes('blacklist')
-        || s.includes('blacklisted')
-        || /\bban\b/.test(s)
-    );
+/** Кик не считается баном. Бан только из чата «вы забанены». */
+export function isBanKickReason(_reason) {
+    return false;
 }
 
 export async function handleWorkerKicked(username, reason, ctx) {
     const bot = ctx.bots?.get(username);
     if (bot) bot.lastKickReason = String(reason || '');
-    if (isBanKickReason(reason)) {
-        await markBotBanned(username, ctx, reason);
-        return true;
-    }
     return false;
 }
 
