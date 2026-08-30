@@ -738,20 +738,26 @@ function noteWindowGone(why, windowId = null) {
 
 function attachWindowCloseTrace(bot) {
     const client = bot._client;
-    if (!client) return;
-    client.prependListener('close_window', (packet) => {
-        noteWindowGone('сервер close_window', packet?.windowId);
-    });
-    client.prependListener('login', () => {
-        if (bot.currentWindow) {
-            noteWindowGone('пакет login (mineflayer сносит окно при смене мира)', bot.currentWindow.id);
-        }
-    });
-    const origClose = bot.closeWindow.bind(bot);
-    bot.closeWindow = (win) => {
-        noteWindowGone('мы closeWindow', win?.id);
-        return origClose(win);
+    if (client) {
+        client.prependListener('close_window', (packet) => {
+            noteWindowGone('сервер close_window', packet?.windowId);
+        });
+        client.prependListener('login', () => {
+            if (bot.currentWindow) {
+                noteWindowGone('пакет login (mineflayer сносит окно при смене мира)', bot.currentWindow.id);
+            }
+        });
+    }
+    const wrapClose = () => {
+        if (typeof bot.closeWindow !== 'function') return;
+        const origClose = bot.closeWindow.bind(bot);
+        bot.closeWindow = (win) => {
+            noteWindowGone('мы closeWindow', win?.id);
+            return origClose(win);
+        };
     };
+    if (typeof bot.closeWindow === 'function') wrapClose();
+    else bot.once('inject_allowed', wrapClose);
 }
 
 /** FunTime часто: close_window → (дыра 0–2с) → open_window. Vanilla за это не «теряет» АХ. */
