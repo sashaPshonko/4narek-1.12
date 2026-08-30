@@ -728,6 +728,42 @@ function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Почему currentWindow стал null. Mineflayer обнуляет его только так. */
+let lastWindowGone = { at: 0, why: '', windowId: null };
+
+function noteWindowGone(why, windowId = null) {
+    lastWindowGone = { at: Date.now(), why, windowId };
+    logWarn(`GUI закрылось: ${why}${windowId != null ? ` id=${windowId}` : ''}`);
+}
+
+function attachWindowCloseTrace(bot) {
+    const client = bot._client;
+    if (!client) return;
+    client.prependListener('close_window', (packet) => {
+        noteWindowGone('сервер close_window', packet?.windowId);
+    });
+    client.prependListener('login', () => {
+        if (bot.currentWindow) {
+            noteWindowGone('пакет login (mineflayer сносит окно при смене мира)', bot.currentWindow.id);
+        }
+    });
+    const origClose = bot.closeWindow.bind(bot);
+    bot.closeWindow = (win) => {
+        noteWindowGone('мы closeWindow', win?.id);
+        return origClose(win);
+    };
+}
+
+/** FunTime часто: close_window → (дыра 0–2с) → open_window. Vanilla за это не «теряет» АХ. */
+async function waitForCurrentWindow(maxMs, key = null) {
+    const deadline = Date.now() + maxMs;
+    while (!bot?.currentWindow && Date.now() < deadline) {
+        if (key != null && config.key !== key) return 'newkey';
+        await sleep(50);
+    }
+    return bot?.currentWindow ? 'ok' : 'gone';
+}
+
 /** @param {boolean} [shift] — true только при клике по лоту покупки */
 async function safeClickBuy(bot, slot, time, key, shift = false) {
     let timeDelay = time;
@@ -746,8 +782,18 @@ async function safeClickBuy(bot, slot, time, key, shift = false) {
             return;
         }
         if (!bot.currentWindow) {
-            logWarn(`клик слот ${slot} — окна нет`);
-            return;
+            const waited = await waitForCurrentWindow(2000, key);
+            if (waited === 'newkey') {
+                logWarn(`клик слот ${slot} отменён (новое окно, пока ждали reopen)`);
+                return;
+            }
+            if (!bot.currentWindow) {
+                logWarn(
+                    `клик слот ${slot} — GUI так и нет (${lastWindowGone.why || '?'}, ${Date.now() - lastWindowGone.at}мс назад)`,
+                );
+                return;
+            }
+            logInfo(`клик слот ${slot} — окно вернулось после ${lastWindowGone.why || 'close'}`);
         }
         const chunk = Math.min(100, remaining);
         await sleep(chunk);
@@ -760,13 +806,18 @@ async function safeClickBuy(bot, slot, time, key, shift = false) {
     }
 
     config.botUpdateWindow = true;
-    if (bot.currentWindow) {
-        const mode = shift ? shiftClick : noShiftClick;
-        logInfo(`клик слот ${slot}${shift ? ' (shift)' : ''}`);
-        await bot.clickWindow(slot, leftMouseButton, mode);
-    } else {
-        logWarn(`клик слот ${slot} — окна нет`);
+    if (!bot.currentWindow) {
+        const waited = await waitForCurrentWindow(2000, key);
+        if (waited !== 'ok') {
+            logWarn(
+                `клик слот ${slot} — не кликнул, GUI нет (${lastWindowGone.why || '?'})`,
+            );
+            return;
+        }
     }
+    const mode = shift ? shiftClick : noShiftClick;
+    logInfo(`клик слот ${slot}${shift ? ' (shift)' : ''}`);
+    await bot.clickWindow(slot, leftMouseButton, mode);
 }
 
 function getSlotInfoSafe(item, slotIndex) {
@@ -1363,6 +1414,7 @@ async function main() {
     attachMapCache(bot);
 
     setupConfigurationTransferFix(bot);
+    attachWindowCloseTrace(bot);
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
@@ -1422,6 +1474,11 @@ async function main() {
             }
         }
         if (Date.now() - config.timeActive > 60000) {
+            // Не закрывать АХ «осмотром»: in-place reload не даёт windowOpen → timeActive не тикает.
+            if (bot.currentWindow) {
+                config.timeActive = Date.now();
+                return;
+            }
             config.timeActive = Date.now();
             await sellItems();
             if (!config.sellInFlight) await safeAH();
@@ -1445,9 +1502,19 @@ async function main() {
                 let staleContentPasses = 0;
                 for (;;) {
                     if (config.key !== key) return;
+                    config.timeActive = Date.now();
                     if (!bot.currentWindow) {
-                        logWarn('АХ → окна нет, выход');
-                        return;
+                        logWarn(
+                            `АХ → GUI null (${lastWindowGone.why || '?'}) — жду open_window, не /ah`,
+                        );
+                        const waited = await waitForCurrentWindow(2500, key);
+                        if (waited === 'newkey') return;
+                        if (!bot.currentWindow) {
+                            logWarn('АХ → open_window так и не пришёл — тогда /ah search');
+                            await safeAH();
+                            return;
+                        }
+                        logInfo('АХ → окно вернулось (это была дыра close→open, не «потеря»)');
                     }
 
                     config.menu = resolveWindowMenu(bot.currentWindow);
@@ -1503,8 +1570,13 @@ async function main() {
                         await rnd('WINDOW_DELAY');
                         if (config.key !== key) return;
                         if (!bot.currentWindow) {
-                            logWarn('АХ → окна нет после buy');
-                            return;
+                            const waited = await waitForCurrentWindow(2500, key);
+                            if (waited === 'newkey') return;
+                            if (!bot.currentWindow) {
+                                logWarn(`АХ → после buy GUI нет (${lastWindowGone.why || '?'}) → /ah search`);
+                                await safeAH();
+                                return;
+                            }
                         }
                         config.menu = resolveWindowMenu(bot.currentWindow);
                         if (config.menu !== analysisAH) {
@@ -1537,6 +1609,15 @@ async function main() {
 
                     await rnd('WINDOW_DELAY');
                     if (config.key !== key) return;
+                    if (!bot.currentWindow) {
+                        const waited = await waitForCurrentWindow(2500, key);
+                        if (waited === 'newkey') return;
+                        if (!bot.currentWindow) {
+                            logWarn(`АХ → после reload GUI нет (${lastWindowGone.why || '?'}) → /ah search`);
+                            await safeAH();
+                            return;
+                        }
+                    }
 
                     const contentAfter = ahWindowContentKey(bot.currentWindow);
                     if (contentAfter !== contentBefore) {
