@@ -30,6 +30,7 @@ import { handleCaptchaLogin, attachMapCache } from './lib/captcha/solve-flow.mjs
 import {
     ahBuyDelayMs,
     ahGlassDelayMs,
+    ahSuspiciousConfirmDelayMs,
     pickAhBrowseAction,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
@@ -197,10 +198,8 @@ function resolveWindowMenu(win) {
 
     if (windowJSON.includes('хранилище')) return myItems;
     if (windowJSON.includes('телепорт') || windowJSON.includes('телепортации')) return rtp;
-    if (windowJSON.includes('подозрительная цена') ||
-        windowJSON.includes('подтверждение покупки')) {
-        return accept;
-    }
+    if (windowJSON.includes('подозрительная цена')) return suspiciousPrice;
+    if (windowJSON.includes('подтверждение покупки')) return accept;
     return analysisAH;
 }
 
@@ -384,6 +383,7 @@ const analysisAH = 'Анализ аукциона';
 const myItems = 'Хранилище';
 const rtp = 'RTP';
 const accept = 'подтверждение покупки';
+const suspiciousPrice = 'подозрительная цена';
 
 const LOBBY_IGNORE_MS = 60_000;
 const LOBBY_BROADCAST_MARKERS = [
@@ -848,6 +848,41 @@ async function safeClickBuy(bot, slot, time, key, shift = false) {
     const mode = shift ? shiftClick : noShiftClick;
     logInfo(`клик слот ${slot}${shift ? ' (shift)' : ''}`);
     await bot.clickWindow(slot, leftMouseButton, mode);
+}
+
+/** Зелёное/подтвердить; красное и «отмена» пропускаем. Иначе слот 0. */
+function findBuyConfirmSlot(win) {
+    const slots = win?.slots ?? [];
+    const end = Number.isFinite(win?.inventoryStart) ? win.inventoryStart : Math.min(slots.length, 54);
+    for (let i = 0; i < end; i++) {
+        const item = slots[i];
+        if (!item) continue;
+        const name = String(item.name || '').toLowerCase();
+        if (name.includes('red_stained') || name === 'barrier') continue;
+        const blob = JSON.stringify(item).toLowerCase();
+        if (blob.includes('отмен')) continue;
+        if (
+            name.includes('lime') ||
+            name.includes('green_stained') ||
+            blob.includes('подтверд') ||
+            blob.includes('принять') ||
+            blob.includes('купить всё равно')
+        ) {
+            return i;
+        }
+    }
+    return slotGlass;
+}
+
+async function clickBuyConfirm(bot, key, suspicious) {
+    const slot = findBuyConfirmSlot(bot.currentWindow);
+    const delay = suspicious ? ahSuspiciousConfirmDelayMs() : ahGlassDelayMs();
+    logInfo(
+        suspicious
+            ? `окно → подозрительная цена, покупаю слот ${slot} (${delay}мс)`
+            : `окно → подтверждение покупки (слот ${slot})`,
+    );
+    await safeClickBuy(bot, slot, delay, key);
 }
 
 function getSlotInfoSafe(item, slotIndex) {
@@ -1688,9 +1723,8 @@ async function main() {
                 if (!bot.currentWindow) return;
 
                 config.menu = resolveWindowMenu(bot.currentWindow);
-                if (config.menu === accept) {
-                    logInfo('окно → подтверждение покупки (клик glass)');
-                    await safeClickBuy(bot, slotGlass, ahGlassDelayMs(), key);
+                if (config.menu === suspiciousPrice || config.menu === accept) {
+                    await clickBuyConfirm(bot, key, config.menu === suspiciousPrice);
                     return;
                 }
                 if (config.menu === rtp) {
@@ -1794,9 +1828,12 @@ async function main() {
                 await safeAH();
                 break;
               
+            case suspiciousPrice:
+                await clickBuyConfirm(bot, key, true);
+                break;
+
             case accept:
-                logInfo('окно → подтверждение покупки (клик glass)');
-                await safeClickBuy(bot, slotGlass, ahGlassDelayMs(), key);
+                await clickBuyConfirm(bot, key, false);
                 break;
         }
         await rnd('WINDOW_DELAY');
