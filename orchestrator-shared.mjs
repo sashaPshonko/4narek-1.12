@@ -175,6 +175,29 @@ export function collectFleetTypes(bots) {
     return [...types];
 }
 
+/** Все ники этого оркестратора (json + овнер), не только онлайн — для FunAuth без отдельного roster. */
+export function collectOrchRoster(bots, clanOwners = []) {
+    const out = [];
+    const seen = new Set();
+    const push = (username, anarchy) => {
+        const nick = String(username || '').trim();
+        if (!nick) return;
+        const key = `${nick.toLowerCase()}:${anarchy ?? ''}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({ username: nick, anarchy: anarchy ?? null });
+    };
+    if (bots) {
+        for (const bot of bots.values()) {
+            push(bot?.username, bot?.anarchy ?? null);
+        }
+    }
+    for (const o of clanOwners || []) {
+        push(o?.username, o?.anarchy ?? null);
+    }
+    return out;
+}
+
 /** Живые боты по go-типу (для ML / Go) */
 export function collectBotsPerType(bots, workers) {
     const counts = {};
@@ -203,6 +226,7 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
         bots_per_type: collectBotsPerType(bots, workers),
         banned: collectBannedBots(bots, extraBanned),
         clan_owners: clanOwners,
+        bots: collectOrchRoster(bots, clanOwners),
     };
 }
 

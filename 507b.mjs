@@ -12,6 +12,7 @@ import {
     applyPricesToBots,
     clearBotPresence,
     collectFleetTypes,
+    collectOrchRoster,
     buildPresencePayload,
     tryAutoStartBots,
     shouldRestartWorkerOnExit,
@@ -504,7 +505,8 @@ async function initTelegram() {
 function sendFleetToGo() {
     if (!socket || !isSocketOpen) return;
     const types = collectFleetTypes(bots);
-    socket.send(JSON.stringify({ action: 'fleet', types }));
+    const owners = clanOwnerWatch.getOwnerForPresence();
+    socket.send(JSON.stringify({ action: 'fleet', types, bots: collectOrchRoster(bots, owners) }));
     console.log(`[FLEET] → Go: ${types.length ? types.join(', ') : 'пусто'}`);
 }
 
