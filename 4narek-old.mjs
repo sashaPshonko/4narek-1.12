@@ -714,10 +714,36 @@ function ahWindowContentKey(win) {
     return parts.join('|');
 }
 
-/** Новый ключ сессии кликов по АХ (если окно обновилось — старые клики не выполняются) */
+/** Новый ключ: этот windowOpen. Клик не бросаем — дожимаем остаток задержки уже с новым ключом. */
 function generateKey() {
     config.key = Math.random().toString(36).substring(2, 15);
     return config.key;
+}
+
+/** Слот + сколько ждали: глина/новый windowOpen не сбрасывает таймер. */
+let pendingClick = null;
+
+function remainingPendingMs() {
+    if (!pendingClick) return 0;
+    return Math.max(0, pendingClick.totalDelay - (Date.now() - pendingClick.startedAt));
+}
+
+function armPendingClick(slot, time, shift) {
+    const sh = Boolean(shift);
+    if (
+        pendingClick &&
+        pendingClick.slot === slot &&
+        pendingClick.shift === sh
+    ) {
+        return remainingPendingMs();
+    }
+    pendingClick = {
+        slot,
+        startedAt: Date.now(),
+        totalDelay: time,
+        shift: sh,
+    };
+    return time;
 }
 
 function delayMs(range) {
@@ -773,31 +799,27 @@ async function waitForCurrentWindow(maxMs, key = null) {
 
 /** @param {boolean} [shift] — true только при клике по лоту покупки */
 async function safeClickBuy(bot, slot, time, key, shift = false) {
-    let timeDelay = time;
-    if (config.botUpdateWindow) {
-        config.botUpdateWindow = false;
-        config.botStartClickTime = Date.now();
-    } else {
-        timeDelay = time - (Date.now() - config.botStartClickTime);
-        if (timeDelay <= 0) timeDelay = 0;
-    }
+    const timeDelay = armPendingClick(slot, time, shift);
+    config.botUpdateWindow = false;
+    config.botStartClickTime = pendingClick.startedAt;
 
     let remaining = timeDelay;
     while (remaining > 0) {
         if (config.key !== key) {
-            logWarn(`клик слот ${slot} отменён (новое окно)`);
+            logInfo(`клик слот ${slot} → новое окно, остаток ${remaining}мс`);
             return;
         }
         if (!bot.currentWindow) {
             const waited = await waitForCurrentWindow(2000, key);
             if (waited === 'newkey') {
-                logWarn(`клик слот ${slot} отменён (новое окно, пока ждали reopen)`);
+                logInfo(`клик слот ${slot} → новое окно (reopen), остаток ${remainingPendingMs()}мс`);
                 return;
             }
             if (!bot.currentWindow) {
                 logWarn(
                     `клик слот ${slot} — GUI так и нет (${lastWindowGone.why || '?'}, ${Date.now() - lastWindowGone.at}мс назад)`,
                 );
+                pendingClick = null;
                 return;
             }
             logInfo(`клик слот ${slot} — окно вернулось после ${lastWindowGone.why || 'close'}`);
@@ -808,10 +830,11 @@ async function safeClickBuy(bot, slot, time, key, shift = false) {
     }
 
     if (config.key !== key) {
-        logWarn(`клик слот ${slot} отменён (новое окно)`);
+        logInfo(`клик слот ${slot} → новое окно, остаток ${remainingPendingMs()}мс`);
         return;
     }
 
+    pendingClick = null;
     config.botUpdateWindow = true;
     if (!bot.currentWindow) {
         const waited = await waitForCurrentWindow(2000, key);
