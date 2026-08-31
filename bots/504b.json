@@ -1,6 +1,6 @@
 [
   {
-    "username": "zhel5zkaX",
+    "username": "semaPila14",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek-old",
@@ -10,7 +10,7 @@
     "ip": "504-1"
   },
   {
-    "username": "par4Chai9",
+    "username": "burkaNol2",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek-old",
@@ -18,15 +18,5 @@
     "goType": "netherite_pickaxe-1.21",
     "clanBalanceLimit": 10,
     "ip": "504-2"
-  },
-  {
-    "username": "kosaP1ay8",
-    "password": "ggggg",
-    "anarchy": 504,
-    "type": "4narek-old",
-    "item": "netherite pickaxe",
-    "goType": "netherite_pickaxe-1.21",
-    "clanBalanceLimit": 10,
-    "ip": "504-3"
   }
 ]
