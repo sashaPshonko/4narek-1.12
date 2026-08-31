@@ -469,7 +469,7 @@ export async function markBotBanned(username, ctx, reason = '') {
         bot.success = false;
         bot.isManualStop = true;
         if (!bot.bannedAt) bot.bannedAt = new Date().toISOString();
-        if (reason) bot.banReason = String(reason).slice(0, 500);
+        if (reason) bot.banReason = String(reason).slice(0, 2000);
     }
     await stopWorkerNoRestart(username, ctx);
     const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
@@ -656,7 +656,7 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (message?.name === 'banned') {
-        await markBotBanned(username, ctx);
+        await markBotBanned(username, ctx, message.reason || '');
         return true;
     }
     if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {

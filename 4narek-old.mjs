@@ -33,6 +33,7 @@ import {
     pickAhBrowseAction,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
+import { extractBanReason } from './lib/clan-owner-ping.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -1255,7 +1256,11 @@ async function handleChatMessage(text) {
     }
 
     if (text.toLowerCase().includes('вы забанены')) {
-        parentPort.postMessage(`${workerData.username} - забанен`);
+        parentPort.postMessage({
+            name: 'banned',
+            username: workerData.username,
+            reason: extractBanReason(text) || text,
+        });
         return;
     }
     if (text.toLowerCase().includes('чтобы двигаться')) {
