@@ -13,6 +13,7 @@ import {
     getSlotInfo,
     getItemUUID,
     getPriceFromAhItem,
+    AH_FAKE_SLOT_PRICE_MAX,
     findMatchingConfigItem,
     getDurabilityPercent,
     getAllEnchants,
@@ -30,6 +31,7 @@ import { handleCaptchaLogin, attachMapCache } from './lib/captcha/solve-flow.mjs
 import {
     ahBuyDelayMs,
     ahGlassDelayMs,
+    ahFakeSlotBuyDelayMs,
     pickAhBrowseAction,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
@@ -1589,12 +1591,21 @@ async function main() {
                     if (config.key !== key) return;
 
                     if (slotToBuy !== null && slotToBuy <= lastBuyableAHSlot) {
-                        logInfo(`АХ → купить слот ${slotToBuy}`);
+                        const fakeSlot = Boolean(config.ahBuyFakeSlot);
+                        config.ahBuyFakeSlot = false;
+                        const buyWait = fakeSlot
+                            ? ahFakeSlotBuyDelayMs()
+                            : ahBuyDelayMs(slotToBuy);
+                        logInfo(
+                            fakeSlot
+                                ? `АХ → купить слот ${slotToBuy} (низкая цена, ${buyWait}мс)`
+                                : `АХ → купить слот ${slotToBuy}`,
+                        );
                         const contentBeforeBuy = ahWindowContentKey(bot.currentWindow);
                         await safeClickBuy(
                             bot,
                             slotToBuy,
-                            ahBuyDelayMs(slotToBuy),
+                            buyWait,
                             key,
                             true,
                         );
@@ -2383,6 +2394,8 @@ async function getBestAHSlot() {
 
             if (ahPrice >= info.buyPrice) continue;
 
+            const fakeSlot = ahPrice <= AH_FAKE_SLOT_PRICE_MAX;
+
             config.BuyingItem.id = info.id;
             config.BuyingItem.price = ahPrice;
             config.BuyingItem.buyPrice = info.buyPrice;
@@ -2393,11 +2406,14 @@ async function getBestAHSlot() {
 
             if (currentUUID) claimAhLotUuid(currentUUID);
 
+            config.ahBuyFakeSlot = fakeSlot;
             return slot;
         }
 
+        config.ahBuyFakeSlot = false;
         return null;
     } catch (err) {
+        config.ahBuyFakeSlot = false;
         reportError('getBestAHSlot', err);
         return null;
     }

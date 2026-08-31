@@ -414,7 +414,8 @@ export function getItemUUID(item) {
     return uuidArray.join(',');
 }
 
-/** Цена с лора лота на аукционе */
+/** Цена с лора лота на аукционе. ≤ этой — клик 5–10 с (фейк-слот), не скип. */
+export const AH_FAKE_SLOT_PRICE_MAX = 150000;
 export function getPriceFromAhItem(item) {
     const loreComp = item?.components?.find((c) => c?.type === 'lore');
     if (!loreComp || !Array.isArray(loreComp.data)) {
@@ -442,9 +443,8 @@ export function getPriceFromAhItem(item) {
 
         candidates.sort((a, b) => b.score - a.score || b.num - a.num);
         const best = candidates[0].num;
-        // Ниже мин. допустимой выставки на FunTime = ловушка; игрок так не выставит.
-        if (best > 150000) return best;
-        throw new Error(`подозрительная цена ${best} для ${item?.name ?? '?'}`);
+        // ≤150k: FunTime так почти не выставляет (фейк-слот). Цену отдаём, скип — в getBestAHSlot / медленный клик.
+        return best;
     }
 
     throw new Error(`не удалось извлечь цену для ${item?.name ?? '?'}`);
