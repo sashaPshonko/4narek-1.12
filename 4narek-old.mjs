@@ -1,4 +1,6 @@
 import fs from 'fs'
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
 import { rnd, rndPoll } from './delay/delay.mjs';
@@ -147,6 +149,88 @@ function findClanAcceptInRaw(raw) {
     return collectClickCommands(node).find((c) => /^\/clan\s+accept\b/i.test(c)) || null;
 }
 
+/** После /clan leave FunTime шлёт клик `/clan leave true`. */
+function findClanLeaveConfirmInRaw(raw) {
+    if (raw == null || raw === '') return null;
+    let node = raw;
+    if (typeof raw === 'string') {
+        try {
+            node = JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    }
+    const isLeaveTrue = (c) => /^\/clan\s+leave\s+true\b/i.test(c);
+    try {
+        const msg = ChatMessage.fromNotch(raw);
+        const hit = collectClickCommands(msg).find(isLeaveTrue);
+        if (hit) return hit;
+    } catch {
+        /* raw JSON ниже */
+    }
+    return collectClickCommands(node).find(isLeaveTrue) || null;
+}
+
+const OLD_ROOT = dirname(fileURLToPath(import.meta.url));
+const MAX_PERSONAL_BALANCE = 2_500_000_000;
+const CLAN_MEMBERS_MARKER = 'Участники:';
+const CLAN_BALANCE_CHAT_MARKER = 'Баланс клана:';
+const CLAN_WITHDRAW_MID = ' снял $';
+const CLAN_WITHDRAW_TAIL = ' из казны';
+
+let pendingClanLeaveConfirm = null;
+let clanLeaderNick = null;
+let clanMembersList = null;
+let clanTreasuryBal = null;
+let selfWithdrawSeen = false;
+let notInClanHint = false;
+let foreignClanLeaveBusy = false;
+
+function nickInChat(text, nick) {
+    const esc = String(nick || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!esc) return false;
+    return new RegExp(`\\b${esc}\\b`, 'i').test(String(text || ''));
+}
+
+function parseClanLeaderFromChat(text) {
+    if (!text?.includes(CLAN_MEMBERS_MARKER)) return null;
+    const m = String(text).match(/\[Лидер\]\s*([a-zA-Z0-9_]{3,16})/i);
+    return m ? m[1] : null;
+}
+
+function parseClanMembersFromChat(text) {
+    if (!text?.includes(CLAN_MEMBERS_MARKER)) return null;
+    const idx = text.indexOf(CLAN_MEMBERS_MARKER);
+    const tail = text.slice(idx + CLAN_MEMBERS_MARKER.length);
+    const names = [];
+    const re = /\][\s]*([a-zA-Z0-9_]{3,16})/g;
+    let m;
+    while ((m = re.exec(tail)) !== null) names.push(m[1]);
+    return names.length ? names : null;
+}
+
+function parseClanTreasuryFromChat(text) {
+    if (!text?.includes(CLAN_BALANCE_CHAT_MARKER)) return null;
+    const m = String(text).match(/Баланс клана:\s*([\d.\s\u00a0,$]+)/i);
+    const n = m ? digitsToInt(m[1]) : NaN;
+    return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function expectedClanOwnerNick() {
+    try {
+        const raw = fs.readFileSync(join(OLD_ROOT, 'clan-owners.json'), 'utf8');
+        const owners = JSON.parse(raw);
+        const row = owners[String(config.anarchy)];
+        return String(row?.username || '').trim();
+    } catch {
+        return '';
+    }
+}
+
+function sleepMs(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
 function setupChatSafeGuard(bot) {
     const client = bot._client;
     if (!client) return;
@@ -158,6 +242,8 @@ function setupChatSafeGuard(bot) {
         const raw = data?.formattedMessage ?? data?.content ?? data?.unsignedContent;
         const text = chatTextFromRaw(data);
         if (text) void onBotChatText(text);
+        const leaveConfirm = findClanLeaveConfirmInRaw(raw);
+        if (leaveConfirm) pendingClanLeaveConfirm = leaveConfirm;
         const accept = findClanAcceptInRaw(raw);
         if (accept) void handleClanInviteAccept(accept);
     };
@@ -1058,7 +1144,28 @@ function maybeRestoreGoPresenceFromBalance() {
 }
 
 async function handleChatMessage(text) {
+    const treasury = parseClanTreasuryFromChat(text);
+    if (treasury != null) clanTreasuryBal = treasury;
+    const leader = parseClanLeaderFromChat(text);
+    if (leader) clanLeaderNick = leader;
+    const members = parseClanMembersFromChat(text);
+    if (members) clanMembersList = members;
+    if (
+        text.includes('Игрок')
+        && text.includes(CLAN_WITHDRAW_MID)
+        && text.includes(CLAN_WITHDRAW_TAIL)
+        && nickInChat(text, config.username)
+    ) {
+        selfWithdrawSeen = true;
+        logOk(`снятие из казны: ${text.slice(0, 120)}`);
+    }
+
     if (text.includes(CLAN_HELP_MARKER) || text.includes(CLAN_NO_PERMS_MARKER)) {
+        if (text.includes(CLAN_HELP_MARKER)) notInClanHint = true;
+        if (foreignClanLeaveBusy) {
+            logWarn(`clan → ${text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms'} (foreign leave)`);
+            return;
+        }
         const reason = text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms';
         logWarn(`clan → ${reason} → clan-setup an${config.anarchy}`);
         parentPort.postMessage({
@@ -1319,6 +1426,10 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.includes(CLAN_TREASURY_LOW)) {
+        if (foreignClanLeaveBusy) {
+            logWarn('казна: сумма больше баланса / пусто — глянем казну ещё раз');
+            return;
+        }
         if (!treasuryEmptyReported) {
             treasuryEmptyReported = true;
             logWarn('казна пуста → presence inactive для Go');
@@ -1490,13 +1601,14 @@ async function main() {
     bot.once('spawn', async () => {
         bot.physicsEnabled = true;
         botWorkerStartTime = Date.now();
-        logOk('spawn → /reg → /l → sellItems → safeAH');
+        logOk('spawn → /reg → /l → clan check → sellItems → safeAH');
         await rnd('BASE_DELAY');
         // тупо всегда: сначала reg, потом login (если уже зареган — сервер просто ответит)
         bot.chat(`/reg ${config.password}`);
         await rnd('BASE_DELAY');
         bot.chat(`/l ${config.password}`);
         config.timeJoinAnarchy = 0;
+        await maybeLeaveForeignClan();
         await sellItems();
         await safeAH();
     });
@@ -1857,6 +1969,118 @@ async function joinAnarchy(gen = null) {
             }
         }
         if (config.timeJoinAnarchy && config.timeJoinAnarchy === joinedAt) return;
+    }
+}
+
+async function waitChatFlag(pred, ms) {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+        if (pred()) return true;
+        await sleepMs(400);
+    }
+    return pred();
+}
+
+async function refreshPersonalBalance(waitMs = 12_000) {
+    config.balance = null;
+    const deadline = Date.now() + waitMs;
+    while (config.balance == null && Date.now() < deadline) {
+        if (!bot?.chat) return null;
+        bot.chat('/balance');
+        await rnd('BASE_DELAY');
+    }
+    return config.balance;
+}
+
+async function refreshClanTreasury(waitMs = 12_000) {
+    clanTreasuryBal = null;
+    const deadline = Date.now() + waitMs;
+    let triedBalance = false;
+    while (clanTreasuryBal == null && Date.now() < deadline) {
+        if (!bot?.chat) return null;
+        bot.chat('/clan money');
+        await rnd('BASE_DELAY');
+        if (clanTreasuryBal == null && !triedBalance) {
+            triedBalance = true;
+            bot.chat('/clan balance');
+            await rnd('BASE_DELAY');
+        }
+    }
+    return clanTreasuryBal;
+}
+
+/** Чужой клан: снять в лимит 2.5 млрд и /clan leave true. */
+async function maybeLeaveForeignClan() {
+    if (!bot?.chat) return;
+    foreignClanLeaveBusy = true;
+    notInClanHint = false;
+    clanLeaderNick = null;
+    clanMembersList = null;
+    clanTreasuryBal = null;
+    selfWithdrawSeen = false;
+    pendingClanLeaveConfirm = null;
+    try {
+        await joinAnarchy();
+        logInfo('/clan info…');
+        bot.chat('/clan info');
+        await waitChatFlag(() => Boolean(clanLeaderNick || notInClanHint), 12_000);
+        if (notInClanHint) {
+            logInfo('клана нет — leave skip');
+            return;
+        }
+        if (!clanLeaderNick) {
+            logWarn('/clan info — нет лидера, leave skip');
+            return;
+        }
+        const owner = expectedClanOwnerNick();
+        if (!owner) {
+            logWarn(`an${config.anarchy}: нет username в clan-owners.json — leave skip`);
+            return;
+        }
+        logInfo(`клан лидер ${clanLeaderNick} (ожидаем ${owner})`);
+        if (clanLeaderNick.toLowerCase() === owner.toLowerCase()) return;
+
+        logWarn(`чужой клан → казна → leave`);
+        for (let attempt = 1; attempt <= 4; attempt++) {
+            const personal = await refreshPersonalBalance();
+            const room = MAX_PERSONAL_BALANCE - (Number.isFinite(personal) ? personal : 0);
+            if (room <= 0) {
+                logWarn(`личный баланс ${personal} ≥ ${MAX_PERSONAL_BALANCE} — снимать некуда`);
+                break;
+            }
+            let treasury = await refreshClanTreasury();
+            if (treasury == null) {
+                logWarn('казна: нет ответа');
+                break;
+            }
+            if (treasury <= 0) {
+                logInfo('казна пуста');
+                break;
+            }
+            const take = Math.min(treasury, room);
+            selfWithdrawSeen = false;
+            logInfo(`попытка ${attempt}: /clan withdraw ${take} (казна ${treasury}, место ${room})`);
+            bot.chat(`/clan withdraw ${take}`);
+            const ok = await waitChatFlag(() => selfWithdrawSeen, 10_000);
+            if (ok) {
+                const after = Number.isFinite(config.balance) ? config.balance + take : null;
+                if (after != null) config.balance = after;
+                continue;
+            }
+            logWarn('нет «Игрок … снял $… из казны» — ещё раз казна');
+            await refreshClanTreasury();
+        }
+
+        pendingClanLeaveConfirm = null;
+        logInfo('/clan leave');
+        bot.chat('/clan leave');
+        await waitChatFlag(() => Boolean(pendingClanLeaveConfirm), 8_000);
+        const confirm = pendingClanLeaveConfirm || '/clan leave true';
+        logInfo(confirm);
+        bot.chat(confirm);
+        await rnd('BASE_DELAY');
+    } finally {
+        foreignClanLeaveBusy = false;
     }
 }
 
