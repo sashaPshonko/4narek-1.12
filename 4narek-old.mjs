@@ -587,6 +587,8 @@ const config = {
     needAdd: false,
     timeActive: Date.now(),
     lastClanInvestAt: 0,
+    ownerBanDrain: false,
+    ownerBanLeaveDone: false,
     ip: workerData.ip,
 };
 
@@ -1162,8 +1164,8 @@ async function handleChatMessage(text) {
 
     if (text.includes(CLAN_HELP_MARKER) || text.includes(CLAN_NO_PERMS_MARKER)) {
         if (text.includes(CLAN_HELP_MARKER)) notInClanHint = true;
-        if (foreignClanLeaveBusy) {
-            logWarn(`clan → ${text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms'} (foreign leave)`);
+        if (foreignClanLeaveBusy || config.ownerBanDrain) {
+            logWarn(`clan → ${text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms'} (leave/owner ban)`);
             return;
         }
         const reason = text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms';
@@ -1426,7 +1428,7 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.includes(CLAN_TREASURY_LOW)) {
-        if (foreignClanLeaveBusy) {
+        if (foreignClanLeaveBusy || config.ownerBanDrain) {
             logWarn('казна: сумма больше баланса / пусто — глянем казну ещё раз');
             return;
         }
@@ -1487,6 +1489,16 @@ parentPort.on('message', (data) => {
             config.catalogAll = data.catalogAll;
         }
         maybeRestoreGoPresenceFromBalance();
+    }
+    if (data.type === 'owner_banned') {
+        if (!config.ownerBanDrain) {
+            config.ownerBanDrain = true;
+            generateKey();
+            logWarn(
+                `овнер забанен${data.owner ? ` (${data.owner})` : ''} → прерываю АХ, казна и leave`,
+            );
+        }
+        return;
     }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
@@ -1621,6 +1633,11 @@ async function main() {
                 return;
             }
         }
+        if (config.ownerBanDrain) {
+            config.timeActive = Date.now();
+            await drainTreasuryAndLeaveClan();
+            return;
+        }
         if (Date.now() - config.timeActive > 60000) {
             // Не закрывать АХ «осмотром»: in-place reload не даёт windowOpen → timeActive не тикает.
             if (bot.currentWindow) {
@@ -1634,6 +1651,11 @@ async function main() {
     })
 
     bot.on('windowOpen', async () => {
+        if (config.ownerBanDrain) {
+            await closeCurrentWindowSafe();
+            await drainTreasuryAndLeaveClan();
+            return;
+        }
         config.timeActive = Date.now();
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
@@ -1649,6 +1671,13 @@ async function main() {
                 let staleAhReported = false;
                 let staleContentPasses = 0;
                 for (;;) {
+                    if (config.ownerBanDrain) {
+                        logWarn('АХ → овнер бан, выхожу');
+                        await closeCurrentWindowSafe();
+                        generateKey();
+                        await drainTreasuryAndLeaveClan();
+                        return;
+                    }
                     if (config.key !== key) return;
                     config.timeActive = Date.now();
                     if (!bot.currentWindow) {
@@ -2009,9 +2038,10 @@ async function refreshClanTreasury(waitMs = 12_000) {
     return clanTreasuryBal;
 }
 
-/** Чужой клан: снять в лимит 2.5 млрд и /clan leave true. */
-async function maybeLeaveForeignClan() {
+/** Казна (лимит 2.5 млрд) и /clan leave true. skipIfOurClan — старт: свой овнер не трогаем. */
+async function drainTreasuryAndLeaveClan({ skipIfOurClan = false } = {}) {
     if (!bot?.chat) return;
+    if (config.ownerBanLeaveDone) return;
     foreignClanLeaveBusy = true;
     notInClanHint = false;
     clanLeaderNick = null;
@@ -2026,21 +2056,26 @@ async function maybeLeaveForeignClan() {
         await waitChatFlag(() => Boolean(clanLeaderNick || notInClanHint), 12_000);
         if (notInClanHint) {
             logInfo('клана нет — leave skip');
+            if (config.ownerBanDrain) config.ownerBanLeaveDone = true;
             return;
         }
         if (!clanLeaderNick) {
             logWarn('/clan info — нет лидера, leave skip');
             return;
         }
-        const owner = expectedClanOwnerNick();
-        if (!owner) {
-            logWarn(`an${config.anarchy}: нет username в clan-owners.json — leave skip`);
-            return;
+        if (skipIfOurClan) {
+            const owner = expectedClanOwnerNick();
+            if (!owner) {
+                logWarn(`an${config.anarchy}: нет username в clan-owners.json — leave skip`);
+                return;
+            }
+            logInfo(`клан лидер ${clanLeaderNick} (ожидаем ${owner})`);
+            if (clanLeaderNick.toLowerCase() === owner.toLowerCase()) return;
+            logWarn(`чужой клан → казна → leave`);
+        } else {
+            logWarn(`казна → leave (овнер бан / принудительно)`);
         }
-        logInfo(`клан лидер ${clanLeaderNick} (ожидаем ${owner})`);
-        if (clanLeaderNick.toLowerCase() === owner.toLowerCase()) return;
 
-        logWarn(`чужой клан → казна → leave`);
         for (let attempt = 1; attempt <= 4; attempt++) {
             const personal = await refreshPersonalBalance();
             const room = MAX_PERSONAL_BALANCE - (Number.isFinite(personal) ? personal : 0);
@@ -2079,9 +2114,14 @@ async function maybeLeaveForeignClan() {
         logInfo(confirm);
         bot.chat(confirm);
         await rnd('BASE_DELAY');
+        if (config.ownerBanDrain) config.ownerBanLeaveDone = true;
     } finally {
         foreignClanLeaveBusy = false;
     }
+}
+
+async function maybeLeaveForeignClan() {
+    await drainTreasuryAndLeaveClan({ skipIfOurClan: true });
 }
 
 function isSellSessionAlive(gen) {
@@ -2156,6 +2196,10 @@ async function sellItems() {
     config.timeActive = Date.now();
     logOk('продажа → старт');
     try {
+        if (config.ownerBanDrain) {
+            await drainTreasuryAndLeaveClan();
+            return;
+        }
         config.needSell = false;
         config.needSendAH = true;
         await joinAnarchy(gen);
@@ -2217,6 +2261,7 @@ async function sellItems() {
                 && currentSlot <= lastHotbarSlot
                 && !config.hasDangerousTrash
                 && isSellSessionAlive(gen)
+                && !config.ownerBanDrain
             ) {
                 if (currentSlot > lastHotbarSlot) {
                     currentSlot = firstHotbarSlot;
@@ -2358,7 +2403,9 @@ async function sellItems() {
                     currentSlot++;
                 }
             }
-            if (!config.hasDangerousTrash && isSellSessionAlive(gen)) {
+            if (config.ownerBanDrain) {
+                await drainTreasuryAndLeaveClan();
+            } else if (!config.hasDangerousTrash && isSellSessionAlive(gen)) {
                 await safeBalance();
                 const saveSum = getSaveSum();
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
@@ -2534,6 +2581,10 @@ async function antiAfkIfNeeded(shouldAbort = null) {
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
 async function safeAH() {
+    if (config.ownerBanDrain) {
+        await drainTreasuryAndLeaveClan();
+        return;
+    }
     logOk('safeAH → старт');
     if (!bot) return;
     if (bot.currentWindow) logInfo('safeAH → закрываю окно');
@@ -2548,6 +2599,10 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
+        if (config.ownerBanDrain) {
+            await drainTreasuryAndLeaveClan();
+            return;
+        }
         if (config.afk) logAfk('режим AFK (safeAH)');
         searchCount++;
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
@@ -2573,6 +2628,7 @@ async function safeBalance() {
     config.botUpdateWindow = true;
 
     while (config.balance === null) {
+        if (config.ownerBanDrain) return;
         await antiAfkIfNeeded();
         await rnd('AH_CMD');
         config.menu = analysisAH;

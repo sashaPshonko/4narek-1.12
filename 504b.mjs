@@ -38,6 +38,7 @@ import {
     createListingStore,
     createWarpCoordinator,
     handleWorkerWarpPick,
+    notifyWorkersOwnerBanned,
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 
@@ -618,7 +619,11 @@ async function main() {
     await initTelegram();
     await loadBotsConfig();
     connectWebSocket();
-    clanOwnerWatch.start({ pushPresenceToGo, sendAlert });
+    clanOwnerWatch.start({
+        pushPresenceToGo,
+        sendAlert,
+        notifyWorkersOwnerBanned: (info) => notifyWorkersOwnerBanned(workers, safePostMessage, info),
+    });
     setTimeout(() => scheduleAutoStart('boot'), 1500);
     console.log('📌 боты стартуют сами (без Go — пустой список товаров)');
 }

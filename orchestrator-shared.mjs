@@ -696,6 +696,22 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     return false;
 }
 
+/** Пинг овнера увидел бан — всем живым воркерам этой анки. */
+export function notifyWorkersOwnerBanned(workers, safePostMessage, info = {}) {
+    if (!workers || typeof safePostMessage !== 'function') return 0;
+    let n = 0;
+    for (const nick of workers.keys()) {
+        if (safePostMessage(nick, { type: 'owner_banned', ...info })) n++;
+    }
+    if (n) {
+        console.log(
+            `[clan-owner] owner_banned → ${n} воркер(ов)` +
+                (info.owner ? ` (${info.owner})` : ''),
+        );
+    }
+    return n;
+}
+
 /** Сумма предметов только от живых ботов (мёртвые = 0 в отчёте) */
 export function collectPresenceItemCounts(bots, workers, botItems, botInventory) {
     const itemsCount = new Map();
