@@ -474,19 +474,35 @@ export function getAhSellerNick(item) {
 }
 
 function looksLikeMcNick(t) {
-    return /^[A-Za-z0-9_]{3,16}$/.test(t);
+    if (!/^[A-Za-z0-9_]{3,16}$/.test(t)) return false;
+    const low = t.toLowerCase();
+    if (low === 'string' || low === 'compound' || low === 'list' || low === 'byte' || low === 'int') {
+        return false;
+    }
+    return true;
 }
 
 function collectLoreTextValues(node, out) {
-    if (node == null) return;
-    if (Array.isArray(node)) {
-        for (const x of node) collectLoreTextValues(x, out);
-        return;
-    }
-    if (typeof node !== 'object') return;
-    if (typeof node.text === 'string') out.push(node.text);
-    else if (typeof node.text?.value === 'string') out.push(node.text.value);
-    for (const v of Object.values(node)) collectLoreTextValues(v, out);
+	if (node == null) return;
+	if (typeof node === 'string') {
+		out.push(node);
+		return;
+	}
+	if (Array.isArray(node)) {
+		for (const x of node) collectLoreTextValues(x, out);
+		return;
+	}
+	if (typeof node !== 'object') return;
+	// FunTime: extra.value = { type: 'string', value: ['psychowhore'] }
+	if (node.type === 'string' && Array.isArray(node.value)) {
+		for (const s of node.value) {
+			if (typeof s === 'string') out.push(s);
+		}
+		return;
+	}
+	if (typeof node.text === 'string') out.push(node.text);
+	else if (typeof node.text?.value === 'string') out.push(node.text.value);
+	for (const v of Object.values(node)) collectLoreTextValues(v, out);
 }
 
 function walkSellerNick(node, found) {
@@ -538,4 +554,31 @@ export function describeAhBookLot(item, catalogAll) {
         seller: getAhSellerNick(item),
         enchants: getAllEnchants(item),
     };
+}
+
+/** Слоты окна АХ → лоты в книгу (без своих ников). extraItem — лот, который кликаем. */
+export function collectAhBookLots(windowSlots, firstSlot, lastSlot, catalogAll, { skipSeller, extraItem } = {}) {
+    const lots = [];
+    const seen = new Set();
+    const me = String(skipSeller || '').trim().toLowerCase();
+    const push = (item) => {
+        if (!item) return;
+        let lot;
+        try {
+            lot = describeAhBookLot(item, catalogAll);
+        } catch {
+            return;
+        }
+        if (!lot?.uuid || seen.has(lot.uuid)) return;
+        if (lot.seller && lot.seller.trim().toLowerCase() === me) return;
+        seen.add(lot.uuid);
+        lots.push(lot);
+    };
+    if (windowSlots) {
+        for (let slot = firstSlot; slot <= lastSlot; slot++) {
+            push(windowSlots[slot]);
+        }
+    }
+    push(extraItem);
+    return lots;
 }

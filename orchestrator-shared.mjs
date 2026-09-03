@@ -101,10 +101,9 @@ export const MARKET_FLOOR_CHECK_MS = 30 * 1000;
 /** Допуск на джиттер таймеров (воркер / оркестратор / сеть) */
 export const MARKET_FLOOR_WINDOW_SLACK_MS = 5000;
 
-export function forwardAhLotToGo(socket, isOpen, lot) {
-    if (!socket || !isOpen || !lot?.uuid || !lot.item_id) return false;
-    socket.send(JSON.stringify({
-        action: 'ah_lot',
+export function forwardAhLotsToGo(socket, isOpen, lots) {
+    if (!socket || !isOpen || !Array.isArray(lots) || lots.length === 0) return false;
+    const rows = lots.filter((lot) => lot?.uuid && lot.item_id).map((lot) => ({
         uuid: lot.uuid,
         go_type: lot.go_type,
         item_id: lot.item_id,
@@ -115,6 +114,8 @@ export function forwardAhLotToGo(socket, isOpen, lot) {
         anarchy: lot.anarchy,
         seen_by: lot.seen_by || '',
     }));
+    if (!rows.length) return false;
+    socket.send(JSON.stringify({ action: 'ah_lots', lots: rows }));
     return true;
 }
 

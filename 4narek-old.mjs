@@ -21,7 +21,7 @@ import {
     getAllEnchants,
     isBotTradeItem,
     setEnchantRegistry,
-    describeAhBookLot,
+    collectAhBookLots,
 } from './items/slotInfo.mjs';
 import { pricesMatch } from './items/listing-memory.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
@@ -952,36 +952,27 @@ function getSlotInfoSafe(item, slotIndex) {
 
 const ahBookSentUuids = new Set();
 
-function reportAhBookLots() {
-    if (!bot?.currentWindow?.slots) return;
-    const me = String(config.username || '').trim().toLowerCase();
-    for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
-        const slotData = bot.currentWindow.slots[slot];
-        if (!slotData) continue;
-        let lot;
-        try {
-            lot = describeAhBookLot(slotData, config.catalogAll);
-        } catch {
-            continue;
-        }
-        if (!lot?.uuid) continue;
-        if (lot.seller && lot.seller.trim().toLowerCase() === me) continue;
+function flushAhBookLots(extraItem) {
+    const raw = collectAhBookLots(
+        bot?.currentWindow?.slots,
+        firstAHSlot,
+        lastAHSlot,
+        config.catalogAll,
+        { skipSeller: config.username, extraItem },
+    );
+    const lots = [];
+    for (const lot of raw) {
         if (ahBookSentUuids.has(lot.uuid)) continue;
         ahBookSentUuids.add(lot.uuid);
-        if (ahBookSentUuids.size > 40000) ahBookSentUuids.clear();
-        parentPort.postMessage({
-            name: 'ah_lot',
-            uuid: lot.uuid,
-            go_type: lot.go_type,
-            item_id: lot.item_id,
-            price: lot.price,
-            durability: lot.durability,
-            seller: lot.seller,
-            enchants: lot.enchants,
+        lots.push({
+            ...lot,
             anarchy: workerData.anarchy,
             seen_by: config.username,
         });
     }
+    if (ahBookSentUuids.size > 40000) ahBookSentUuids.clear();
+    if (!lots.length) return;
+    parentPort.postMessage({ name: 'ah_lots', lots });
 }
 
 /**
@@ -2679,9 +2670,9 @@ async function safeBalance() {
 async function getBestAHSlot() {
     try {
         if (!bot?.currentWindow?.slots) return null;
-        reportAhBookLots();
-
-        for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
+        let buyItem = null;
+        try {
+            for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
             const slotData = bot.currentWindow.slots[slot];
             if (!slotData) continue;
 
@@ -2723,11 +2714,15 @@ async function getBestAHSlot() {
             if (currentUUID) claimAhLotUuid(currentUUID);
 
             config.ahBuyFakeSlot = fakeSlot;
+            buyItem = slotData;
             return slot;
-        }
+            }
 
-        config.ahBuyFakeSlot = false;
-        return null;
+            config.ahBuyFakeSlot = false;
+            return null;
+        } finally {
+            flushAhBookLots(buyItem);
+        }
     } catch (err) {
         config.ahBuyFakeSlot = false;
         reportError('getBestAHSlot', err);
