@@ -27,11 +27,87 @@ function named(text, extra = {}) {
     };
 }
 
+function splitName(parts) {
+    return {
+        name: 'netherite_helmet',
+        components: [
+            {
+                type: 'custom_name',
+                data: {
+                    type: 'compound',
+                    value: {
+                        extra: {
+                            type: 'list',
+                            value: {
+                                type: 'compound',
+                                value: parts.map((t) => ({
+                                    text: { type: 'string', value: t },
+                                })),
+                            },
+                        },
+                        text: { type: 'string', value: '' },
+                    },
+                },
+            },
+        ],
+    };
+}
+
+function loreOriginal() {
+    const parts = ['О', 'ригинальн', 'ый', ' ', 'п', 'редмет'];
+    return {
+        name: 'netherite_boots',
+        components: [
+            {
+                type: 'custom_name',
+                data: {
+                    type: 'compound',
+                    value: {
+                        extra: {
+                            type: 'list',
+                            value: {
+                                type: 'compound',
+                                value: [{ text: { type: 'string', value: 'by TE_AMO' } }],
+                            },
+                        },
+                        text: { type: 'string', value: '' },
+                    },
+                },
+            },
+            {
+                type: 'lore',
+                data: [
+                    {
+                        extra: {
+                            type: 'list',
+                            value: {
+                                type: 'compound',
+                                value: parts.map((t) => ({
+                                    text: { type: 'string', value: t },
+                                })),
+                            },
+                        },
+                    },
+                ],
+            },
+        ],
+    };
+}
+
 test('crusher custom_name skipped', () => {
     assert.equal(isFunTimeCrusherItem(named('Меч крушителя')), true);
     assert.equal(isFunTimeCrusherItem(named('Шлем крушителя')), true);
     assert.equal(isFunTimeCrusherItem(named('***psychowhore***')), false);
     assert.equal(isFunTimeCrusherItem({ name: 'netherite_sword', displayName: 'Netherite Sword' }), false);
+});
+
+test('split custom_name Шлем Крушителя', () => {
+    const item = splitName(['xxx', ' ', 'Ш', 'л', 'е', 'м', ' ', 'К', 'ру', 'ш', 'и', 'т', 'е', 'л', 'я', ' ', 'xxx']);
+    assert.equal(isFunTimeCrusherItem(item), true);
+});
+
+test('renamed original lore still crusher', () => {
+    assert.equal(isFunTimeCrusherItem(loreOriginal()), true);
 });
 
 test('crusher does not match catalog', () => {

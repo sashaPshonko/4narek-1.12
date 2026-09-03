@@ -258,22 +258,63 @@ function itemMatchesConfigEntry(item, configItem, allEnchants) {
     return true;
 }
 
-/** Сет «крушителя»: custom_name/лор, не ванильный netherite. В каталог и книгу АХ не берём. */
-export function isFunTimeCrusherItem(item) {
-    if (!item) return false;
+function collectItemChatTexts(item) {
     const texts = [];
-    const nameComp = item.components?.find((c) => c?.type === 'custom_name');
-    if (nameComp) collectLoreTextValues(nameComp.data, texts);
-    const loreComp = item.components?.find((c) => c?.type === 'lore');
-    if (loreComp) collectLoreTextValues(loreComp.data, texts);
-    for (const extra of [item.customName, item.displayName]) {
+    const nameComp = item?.components?.find((c) => c?.type === 'custom_name');
+    if (nameComp) collectChatTextLeaves(nameComp.data, texts);
+    const loreComp = item?.components?.find((c) => c?.type === 'lore');
+    if (loreComp) collectChatTextLeaves(loreComp.data, texts);
+    for (const extra of [item?.customName, item?.displayName]) {
         if (typeof extra === 'string') texts.push(extra);
-        else if (extra && typeof extra.toString === 'function') {
-            const s = extra.toString();
-            if (s && s !== '[object Object]') texts.push(s);
+        else if (extra && typeof extra === 'object') collectChatTextLeaves(extra, texts);
+    }
+    return texts;
+}
+
+/** Только содержимое text/value, без ключей type: compound|string|list. */
+function collectChatTextLeaves(node, out) {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+        for (const x of node) collectChatTextLeaves(x, out);
+        return;
+    }
+    if (typeof node !== 'object') return;
+    if (typeof node.text === 'string') {
+        if (node.text) out.push(node.text);
+    } else if (typeof node.text?.value === 'string') {
+        if (node.text.value) out.push(node.text.value);
+    } else if (node.type === 'string') {
+        if (typeof node.value === 'string' && node.value) out.push(node.value);
+        else if (Array.isArray(node.value)) {
+            for (const s of node.value) {
+                if (typeof s === 'string' && s) out.push(s);
+            }
         }
     }
-    return texts.some((s) => /крушител/i.test(String(s)));
+    for (const [k, v] of Object.entries(node)) {
+        if (k === 'type' || k === 'text') continue;
+        if (node.type === 'string' && k === 'value') continue;
+        collectChatTextLeaves(v, out);
+    }
+}
+
+/** FunTime режет «Шлем Крушителя» по extra.text (К+ру+ш+…). Смотрим склейку, не куски. */
+export function flattenItemChatText(item) {
+    return collectItemChatTexts(item)
+        .map((s) => String(s))
+        .filter((s) => s && !/^#/.test(s))
+        .join('');
+}
+
+/**
+ * Сет крушителя: имя после склейки («…Крушителя…»).
+ * Переименованные лоты: в лоре «Оригинальный предмет» (у наших AH этого нет).
+ */
+export function isFunTimeCrusherItem(item) {
+    if (!item) return false;
+    const blob = flattenItemChatText(item);
+    if (/крушител/i.test(blob)) return true;
+    return /оригинальн.*предмет/i.test(blob);
 }
 
 /** Лучший id по num среди всего каталога (все go-типы). */
