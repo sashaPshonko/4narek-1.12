@@ -449,3 +449,93 @@ export function getPriceFromAhItem(item) {
 
     throw new Error(`не удалось извлечь цену для ${item?.name ?? '?'}`);
 }
+
+/** Книга АХ: битые лоты не пишем — продавцы часто ставят цену как у целых. */
+export const AH_BOOK_MIN_DURABILITY = 0.9;
+
+function loreLooksLikeSellerLabel(s) {
+    const n = String(s)
+        .toLowerCase()
+        .replace(/a/g, 'а')
+        .replace(/e/g, 'е')
+        .replace(/o/g, 'о')
+        .replace(/p/g, 'р')
+        .replace(/c/g, 'с');
+    return n.includes('продавец');
+}
+
+/** Ник из лора («Продавец:» + extra «Beyermy»). */
+export function getAhSellerNick(item) {
+    const loreComp = item?.components?.find((c) => c?.type === 'lore');
+    if (!loreComp || !Array.isArray(loreComp.data)) return '';
+    const found = [];
+    walkSellerNick(loreComp.data, found);
+    return found[0] || '';
+}
+
+function looksLikeMcNick(t) {
+    return /^[A-Za-z0-9_]{3,16}$/.test(t);
+}
+
+function collectLoreTextValues(node, out) {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+        for (const x of node) collectLoreTextValues(x, out);
+        return;
+    }
+    if (typeof node !== 'object') return;
+    if (typeof node.text === 'string') out.push(node.text);
+    else if (typeof node.text?.value === 'string') out.push(node.text.value);
+    for (const v of Object.values(node)) collectLoreTextValues(v, out);
+}
+
+function walkSellerNick(node, found) {
+    if (found.length || node == null) return;
+    if (Array.isArray(node)) {
+        for (const x of node) walkSellerNick(x, found);
+        return;
+    }
+    if (typeof node !== 'object') return;
+    const label = node.text?.value ?? node.text;
+    if (typeof label === 'string' && loreLooksLikeSellerLabel(label)) {
+        const extra = node.extra?.value?.value ?? node.extra;
+        const names = [];
+        collectLoreTextValues(extra, names);
+        const nick = names.map((s) => String(s).trim()).find((t) => looksLikeMcNick(t));
+        if (nick) {
+            found.push(nick);
+            return;
+        }
+    }
+    for (const v of Object.values(node)) walkSellerNick(v, found);
+}
+
+/**
+ * Лот в книгу: матч по зачарам конфига, цена любая (в т.ч. дороже нашего buy).
+ * @returns {null|{ uuid, go_type, item_id, price, durability, seller, enchants }}
+ */
+export function describeAhBookLot(item, catalogAll) {
+    if (!item) return null;
+    const uuid = getItemUUID(item);
+    if (!uuid) return null;
+    const durability = getDurabilityPercent(item);
+    if (durability < AH_BOOK_MIN_DURABILITY) return null;
+    const cfg = findBestMatchingConfigItem(item, catalogAll);
+    if (!cfg?.id || !cfg.type) return null;
+    let price;
+    try {
+        price = getPriceFromAhItem(item);
+    } catch {
+        return null;
+    }
+    if (!Number.isFinite(price) || price <= AH_FAKE_SLOT_PRICE_MAX) return null;
+    return {
+        uuid,
+        go_type: cfg.type,
+        item_id: cfg.id,
+        price: Math.round(price),
+        durability: Math.round(durability * 1000) / 1000,
+        seller: getAhSellerNick(item),
+        enchants: getAllEnchants(item),
+    };
+}

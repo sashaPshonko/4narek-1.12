@@ -101,6 +101,23 @@ export const MARKET_FLOOR_CHECK_MS = 30 * 1000;
 /** Допуск на джиттер таймеров (воркер / оркестратор / сеть) */
 export const MARKET_FLOOR_WINDOW_SLACK_MS = 5000;
 
+export function forwardAhLotToGo(socket, isOpen, lot) {
+    if (!socket || !isOpen || !lot?.uuid || !lot.item_id) return false;
+    socket.send(JSON.stringify({
+        action: 'ah_lot',
+        uuid: lot.uuid,
+        go_type: lot.go_type,
+        item_id: lot.item_id,
+        price: lot.price,
+        durability: lot.durability,
+        seller: lot.seller || '',
+        enchants: Array.isArray(lot.enchants) ? lot.enchants : [],
+        anarchy: lot.anarchy,
+        seen_by: lot.seen_by || '',
+    }));
+    return true;
+}
+
 export const GO_WS_URL_REMOTE = 'ws://212.8.229.76:8080/ws';
 export const GO_WS_URL_LOCAL = 'ws://127.0.0.1:8080/ws';
 

@@ -21,6 +21,7 @@ import {
     terminateWorkerEntry,
     createMarketFloorTracker,
     sendMarketFloorsToGo,
+    forwardAhLotToGo,
     getWorkerHealthStats,
     formatBotAlert,
     buildTelegramAlertText,
@@ -282,6 +283,8 @@ async function runWorker(bot) {
                                 price: message.price 
                             }));
                         }
+                    } else if (message.name === 'ah_lot') {
+                        forwardAhLotToGo(socket, isSocketOpen, message);
                     } else if (message.name === 'ah_market_floor') {
                         marketFloorTracker.mergeFromWorker(message);
                     } else if (message && typeof message === 'object' && message.name) {
