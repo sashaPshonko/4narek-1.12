@@ -9,10 +9,10 @@ import { catalogTypeMatchesGoType } from '../lib/go-type.mjs';
 const forbiddenEnchantsByType = {
     netherite_sword: ['heavy', 'unstable'],
     diamond_sword: ['heavy', 'unstable'],
-    netherite_helmet: ['minecraft:thorns'],
-    netherite_chestplate: ['minecraft:thorns'],
-    netherite_leggings: ['minecraft:thorns'],
-    netherite_boots: ['minecraft:thorns'],
+    netherite_helmet: ['minecraft:thorns', 'minecraft:mending'],
+    netherite_chestplate: ['minecraft:thorns', 'minecraft:mending'],
+    netherite_leggings: ['minecraft:thorns', 'minecraft:mending'],
+    netherite_boots: ['minecraft:thorns', 'minecraft:mending'],
     netherite_pickaxe: ['heavy', 'unstable'],
     elytra: [],
 };

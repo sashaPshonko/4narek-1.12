@@ -122,3 +122,33 @@ test('crusher does not match catalog', () => {
     ];
     assert.equal(findBestMatchingConfigItem(named('Меч крушителя'), catalog), null);
 });
+
+test('armor with mending is not catalog match', () => {
+    const catalog = [
+        {
+            id: 'шлем-1.21',
+            type: 'netherite_armor-1.21',
+            name: 'netherite_helmet',
+            num: 2,
+            effects: [
+                { name: 'minecraft:unbreaking', lvl: 4 },
+                { name: 'minecraft:protection', lvl: 5 },
+            ],
+        },
+    ];
+    const baseEnch = [
+        { name: 'minecraft:unbreaking', lvl: 4 },
+        { name: 'minecraft:protection', lvl: 5 },
+    ];
+    assert.equal(
+        findBestMatchingConfigItem({ name: 'netherite_helmet', enchants: baseEnch }, catalog)?.id,
+        'шлем-1.21',
+    );
+    assert.equal(
+        findBestMatchingConfigItem(
+            { name: 'netherite_helmet', enchants: [...baseEnch, { name: 'minecraft:mending', lvl: 1 }] },
+            catalog,
+        ),
+        null,
+    );
+});
