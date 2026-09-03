@@ -258,9 +258,27 @@ function itemMatchesConfigEntry(item, configItem, allEnchants) {
     return true;
 }
 
+/** Сет «крушителя»: custom_name/лор, не ванильный netherite. В каталог и книгу АХ не берём. */
+export function isFunTimeCrusherItem(item) {
+    if (!item) return false;
+    const texts = [];
+    const nameComp = item.components?.find((c) => c?.type === 'custom_name');
+    if (nameComp) collectLoreTextValues(nameComp.data, texts);
+    const loreComp = item.components?.find((c) => c?.type === 'lore');
+    if (loreComp) collectLoreTextValues(loreComp.data, texts);
+    for (const extra of [item.customName, item.displayName]) {
+        if (typeof extra === 'string') texts.push(extra);
+        else if (extra && typeof extra.toString === 'function') {
+            const s = extra.toString();
+            if (s && s !== '[object Object]') texts.push(s);
+        }
+    }
+    return texts.some((s) => /крушител/i.test(String(s)));
+}
+
 /** Лучший id по num среди всего каталога (все go-типы). */
 export function findBestMatchingConfigItem(item, catalogAll) {
-    if (!item) return null;
+    if (!item || isFunTimeCrusherItem(item)) return null;
     const candidates = catalogCandidates(catalogAll);
     if (!candidates.length) return null;
 
