@@ -9,10 +9,10 @@ import { catalogTypeMatchesGoType } from '../lib/go-type.mjs';
 const forbiddenEnchantsByType = {
     netherite_sword: ['heavy', 'unstable'],
     diamond_sword: ['heavy', 'unstable'],
-    netherite_helmet: ['minecraft:thorns', 'minecraft:mending'],
-    netherite_chestplate: ['minecraft:thorns', 'minecraft:mending'],
-    netherite_leggings: ['minecraft:thorns', 'minecraft:mending'],
-    netherite_boots: ['minecraft:thorns', 'minecraft:mending'],
+    netherite_helmet: ['minecraft:thorns'],
+    netherite_chestplate: ['minecraft:thorns'],
+    netherite_leggings: ['minecraft:thorns'],
+    netherite_boots: ['minecraft:thorns'],
     netherite_pickaxe: ['heavy', 'unstable'],
     elytra: [],
 };
@@ -585,6 +585,23 @@ function walkSellerNick(node, found) {
     for (const v of Object.values(node)) walkSellerNick(v, found);
 }
 
+const ahBookArmorNames = new Set([
+    'netherite_helmet',
+    'netherite_chestplate',
+    'netherite_leggings',
+    'netherite_boots',
+]);
+
+function itemHasMending(item) {
+    return getAllEnchants(item).some((e) => normalizeEnchantName(e?.name) === 'minecraft:mending');
+}
+
+/** Книга АХ: броня с починкой не шлём в Go (матч закупа не трогаем). */
+export function skipAhBookArmorMending(item, cfg) {
+    if (!cfg || !ahBookArmorNames.has(cfg.name)) return false;
+    return itemHasMending(item);
+}
+
 /**
  * Лот в книгу: матч по зачарам конфига, цена любая (в т.ч. дороже нашего buy).
  * @returns {null|{ uuid, go_type, item_id, price, durability, seller, enchants }}
@@ -597,6 +614,7 @@ export function describeAhBookLot(item, catalogAll) {
     if (durability < AH_BOOK_MIN_DURABILITY) return null;
     const cfg = findBestMatchingConfigItem(item, catalogAll);
     if (!cfg?.id || !cfg.type) return null;
+    if (skipAhBookArmorMending(item, cfg)) return null;
     let price;
     try {
         price = getPriceFromAhItem(item);

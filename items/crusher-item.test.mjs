@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isFunTimeCrusherItem, findBestMatchingConfigItem } from './slotInfo.mjs';
+import { isFunTimeCrusherItem, findBestMatchingConfigItem, skipAhBookArmorMending } from './slotInfo.mjs';
 
 function named(text, extra = {}) {
     return {
@@ -123,7 +123,7 @@ test('crusher does not match catalog', () => {
     assert.equal(findBestMatchingConfigItem(named('Меч крушителя'), catalog), null);
 });
 
-test('armor with mending is not catalog match', () => {
+test('armor mending still matches catalog but skipped for AH book', () => {
     const catalog = [
         {
             id: 'шлем-1.21',
@@ -136,19 +136,22 @@ test('armor with mending is not catalog match', () => {
             ],
         },
     ];
-    const baseEnch = [
-        { name: 'minecraft:unbreaking', lvl: 4 },
-        { name: 'minecraft:protection', lvl: 5 },
-    ];
+    const withMend = {
+        name: 'netherite_helmet',
+        enchants: [
+            { name: 'minecraft:unbreaking', lvl: 4 },
+            { name: 'minecraft:protection', lvl: 5 },
+            { name: 'minecraft:mending', lvl: 1 },
+        ],
+    };
+    const cfg = findBestMatchingConfigItem(withMend, catalog);
+    assert.equal(cfg?.id, 'шлем-1.21');
+    assert.equal(skipAhBookArmorMending(withMend, cfg), true);
     assert.equal(
-        findBestMatchingConfigItem({ name: 'netherite_helmet', enchants: baseEnch }, catalog)?.id,
-        'шлем-1.21',
-    );
-    assert.equal(
-        findBestMatchingConfigItem(
-            { name: 'netherite_helmet', enchants: [...baseEnch, { name: 'minecraft:mending', lvl: 1 }] },
-            catalog,
+        skipAhBookArmorMending(
+            { name: 'netherite_helmet', enchants: [{ name: 'minecraft:protection', lvl: 5 }] },
+            cfg,
         ),
-        null,
+        false,
     );
 });
