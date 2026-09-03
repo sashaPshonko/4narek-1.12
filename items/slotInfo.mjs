@@ -4,6 +4,7 @@ import {
     resolveFuntimeEnchantId,
 } from './funtime-enchants.mjs';
 import { catalogTypeMatchesGoType } from '../lib/go-type.mjs';
+import { CRUSHER_KITS } from './funtime-crusher-kits.mjs';
 
 /** Запрещённые чары по minecraft-типу (name в каталоге). Исключения — forbidden_effects у id в items_config.json */
 const forbiddenEnchantsByType = {
@@ -307,19 +308,36 @@ export function flattenItemChatText(item) {
 }
 
 /**
- * Сет крушителя: имя после склейки («…Крушителя…»).
- * Переименованные лоты: в лоре «Оригинальный предмет» (у наших AH этого нет).
+ * Имя после склейки («Шлем Крушителя»). Не лор «оригинальный предмет» — его нет на всех лотах.
  */
 export function isFunTimeCrusherItem(item) {
     if (!item) return false;
-    const blob = flattenItemChatText(item);
-    if (/крушител/i.test(blob)) return true;
-    return /оригинальн.*предмет/i.test(blob);
+    return /крушител/i.test(flattenItemChatText(item));
+}
+
+/** Все defaultEnchants крушителя на этом minecraft-типе (уровень ≥). */
+export function itemMatchesCrusherKit(item) {
+    if (!item?.name || !CRUSHER_KITS?.length) return false;
+    const have = getAllEnchants(item);
+    for (const kit of CRUSHER_KITS) {
+        if (kit.matchName !== item.name || !kit.enchants?.length) continue;
+        const ok = kit.enchants.every((req) => {
+            const found = have.find((e) => enchantNamesMatch(e?.name, req.id));
+            return found && found.lvl >= req.level;
+        });
+        if (ok) return true;
+    }
+    return false;
+}
+
+/** Книга АХ: крушитель не шлём в Go (матч закупа не трогаем). */
+export function skipAhBookCrusher(item) {
+    return isFunTimeCrusherItem(item) || itemMatchesCrusherKit(item);
 }
 
 /** Лучший id по num среди всего каталога (все go-типы). */
 export function findBestMatchingConfigItem(item, catalogAll) {
-    if (!item || isFunTimeCrusherItem(item)) return null;
+    if (!item) return null;
     const candidates = catalogCandidates(catalogAll);
     if (!candidates.length) return null;
 
@@ -615,6 +633,7 @@ export function describeAhBookLot(item, catalogAll) {
     const cfg = findBestMatchingConfigItem(item, catalogAll);
     if (!cfg?.id || !cfg.type) return null;
     if (skipAhBookArmorMending(item, cfg)) return null;
+    if (skipAhBookCrusher(item)) return null;
     let price;
     try {
         price = getPriceFromAhItem(item);

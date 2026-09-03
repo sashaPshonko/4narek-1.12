@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isFunTimeCrusherItem, findBestMatchingConfigItem, skipAhBookArmorMending } from './slotInfo.mjs';
+import { isFunTimeCrusherItem, findBestMatchingConfigItem, skipAhBookArmorMending, skipAhBookCrusher, itemMatchesCrusherKit } from './slotInfo.mjs';
 
 function named(text, extra = {}) {
     return {
@@ -106,11 +106,12 @@ test('split custom_name Шлем Крушителя', () => {
     assert.equal(isFunTimeCrusherItem(item), true);
 });
 
-test('renamed original lore still crusher', () => {
-    assert.equal(isFunTimeCrusherItem(loreOriginal()), true);
+test('renamed original lore is not enough', () => {
+    assert.equal(isFunTimeCrusherItem(loreOriginal()), false);
+    assert.equal(skipAhBookCrusher(loreOriginal()), false);
 });
 
-test('crusher does not match catalog', () => {
+test('named crusher skipped for AH book, catalog match unchanged', () => {
     const catalog = [
         {
             id: 'megasword-яд3-1.21',
@@ -120,7 +121,38 @@ test('crusher does not match catalog', () => {
             effects: [],
         },
     ];
-    assert.equal(findBestMatchingConfigItem(named('Меч крушителя'), catalog), null);
+    const item = named('Меч крушителя');
+    assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'megasword-яд3-1.21');
+    assert.equal(skipAhBookCrusher(item), true);
+});
+
+test('crusher helmet kit by enchants skips AH book', () => {
+    const item = {
+        name: 'netherite_helmet',
+        enchants: [
+            { name: 'minecraft:protection', lvl: 5 },
+            { name: 'minecraft:blast_protection', lvl: 5 },
+            { name: 'minecraft:fire_protection', lvl: 5 },
+            { name: 'minecraft:projectile_protection', lvl: 5 },
+            { name: 'minecraft:respiration', lvl: 3 },
+            { name: 'minecraft:aqua_affinity', lvl: 1 },
+            { name: 'minecraft:unbreaking', lvl: 5 },
+            { name: 'minecraft:mending', lvl: 1 },
+        ],
+    };
+    assert.equal(itemMatchesCrusherKit(item), true);
+    assert.equal(skipAhBookCrusher(item), true);
+    assert.equal(isFunTimeCrusherItem(item), false);
+    assert.equal(
+        itemMatchesCrusherKit({
+            name: 'netherite_helmet',
+            enchants: [
+                { name: 'minecraft:protection', lvl: 5 },
+                { name: 'minecraft:unbreaking', lvl: 4 },
+            ],
+        }),
+        false,
+    );
 });
 
 test('armor mending still matches catalog but skipped for AH book', () => {
