@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
-import { rnd, rndPoll } from './delay/delay.mjs';
+import { rnd, rndPoll, initBotDelayProfile } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -36,8 +36,12 @@ import {
     ahGlassDelayMs,
     ahFakeSlotBuyDelayMs,
     pickAhBrowseAction,
+    initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
+import { runAntiAfkMotion } from './lib/afk-look.mjs';
+import { patchWalking121 } from './lib/walk-121.mjs';
+import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
 
 process.on('uncaughtException', (err) => {
@@ -232,6 +236,63 @@ function sleepMs(ms) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Не совмещать осмотр мыши с chat/кликами.
+ * bot.chat ставится в очередь и ждёт конца look; look ждёт flush chat + паузу после команды.
+ */
+let lookLock = false;
+let lastChatAt = 0;
+let lastLookAt = 0;
+let chatChain = Promise.resolve();
+
+function installPlayerActionGate(bot) {
+    if (!bot || bot._actionGateInstalled) return;
+    bot._actionGateInstalled = true;
+    const origChat = bot.chat.bind(bot);
+    bot.chat = (message) => {
+        chatChain = chatChain
+            .then(async () => {
+                while (lookLock) {
+                    await sleepMs(40);
+                }
+                const sinceLook = lastLookAt ? Date.now() - lastLookAt : 9999;
+                if (sinceLook < 280) {
+                    await sleepMs(280 - sinceLook);
+                }
+                origChat(message);
+                lastChatAt = Date.now();
+            })
+            .catch((err) => reportError('gatedChat', err));
+    };
+}
+
+/** Дождаться очереди chat и отсутствия осмотра. */
+async function waitActionsSettled(shouldAbort = null) {
+    await chatChain;
+    const start = Date.now();
+    while (lookLock) {
+        if (typeof shouldAbort === 'function' && shouldAbort()) return false;
+        if (Date.now() - start > 20000) {
+            logWarn('lookLock timeout → снимаю');
+            lookLock = false;
+            break;
+        }
+        await sleepMs(40);
+    }
+    return !(typeof shouldAbort === 'function' && shouldAbort());
+}
+
+/** Пауза после последней команды, чтобы look не наложился на /warp,/ah и т.п. */
+async function pauseAfterChatBeforeLook(shouldAbort = null) {
+    await chatChain;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return false;
+    if (!lastChatAt) return true;
+    const need = 550 + Math.floor(Math.random() * 750); // 0.55–1.3 с
+    const left = need - (Date.now() - lastChatAt);
+    if (left > 0) await sleepMs(left);
+    return !(typeof shouldAbort === 'function' && shouldAbort());
+}
+
 function setupChatSafeGuard(bot) {
     const client = bot._client;
     if (!client) return;
@@ -308,6 +369,7 @@ const CONFIG_BLOCKED_PACKETS = new Set([
     'window_click', 'close_window',
     'arm_animation', 'entity_action',
     'held_item_slot', 'set_creative_slot',
+    'player_input', 'tick_end',
 ]);
 
 let configTransferStartedAt = 0;
@@ -436,21 +498,6 @@ function isHotbarSlot(slot) {
     return slot >= firstHotbarSlot && slot <= lastHotbarSlot;
 }
 
-/** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
-const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
-/** Доля полного круга (~0.15 ≈ 54°, ~90 шагов, ~4–5 с). */
-const LOOK_SPIN_TURNS = 0.15;
-/** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
-const LOOK_SPIN_AVG_YAW_UNITS = 4;
-/** Длительность осмотра (мс): случайно от 3 до 4 с на каждый вызов. */
-const LOOK_SPIN_TIMEOUT_MIN_MS = 3000;
-const LOOK_SPIN_TIMEOUT_MAX_MS = 4000;
-
-function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
-    const totalTurn = Math.PI * 2 * turns;
-    return Math.ceil(totalTurn / (LOOK_SPIN_AVG_YAW_UNITS * LOOK_GCD_STEP));
-}
-
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
 function hotbarSlotToQuick(slot) {
     if (!isHotbarSlot(slot)) {
@@ -536,12 +583,15 @@ async function handleClanInviteAccept(acceptCmd) {
     if (!acceptCmd || clanAcceptBusy || !bot) return;
     clanAcceptBusy = true;
     try {
+        // не принимать клан поверх осмотра / в середине клика
+        await waitActionsSettled();
         // сбрасываем текущий windowOpen-цикл (АХ и т.п.)
         config.key = generateKey();
         logOk(`клан → закрываю окно, ${acceptCmd}`);
         await closeCurrentWindowSafe();
         await rnd('BASE_DELAY');
         bot.chat(acceptCmd);
+        await chatChain;
         await rnd('BASE_DELAY');
         await sellItems();
         await safeAH();
@@ -592,6 +642,9 @@ const config = {
     ownerBanLeaveDone: false,
     ip: workerData.ip,
 };
+
+initBotDelayProfile(config.username);
+initAhTempo(config.username);
 
 var bot = null;
 /** UUID лотов в очереди: { uuid, username } */
@@ -890,6 +943,8 @@ async function waitForCurrentWindow(maxMs, key = null) {
 
 /** @param {boolean} [shift] — true только при клике по лоту покупки */
 async function safeClickBuy(bot, slot, time, key, shift = false) {
+    if (!(await waitActionsSettled(() => config.key !== key))) return;
+    await waitForEventLoopOk({ log: (m) => logWarn(m) });
     const timeDelay = armPendingClick(slot, time, shift);
     config.botUpdateWindow = false;
     config.botStartClickTime = pendingClick.startedAt;
@@ -938,6 +993,7 @@ async function safeClickBuy(bot, slot, time, key, shift = false) {
     }
     const mode = shift ? shiftClick : noShiftClick;
     logInfo(`клик слот ${slot}${shift ? ' (shift)' : ''}`);
+    if (!(await waitActionsSettled(() => config.key !== key))) return;
     await bot.clickWindow(slot, leftMouseButton, mode);
 }
 
@@ -1595,6 +1651,8 @@ async function main() {
         },
     });
     setEnchantRegistry();
+    patchWalking121(bot);
+    installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
 
@@ -2268,6 +2326,7 @@ async function sellItems() {
                     bot.chat(`/warp ${warp}`);
                     config.lastWarp = warp;
                     config.lastWarpTime = Date.now();
+                    // lookAroundSpin сам ждёт flush chat + паузу после команды
                 }
             }
 
@@ -2332,6 +2391,10 @@ async function sellItems() {
                         }
                         await bot.setQuickBarSlot(quick);
                     }
+                    // hotbar → пауза → осмотр (если AFK) → sell; без наложений
+                    if (bot.quickBarSlot === quick) {
+                        await sleepMs(180 + Math.floor(Math.random() * 320));
+                    }
                     await antiAfkIfNeeded(() => !isSellSessionAlive(gen));
                     if (!isSellSessionAlive(gen)) return;
                     if (slotGone()) {
@@ -2380,7 +2443,11 @@ async function sellItems() {
                             config.enoughItems = true;
                             break;
                         }
+                        await waitForEventLoopOk({ log: (m) => logWarn(m) });
+                        await waitActionsSettled(() => !isSellSessionAlive(gen));
+                        if (!isSellSessionAlive(gen)) return;
                         bot.chat(`/ah sell ${listPrice}`);
+                        await chatChain;
                         let ack = await waitSellListAck();
                         if (!isSellSessionAlive(gen)) return;
                         if (ack === 'timeout') {
@@ -2499,6 +2566,8 @@ async function moveToHotBar() {
                         break;
                     }
                     try {
+                        await waitForEventLoopOk({ log: (m) => logWarn(m) });
+                        await waitActionsSettled();
                         await rnd('BASE_DELAY');
                         await bot.moveSlotItem(src, slot);
                     } catch (err) {
@@ -2547,56 +2616,46 @@ function isBotInventoryFull() {
     }
 }
 
-/** Осмотр: от текущего yaw/pitch сервера, мелкие GCD-шаги, фикс. число итераций. */
+/** Anti-AFK motion: look и/или WASD под lock (не пересекается с chat/кликами). */
 async function lookAroundSpin(shouldAbort = null) {
-    if (!bot?.entity) return;
+    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
-    const startedAt = Date.now();
-    const startPitch = bot.entity.pitch;
-    const maxPitch = (Math.PI / 2) * 0.22;
-    const turnDir = Math.random() < 0.5 ? -1 : 1;
-    const steps = lookAroundSpinStepCount();
-    const plannedDeg = LOOK_SPIN_TURNS * 360;
-    const timeoutMs =
-        LOOK_SPIN_TIMEOUT_MIN_MS +
-        Math.floor(Math.random() * (LOOK_SPIN_TIMEOUT_MAX_MS - LOOK_SPIN_TIMEOUT_MIN_MS + 1));
-    const deadline = startedAt + timeoutMs;
-    let doneSteps = 0;
-
-    for (let i = 0; i < steps; i++) {
-        if (Date.now() >= deadline) break;
-        if (typeof shouldAbort === 'function' && shouldAbort()) break;
-
-        const yawUnits = 2 + Math.floor(Math.random() * 5);
-        const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
-
-        let pitch = bot.entity.pitch;
-        if (Math.random() < 0.15) {
-            const pitchUnits = 1 + Math.floor(Math.random() * 2);
-            pitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
-            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+    await waitForEventLoopOk({ log: (m) => logWarn(m) });
+    const prevPhysics = bot.physicsEnabled;
+    bot.physicsEnabled = true;
+    lookLock = true;
+    try {
+        // периодический «осмотр» в sell тоже может быть wasd — тот же пул планов
+        await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort);
+    } finally {
+        try {
+            for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
+                bot.setControlState(key, false);
+            }
+        } catch {
+            /* ignore */
         }
-
-        await bot.look(yaw, pitch, false);
-        doneSteps++;
+        lookLock = false;
+        lastLookAt = Date.now();
+        bot.physicsEnabled = prevPhysics;
     }
-
-    const elapsedSec = (Date.now() - startedAt) / 1000;
-    const timedOut = doneSteps < steps;
-    logOk(
-        `ОСМОТР ${doneSteps}/${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с` +
-        (timedOut ? ` (таймаут ${(timeoutMs / 1000).toFixed(1)}с)` : '') +
-        ` pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
-    );
+    // короткая пауза после motion, прежде чем снова chat/клик
+    const after = 220 + Math.floor(Math.random() * 380);
+    const deadline = Date.now() + after;
+    while (Date.now() < deadline) {
+        if (typeof shouldAbort === 'function' && shouldAbort()) break;
+        await sleepMs(Math.min(50, deadline - Date.now()));
+    }
     config.walkTime = Date.now();
 }
 
-/** Сход с AFK — крутим головой. */
+/** Сход с AFK — look/WASD (через lookAroundSpin → runAntiAfkMotion). */
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
-    logAfk('сходу с AFK → осмотр');
+    logAfk('сходу с AFK → motion');
 
     await closeCurrentWindowSafe();
 

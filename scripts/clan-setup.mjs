@@ -16,6 +16,7 @@ import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { handleCaptchaLogin, attachMapCache, isCaptchaChat } from '../lib/captcha/solve-flow.mjs';
 import { antiAfkIfNeeded, lookAroundSpin } from '../lib/afk-look.mjs';
+import { patchWalking121 } from '../lib/walk-121.mjs';
 import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
 import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
 import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
@@ -360,6 +361,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
     });
 
     attachMapCache(bot);
+    patchWalking121(bot);
     setupConfigurationTransferFix(bot);
 
     bot.on('scoreboardCreated', (scoreboard) => {

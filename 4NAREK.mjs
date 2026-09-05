@@ -31,6 +31,8 @@ import {
     pickAhBrowseAction,
     pickAhReloadSlot,
 } from './lib/ah-buy-tempo.mjs';
+import { lookAroundSpin as lookAroundSpinLib } from './lib/afk-look.mjs';
+import { patchWalking121 } from './lib/walk-121.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -326,21 +328,6 @@ function isStorageSlot(slot) {
 
 function isHotbarSlot(slot) {
     return slot >= firstHotbarSlot && slot <= lastHotbarSlot;
-}
-
-/** Шаг мыши vanilla 100% — GCD как в mineflayer bot.look (плавные look-пакеты). */
-const LOOK_GCD_STEP = 0.15 * (Math.PI / 180);
-/** Доля полного круга (~0.15 ≈ 54°, ~90 шагов, ~4–5 с). */
-const LOOK_SPIN_TURNS = 0.15;
-/** Средний размер yaw-шага (GCD) для расчёта числа итераций. */
-const LOOK_SPIN_AVG_YAW_UNITS = 4;
-/** Длительность осмотра (мс): случайно от 3 до 4 с на каждый вызов. */
-const LOOK_SPIN_TIMEOUT_MIN_MS = 3000;
-const LOOK_SPIN_TIMEOUT_MAX_MS = 4000;
-
-function lookAroundSpinStepCount(turns = LOOK_SPIN_TURNS) {
-    const totalTurn = Math.PI * 2 * turns;
-    return Math.ceil(totalTurn / (LOOK_SPIN_AVG_YAW_UNITS * LOOK_GCD_STEP));
 }
 
 /** Слот инвентаря хотбара (36–44) → quickBar (0–8). 36→0, 37→1, … 44→8 */
@@ -1045,6 +1032,7 @@ async function main() {
         },
     });
 
+    patchWalking121(bot);
     setupConfigurationTransferFix(bot);
 
     bot.once('inject_allowed', () => {
@@ -1721,47 +1709,11 @@ function hasBotItem() {
     }
 }
 
-/** Осмотр: от текущего yaw/pitch сервера, мелкие GCD-шаги, фикс. число итераций. */
+/** Осмотр: сегменты с разными dir/скоростью (lib/afk-look), GCD-пакеты как vanilla. */
 async function lookAroundSpin() {
     if (!bot?.entity) return;
-
     bot.physicsEnabled = true;
-    const startedAt = Date.now();
-    const startPitch = bot.entity.pitch;
-    const maxPitch = (Math.PI / 2) * 0.22;
-    const turnDir = Math.random() < 0.5 ? -1 : 1;
-    const steps = lookAroundSpinStepCount();
-    const plannedDeg = LOOK_SPIN_TURNS * 360;
-    const timeoutMs =
-        LOOK_SPIN_TIMEOUT_MIN_MS +
-        Math.floor(Math.random() * (LOOK_SPIN_TIMEOUT_MAX_MS - LOOK_SPIN_TIMEOUT_MIN_MS + 1));
-    const deadline = startedAt + timeoutMs;
-    let doneSteps = 0;
-
-    for (let i = 0; i < steps; i++) {
-        if (Date.now() >= deadline) break;
-
-        const yawUnits = 2 + Math.floor(Math.random() * 5);
-        const yaw = bot.entity.yaw + turnDir * yawUnits * LOOK_GCD_STEP;
-
-        let pitch = bot.entity.pitch;
-        if (Math.random() < 0.15) {
-            const pitchUnits = 1 + Math.floor(Math.random() * 2);
-            pitch += (Math.random() < 0.5 ? -1 : 1) * pitchUnits * LOOK_GCD_STEP;
-            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
-        }
-
-        await bot.look(yaw, pitch, false);
-        doneSteps++;
-    }
-
-    const elapsedSec = (Date.now() - startedAt) / 1000;
-    const timedOut = doneSteps < steps;
-    logOk(
-        `ОСМОТР ${doneSteps}/${steps} шаг. ~${plannedDeg.toFixed(0)}° за ${elapsedSec.toFixed(1)}с` +
-        (timedOut ? ` (таймаут ${(timeoutMs / 1000).toFixed(1)}с)` : '') +
-        ` pitch ±${(Math.abs(bot.entity.pitch - startPitch) * 180 / Math.PI).toFixed(1)}°`
-    );
+    await lookAroundSpinLib(bot, (msg) => logOk(msg));
     config.walkTime = Date.now();
 }
 

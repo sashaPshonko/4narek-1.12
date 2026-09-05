@@ -42,6 +42,7 @@ import {
     notifyWorkersOwnerBanned,
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
+import { runWorkersStaggered } from './lib/bot-tempo.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
     onFlush(floors, meta) {
@@ -429,13 +430,13 @@ async function startBots() {
 
         sendFleetToGo();
 
-        for (const bot of bots.values()) {
-            if (bot.banned) continue;
-            const live = workers.get(bot.username);
-            if (live?.worker) continue;
-            if (pendingRestarts.has(bot.username)) continue;
-            await runWorker(bot);
-        }
+        await runWorkersStaggered({
+            bots,
+            workers,
+            pendingRestarts,
+            runWorker,
+            log: console.log,
+        });
 
     } catch (error) {
         await sendAlert(`❌ Ошибка запуска ботов: ${error.message}`);
