@@ -248,6 +248,13 @@ let chatChain = Promise.resolve();
 function installPlayerActionGate(bot) {
     if (!bot || bot._actionGateInstalled) return;
     bot._actionGateInstalled = true;
+    // bot.chat появляется только когда mineflayer инжектит плагины (inject_allowed)
+    if (typeof bot.chat === 'function') wrapChat(bot);
+    else bot.once('inject_allowed', () => wrapChat(bot));
+}
+
+function wrapChat(bot) {
+    if (typeof bot.chat !== 'function') return;
     const origChat = bot.chat.bind(bot);
     bot.chat = (message) => {
         chatChain = chatChain
