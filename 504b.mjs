@@ -18,6 +18,8 @@ import {
     shouldRestartWorkerOnExit,
     getWorkerRestartDelayMs,
     handleWorkerKicked,
+    authFaultKindFromExitCode,
+    markBotAuthFault,
     terminateWorkerEntry,
     createMarketFloorTracker,
     sendMarketFloorsToGo,
@@ -335,6 +337,12 @@ async function runWorker(bot) {
                 const workerData = workers.get(username);
                 if (workerData?.timeoutId) clearTimeout(workerData.timeoutId);
                 workers.delete(username);
+
+                const faultKind = authFaultKindFromExitCode(code);
+                if (faultKind) {
+                    void markBotAuthFault(username, workerStatusCtx(), faultKind, bot.lastKickReason || `exit ${code}`);
+                    return;
+                }
 
                 if (!bot.isManualStop && !bot.authFault && !bot.banned && !isShuttingDown) {
                     const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason);

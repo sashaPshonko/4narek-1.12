@@ -44,7 +44,7 @@ import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
-import { isWrongPasswordText } from './lib/auth-fault.mjs';
+import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -1497,7 +1497,7 @@ async function handleChatMessage(text) {
             username: workerData.username,
             reason: text,
         });
-        setTimeout(() => process.exit(1), 300);
+        setTimeout(() => process.exit(EXIT_BAD_PASSWORD), 300);
         return;
     }
     if (text.toLowerCase().includes('чтобы двигаться')) {
@@ -1672,7 +1672,7 @@ async function main() {
                         });
                     } catch { /* parent gone */ }
                     // process.exit сразу после postMessage может дропнуть сообщение родителю
-                    setTimeout(() => process.exit(1), 400);
+                    setTimeout(() => process.exit(EXIT_PROXY_ERROR), 400);
                     return;
                 }
                 client.setSocket(info.socket);
@@ -1718,7 +1718,7 @@ async function main() {
             }
         } catch { /* parent gone */ }
         // immediate exit дропает bad_password у parent (worker_threads)
-        if (authFault) setTimeout(() => process.exit(1), 400);
+        if (authFault) setTimeout(() => process.exit(EXIT_BAD_PASSWORD), 400);
         else process.exit(1);
     });
     bot.on('end', (reason) => {

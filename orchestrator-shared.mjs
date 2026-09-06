@@ -9,6 +9,17 @@ import { proxyHostFromString } from './lib/proxy-host.mjs';
 import {
     AUTH_FAULT_BAD_PASSWORD,
     AUTH_FAULT_PROXY,
+    authFaultKindFromExitCode,
+    authFaultLabel,
+    isWrongPasswordText,
+} from './lib/auth-fault.mjs';
+
+export {
+    AUTH_FAULT_BAD_PASSWORD,
+    AUTH_FAULT_PROXY,
+    EXIT_BAD_PASSWORD,
+    EXIT_PROXY_ERROR,
+    authFaultKindFromExitCode,
     authFaultLabel,
     isWrongPasswordText,
 } from './lib/auth-fault.mjs';
