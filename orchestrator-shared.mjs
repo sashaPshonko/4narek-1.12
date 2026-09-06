@@ -13,6 +13,10 @@ import {
     authFaultLabel,
     isWrongPasswordText,
 } from './lib/auth-fault.mjs';
+import {
+    STAFF_CHECK_EVACUATE_MS,
+    isStaffCheckText,
+} from './lib/staff-check.mjs';
 
 export {
     AUTH_FAULT_BAD_PASSWORD,
@@ -23,6 +27,11 @@ export {
     authFaultLabel,
     isWrongPasswordText,
 } from './lib/auth-fault.mjs';
+
+export {
+    STAFF_CHECK_EVACUATE_MS,
+    isStaffCheckText,
+} from './lib/staff-check.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -485,12 +494,16 @@ export const ALERT_KIND = {
     VPN: 'vpn',
     UNKNOWN: 'unknown',
     AUTH: 'auth',
+    STAFF_CHECK: 'staff_check',
 };
 
 /** Тип алерта для @тега (бан / капча / vpn / неведомая / пароль-прокси). */
 export function classifyWorkerAlert(message) {
     if (message == null) return null;
     const lower = String(message).toLowerCase();
+    if (isStaffCheckText(message) || lower.includes('проверку читов') || lower.includes('staff check')) {
+        return ALERT_KIND.STAFF_CHECK;
+    }
     if (lower.includes('забанен')) return ALERT_KIND.BAN;
     if (lower.includes('неверный пароль') || lower.includes('ошибка прокси')) return ALERT_KIND.AUTH;
     if (lower.includes('ввести капчу') || lower.includes('капч')) return ALERT_KIND.CAPTCHA;
@@ -797,6 +810,10 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         await markBotAuthFault(username, ctx, AUTH_FAULT_PROXY, message.reason || '');
         return true;
     }
+    if (message?.name === 'staff_check') {
+        await handleStaffCheckReport(username, ctx, message.reason || '');
+        return true;
+    }
     if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {
         await markBotBanned(username, ctx);
         return true;
@@ -828,6 +845,73 @@ export function notifyWorkersOwnerBanned(workers, safePostMessage, info = {}) {
         );
     }
     return n;
+}
+
+/** Staff SS-check — /hub всей анки на STAFF_CHECK_EVACUATE_MS. */
+let staffEvacuateUntil = 0;
+let staffEvacuateTimer = null;
+
+export function notifyWorkersStaffCheck(workers, safePostMessage, info = {}) {
+    if (!workers || typeof safePostMessage !== 'function') return 0;
+    let n = 0;
+    for (const nick of workers.keys()) {
+        if (safePostMessage(nick, { type: 'staff_check_evacuate', ...info })) n++;
+    }
+    return n;
+}
+
+export async function handleStaffCheckReport(username, ctx, reason = '') {
+    const now = Date.now();
+    const until = Math.max(staffEvacuateUntil, now + STAFF_CHECK_EVACUATE_MS);
+    const already = staffEvacuateUntil > now;
+    staffEvacuateUntil = until;
+
+    const n = notifyWorkersStaffCheck(ctx.workers, (nick, msg) => {
+        const entry = ctx.workers?.get(nick);
+        if (!entry?.worker || entry.worker.terminated) return false;
+        try {
+            entry.worker.postMessage(msg);
+            return true;
+        } catch {
+            return false;
+        }
+    }, {
+        from: username,
+        until,
+        reason: String(reason || '').slice(0, 500),
+    });
+
+    for (const nick of ctx.workers?.keys?.() || []) {
+        const bot = ctx.bots?.get(nick);
+        if (bot) bot.staffCheckEvac = true;
+        markBotPresenceInactive(nick, ctx, 'staff_check');
+    }
+    ctx.pushPresenceToGo?.();
+
+    if (staffEvacuateTimer) clearTimeout(staffEvacuateTimer);
+    staffEvacuateTimer = setTimeout(() => {
+        staffEvacuateUntil = 0;
+        staffEvacuateTimer = null;
+        for (const nick of ctx.bots?.keys?.() || []) {
+            const bot = ctx.bots.get(nick);
+            if (!bot?.staffCheckEvac) continue;
+            bot.staffCheckEvac = false;
+            clearBotPresenceInactive(nick, ctx, 'staff_check_done');
+        }
+        ctx.pushPresenceToGo?.();
+        console.log('[staff-check] 10м прошло → presence снова активен, боты могут /an');
+    }, Math.max(1000, until - now));
+
+    const mins = Math.ceil((until - now) / 60_000);
+    const anarchy = ctx.bots?.get(username)?.anarchy;
+    const an = anarchy != null ? ` an${anarchy}` : '';
+    console.warn(
+        `[staff-check] ${username}${an} → /hub на ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
+    );
+    await ctx.sendAlert?.(
+        `🚨${an} проверка читов у ${username} → все в /hub на ${mins} мин`,
+        username,
+    );
 }
 
 /** Сумма предметов только от живых ботов (мёртвые = 0 в отчёте) */
