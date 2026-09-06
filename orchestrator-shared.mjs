@@ -582,9 +582,16 @@ export async function markBotAuthFault(username, ctx, kind, reason = '') {
         if (!bot.authFaultAt) bot.authFaultAt = new Date().toISOString();
         if (reason) bot.authFaultReason = String(reason).slice(0, 2000);
     }
+    // сразу отменить уже запланированный рестарт (гонка с worker exit)
+    const pending = ctx.pendingRestarts?.get(username);
+    if (pending) {
+        clearTimeout(pending);
+        ctx.pendingRestarts.delete(username);
+    }
     await stopWorkerNoRestart(username, ctx);
     const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
     const label = authFaultLabel(fault);
+    console.warn(`🔧 ${username}${anarchy} — ${label} (без рестартов)`);
     await ctx.sendAlert(`🔧 ${username}${anarchy} — ${label}`, username);
 }
 

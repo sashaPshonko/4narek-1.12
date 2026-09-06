@@ -201,6 +201,12 @@ function safePostMessage(username, message) {
 async function runWorker(bot) {
     const username = bot.username;
 
+    if (bot.banned || bot.authFault) {
+        bot.isManualStop = true;
+        console.warn(`⏭ ${username} не стартуем: ${bot.banned ? 'бан' : (bot.authFault === 'proxy_error' ? 'прокси' : 'пароль')}`);
+        return null;
+    }
+
     const pending = pendingRestarts.get(username);
     if (pending) {
         clearTimeout(pending);
@@ -332,11 +338,12 @@ async function runWorker(bot) {
                 if (workerData?.restartTimerId) clearTimeout(workerData.restartTimerId);
                 workers.delete(username);
 
-                if (!bot.isManualStop && !isShuttingDown) {
+                if (!bot.isManualStop && !bot.authFault && !bot.banned && !isShuttingDown) {
                     const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason);
                     bot.lastKickReason = '';
                     const restartTimerId = setTimeout(() => {
                         pendingRestarts.delete(username);
+                        if (bot.isManualStop || bot.authFault || bot.banned || isShuttingDown) return;
                         console.log(`🔁 Перезапуск ${username} (через ${delayMs / 1000}с)`);
                         runWorker(bot);
                     }, delayMs);

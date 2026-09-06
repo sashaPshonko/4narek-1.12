@@ -1045,7 +1045,9 @@ async function main() {
                             reason: String(err.message || err),
                         });
                     } catch { /* parent gone */ }
-                    process.exit(1);
+                    // process.exit сразу после postMessage может дропнуть сообщение родителю
+                    setTimeout(() => process.exit(1), 400);
+                    return;
                 }
                 client.setSocket(info.socket);
                 client.emit('connect');
@@ -1076,8 +1078,10 @@ async function main() {
     bot.on('kicked', (reason) => {
         const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
         console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${text}`);
+        let authFault = false;
         try {
             if (isWrongPasswordText(text)) {
+                authFault = true;
                 parentPort.postMessage({
                     name: 'bad_password',
                     username: workerData.username,
@@ -1087,7 +1091,9 @@ async function main() {
                 parentPort.postMessage({ name: 'kicked', reason: text });
             }
         } catch { /* parent gone */ }
-        process.exit(1);
+        // immediate exit дропает bad_password у parent (worker_threads)
+        if (authFault) setTimeout(() => process.exit(1), 400);
+        else process.exit(1);
     });
     bot.on('end', (reason) => {
         console.log(reason)
