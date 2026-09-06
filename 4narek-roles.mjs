@@ -31,8 +31,9 @@ import {
     pickAhBrowseAction,
     pickAhReloadSlot,
 } from './lib/ah-buy-tempo.mjs';
-import { lookAroundSpin as lookAroundSpinLib } from './lib/afk-look.mjs';
+import { lookAroundSpin as lookAroundSpinLib, nextWalkGapMs } from './lib/afk-look.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
+import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -220,6 +221,7 @@ function setupConfigurationTransferFix(bot) {
         configTransferStartedAt = 0;
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = true;
+        applyVanillaClientSettings(bot);
         logOk('transfer → configuration завершён');
     });
 
@@ -386,6 +388,7 @@ const config = {
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
     walkTime: 0,
+    walkGapMs: 55_000,
     BuyingItem: { id: '', price: 0 },
     needPrice: 0,
     key: '',
@@ -431,6 +434,7 @@ function clearAhBuySession() {
 
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
+    ensurePhysicsOn(bot);
     logOk(`анархия ${config.anarchy} — вход`);
     parentPort.postMessage({ name: 'success', username: config.username });
     logOk(`на анархии an${config.anarchy} → success`);
@@ -872,7 +876,7 @@ async function main() {
         host: 'mc.funtime.su',
         port: 25565,
         version: '1.21.11',
-        physicsEnabled: false,
+        ...VANILLA_BOT_OPTS,
         hideErrors: true,
         logErrors: false,
         agent: agent,
@@ -906,6 +910,12 @@ async function main() {
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
+        applyVanillaClientSettings(bot);
+    });
+
+    bot.on('spawn', () => {
+        ensurePhysicsOn(bot);
+        applyVanillaClientSettings(bot);
     });
 
     // .
@@ -971,7 +981,7 @@ async function main() {
 
         switch (config.menu) {
             case analysisAH:
-                if (config.walkTime < Date.now() - 55000 ||
+                if (config.walkTime < Date.now() - (config.walkGapMs || 55_000) ||
                     (config.needSell && !config.enoughItems && hasBotItem())) {
                     logInfo('АХ → sellItems (осмотр/needSell)');
                     await sellItems();
@@ -1137,7 +1147,6 @@ async function joinAnarchy() {
             }
             await rnd('BASE_DELAY');
             logInfo(`/an${config.anarchy}… (жду входа)`);
-            bot.physicsEnabled = false;
             bot.chat(`/an${config.anarchy}`);
             await rnd('ANARCHY_DELAY');
         }
@@ -1408,10 +1417,12 @@ function hasBotItem() {
     }
 }
 
-/** Осмотр: сегменты с разными dir/скоростью (lib/afk-look), GCD-пакеты как vanilla. */
+/** Anti-AFK: микро мышь + одна WASD. */
 async function lookAroundSpin() {
-    await lookAroundSpinLib(bot, (msg) => logOk(msg));
+    await lookAroundSpinLib(bot, (msg) => logOk(msg), null, { force: Boolean(config.afk) });
+    ensurePhysicsOn(bot);
     config.walkTime = Date.now();
+    config.walkGapMs = nextWalkGapMs();
 }
 
 /** Сход с AFK — крутим головой. */

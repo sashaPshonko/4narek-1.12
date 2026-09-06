@@ -39,8 +39,9 @@ import {
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
-import { runAntiAfkMotion } from './lib/afk-look.mjs';
+import { runAntiAfkMotion, nextWalkGapMs } from './lib/afk-look.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
+import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
 
@@ -423,6 +424,7 @@ function setupConfigurationTransferFix(bot) {
         configTransferStartedAt = 0;
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = true;
+        applyVanillaClientSettings(bot);
         logOk('transfer → configuration завершён');
     });
 
@@ -629,6 +631,7 @@ const config = {
     sellStartedAt: 0,
     needReset: false,
     walkTime: 0,
+    walkGapMs: 55_000,
     BuyingItem: { id: '', price: 0, buyPrice: 0, nacenka: 0, enchants: [], durability: null },
     needPrice: 0,
     key: '',
@@ -787,6 +790,7 @@ function scheduleFunauthVerify() {
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
     funauthBindRequired = false;
+    ensurePhysicsOn(bot);
     scheduleFunauthVerify();
     logOk(`анархия ${config.anarchy} — вход`);
     parentPort.postMessage({ name: 'success', username: config.username });
@@ -1629,7 +1633,7 @@ async function main() {
         host: 'mc.funtime.su',
         port: 25565,
         version: '1.21.11',
-        physicsEnabled: false,
+        ...VANILLA_BOT_OPTS,
         hideErrors: true,
         logErrors: false,
         agent: agent,
@@ -1668,6 +1672,7 @@ async function main() {
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
+        applyVanillaClientSettings(bot);
     });
 
     // .
@@ -1810,7 +1815,7 @@ async function main() {
                         return;
                     }
 
-                    if (config.walkTime < Date.now() - 55000 ||
+                    if (config.walkTime < Date.now() - (config.walkGapMs || 55_000) ||
                         (config.needSell && !config.enoughItems && hasBotItem())) {
                         logInfo('АХ → sellItems (осмотр/needSell)');
                         await sellItems();
@@ -2071,7 +2076,7 @@ async function joinAnarchy(gen = null) {
                 }
                 await rnd('BASE_DELAY');
                 logInfo(`/an${config.anarchy}… (жду входа)`);
-                bot.physicsEnabled = false;
+                // physics не гасим навсегда: только configuration-фаза сама выключает
                 bot.chat(`/an${config.anarchy}`);
                 await rnd('ANARCHY_DELAY');
             }
@@ -2623,18 +2628,17 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK motion: look и/или WASD под lock (не пересекается с chat/кликами). */
+/** Anti-AFK: микро мышь + одна WASD (как рабочий FunTime-клиент). */
 async function lookAroundSpin(shouldAbort = null) {
     if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
     await waitForEventLoopOk({ log: (m) => logWarn(m) });
     const prevPhysics = bot.physicsEnabled;
-    bot.physicsEnabled = true;
+    ensurePhysicsOn(bot);
     lookLock = true;
     try {
-        // периодический «осмотр» в sell тоже может быть wasd — тот же пул планов
-        await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort);
+        await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort, { force: Boolean(config.afk) });
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -2645,9 +2649,13 @@ async function lookAroundSpin(shouldAbort = null) {
         }
         lookLock = false;
         lastLookAt = Date.now();
-        bot.physicsEnabled = prevPhysics;
+        // не возвращаем false — physics держим как у живого клиента
+        if (prevPhysics === false && isInConfigurationTransfer()) {
+            bot.physicsEnabled = false;
+        } else {
+            ensurePhysicsOn(bot);
+        }
     }
-    // короткая пауза после motion, прежде чем снова chat/клик
     const after = 220 + Math.floor(Math.random() * 380);
     const deadline = Date.now() + after;
     while (Date.now() < deadline) {
@@ -2655,9 +2663,10 @@ async function lookAroundSpin(shouldAbort = null) {
         await sleepMs(Math.min(50, deadline - Date.now()));
     }
     config.walkTime = Date.now();
+    config.walkGapMs = nextWalkGapMs();
 }
 
-/** Сход с AFK — look/WASD (через lookAroundSpin → runAntiAfkMotion). */
+/** Сход с AFK — тот же motion (force через config.afk). */
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
