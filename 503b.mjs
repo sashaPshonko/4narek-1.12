@@ -144,6 +144,9 @@ async function loadBotsConfig() {
                 banned: !!b.banned,
                 bannedAt: b.bannedAt || null,
                 banReason: b.banReason || '',
+                authFault: b.authFault || null,
+                authFaultAt: b.authFaultAt || null,
+                authFaultReason: b.authFaultReason || '',
                 presenceInactive: !!b.presenceInactive,
             });
         }
@@ -160,11 +163,14 @@ async function loadBotsConfig() {
                 itemPrices: [],
                 msgID: 0,
                 msgTime: null,
-                isManualStop: !!prev.banned,
-                success: prev.banned ? false : (prev.success ?? false),
+                isManualStop: !!(prev.banned || prev.authFault),
+                success: (prev.banned || prev.authFault) ? false : (prev.success ?? false),
                 banned: !!prev.banned,
                 bannedAt: prev.bannedAt || null,
                 banReason: prev.banReason || '',
+                authFault: prev.authFault || null,
+                authFaultAt: prev.authFaultAt || null,
+                authFaultReason: prev.authFaultReason || '',
                 presenceInactive: !!prev.presenceInactive,
             });
         }

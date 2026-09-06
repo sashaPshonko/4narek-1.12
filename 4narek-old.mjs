@@ -44,6 +44,7 @@ import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
+import { isWrongPasswordText } from './lib/auth-fault.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -1490,6 +1491,15 @@ async function handleChatMessage(text) {
         });
         return;
     }
+    if (isWrongPasswordText(text)) {
+        parentPort.postMessage({
+            name: 'bad_password',
+            username: workerData.username,
+            reason: text,
+        });
+        setTimeout(() => process.exit(1), 300);
+        return;
+    }
     if (text.toLowerCase().includes('чтобы двигаться')) {
         funauthBindRequired = true;
         cancelFunauthVerifyTimer();
@@ -1654,6 +1664,13 @@ async function main() {
             }, (err, info) => {
                 if (err) {
                     console.error(`❌ ${config.username} ошибка прокси:`, err.message);
+                    try {
+                        parentPort.postMessage({
+                            name: 'proxy_error',
+                            username: config.username,
+                            reason: String(err.message || err),
+                        });
+                    } catch { /* parent gone */ }
                     process.exit(1);
                 }
                 client.setSocket(info.socket);
@@ -1686,7 +1703,15 @@ async function main() {
         const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
         console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${text}`);
         try {
-            parentPort.postMessage({ name: 'kicked', reason: text });
+            if (isWrongPasswordText(text)) {
+                parentPort.postMessage({
+                    name: 'bad_password',
+                    username: workerData.username,
+                    reason: text,
+                });
+            } else {
+                parentPort.postMessage({ name: 'kicked', reason: text });
+            }
         } catch { /* parent gone */ }
         process.exit(1);
     });

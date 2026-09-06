@@ -6,6 +6,12 @@ import { fileURLToPath } from 'url';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
 import { proxyHostFromString } from './lib/proxy-host.mjs';
+import {
+    AUTH_FAULT_BAD_PASSWORD,
+    AUTH_FAULT_PROXY,
+    authFaultLabel,
+    isWrongPasswordText,
+} from './lib/auth-fault.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -243,6 +249,7 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
         active_types: collectActiveTypes(bots, workers),
         bots_per_type: collectBotsPerType(bots, workers),
         banned: collectBannedBots(bots, extraBanned),
+        auth_faults: collectAuthFaultBots(bots),
         clan_owners: clanOwners,
         bots: collectOrchRoster(bots, clanOwners),
     };
@@ -303,6 +310,31 @@ export function collectBannedBots(bots, extraBanned = []) {
     return out;
 }
 
+/** Боты с неверным паролем / мёртвой проксей — для Go /fleet. */
+export function collectAuthFaultBots(bots) {
+    const out = [];
+    if (!bots) return out;
+    for (const bot of bots.values()) {
+        if (!bot?.authFault) continue;
+        out.push({
+            username: bot.username,
+            anarchy: bot.anarchy ?? null,
+            go_type: resolveGoType(bot) || bot.goType || '',
+            kind: bot.authFault,
+            at: bot.authFaultAt || null,
+            reason: bot.authFaultReason || '',
+            ip: botProxyHost(bot),
+        });
+    }
+    out.sort((a, b) => {
+        const aa = Number(a.anarchy) || 0;
+        const ba = Number(b.anarchy) || 0;
+        if (aa !== ba) return aa - ba;
+        return String(a.username).localeCompare(String(b.username));
+    });
+    return out;
+}
+
 /** Кик не считается баном. Бан только из чата «вы забанены». */
 export function isBanKickReason(_reason) {
     return false;
@@ -310,7 +342,12 @@ export function isBanKickReason(_reason) {
 
 export async function handleWorkerKicked(username, reason, ctx) {
     const bot = ctx.bots?.get(username);
-    if (bot) bot.lastKickReason = String(reason || '');
+    const text = String(reason || '');
+    if (bot) bot.lastKickReason = text;
+    if (isWrongPasswordText(text)) {
+        await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, text);
+        return true;
+    }
     return false;
 }
 
@@ -369,6 +406,7 @@ export function clearBotPresence(username, botItems, botInventory) {
 /** Статус для /ping: в игре ≠ просто запущенный воркер */
 export function getWorkerHealthStats(bots, workers) {
     const banned = [];
+    const authFaults = [];
     const waiting = [];
     let active = 0;
     let workersRunning = 0;
@@ -383,6 +421,10 @@ export function getWorkerHealthStats(bots, workers) {
             banned.push(username);
             continue;
         }
+        if (bot.authFault) {
+            authFaults.push(username);
+            continue;
+        }
         if (bot.success && hasWorker) {
             active++;
         } else if (hasWorker) {
@@ -395,6 +437,7 @@ export function getWorkerHealthStats(bots, workers) {
         active,
         workersRunning,
         banned,
+        authFaults,
         waiting,
     };
 }
@@ -430,13 +473,15 @@ export const ALERT_KIND = {
     CAPTCHA: 'captcha',
     VPN: 'vpn',
     UNKNOWN: 'unknown',
+    AUTH: 'auth',
 };
 
-/** Тип алерта для @тега (бан / капча / vpn / неведомая). */
+/** Тип алерта для @тега (бан / капча / vpn / неведомая / пароль-прокси). */
 export function classifyWorkerAlert(message) {
     if (message == null) return null;
     const lower = String(message).toLowerCase();
     if (lower.includes('забанен')) return ALERT_KIND.BAN;
+    if (lower.includes('неверный пароль') || lower.includes('ошибка прокси')) return ALERT_KIND.AUTH;
     if (lower.includes('ввести капчу') || lower.includes('капч')) return ALERT_KIND.CAPTCHA;
     if (lower.includes('vpn спалили') || lower.includes('впн спалили')) return ALERT_KIND.VPN;
     if (lower.includes('хуйня неведомая') || lower.includes('неведомая')) return ALERT_KIND.UNKNOWN;
@@ -473,15 +518,23 @@ export function buildTelegramAlertText({ message, botUsername, bots }) {
 }
 
 export function formatOrchestratorPing(stats, bots = null) {
-    const { configured, active, workersRunning, banned, waiting } = stats;
+    const { configured, active, workersRunning, banned, authFaults = [], waiting } = stats;
     const label = (u) => (bots ? formatBotLabel(u, bots) : u);
-    const ok = active === configured && banned.length === 0 && waiting.length === 0;
+    const ok = active === configured && banned.length === 0 && authFaults.length === 0 && waiting.length === 0;
     let text = `${ok ? '✅' : '⚠️'} В игре: ${active}/${configured}`;
     const extras = [];
     if (workersRunning !== active) extras.push(`воркеров: ${workersRunning}`);
     if (waiting.length) extras.push(`ждут вход: ${waiting.map(label).join(', ')}`);
     if (extras.length) text += ` (${extras.join(', ')})`;
     if (banned.length) text += `\n🚫 Забанены: ${banned.map(label).join(', ')}`;
+    if (authFaults.length) {
+        const lines = authFaults.map((u) => {
+            const b = bots?.get(u);
+            const kind = authFaultLabel(b?.authFault);
+            return `${label(u)} (${kind})`;
+        });
+        text += `\n🔧 Сломаны: ${lines.join(', ')}`;
+    }
     return text;
 }
 
@@ -516,6 +569,23 @@ export async function markBotBanned(username, ctx, reason = '') {
     await stopWorkerNoRestart(username, ctx);
     const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
     await ctx.sendAlert(`🚫 ${username}${anarchy} забанен`, username);
+}
+
+/** Неверный пароль / мёртвая прокси — стоп рестартов, в /fleet как «сломанные». */
+export async function markBotAuthFault(username, ctx, kind, reason = '') {
+    const fault = kind === AUTH_FAULT_PROXY ? AUTH_FAULT_PROXY : AUTH_FAULT_BAD_PASSWORD;
+    const bot = ctx.bots?.get(username);
+    if (bot) {
+        bot.authFault = fault;
+        bot.success = false;
+        bot.isManualStop = true;
+        if (!bot.authFaultAt) bot.authFaultAt = new Date().toISOString();
+        if (reason) bot.authFaultReason = String(reason).slice(0, 2000);
+    }
+    await stopWorkerNoRestart(username, ctx);
+    const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
+    const label = authFaultLabel(fault);
+    await ctx.sendAlert(`🔧 ${username}${anarchy} — ${label}`, username);
 }
 
 /** FunAuth game-verified: 5с на анке без «чтобы двигаться». */
@@ -701,8 +771,20 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         await markBotBanned(username, ctx, message.reason || '');
         return true;
     }
+    if (message?.name === 'bad_password') {
+        await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, message.reason || '');
+        return true;
+    }
+    if (message?.name === 'proxy_error') {
+        await markBotAuthFault(username, ctx, AUTH_FAULT_PROXY, message.reason || '');
+        return true;
+    }
     if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {
         await markBotBanned(username, ctx);
+        return true;
+    }
+    if (typeof message === 'string' && isWrongPasswordText(message)) {
+        await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, message);
         return true;
     }
     if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
