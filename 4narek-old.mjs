@@ -379,6 +379,7 @@ const CONFIG_BLOCKED_PACKETS = new Set([
     'arm_animation', 'entity_action',
     'held_item_slot', 'set_creative_slot',
     'player_input', 'tick_end',
+    'settings', // setSettings на inject/config → FunTime socketClosed
 ]);
 
 let configTransferStartedAt = 0;
@@ -1691,7 +1692,7 @@ async function main() {
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
-        applyVanillaClientSettings(bot);
+        // setSettings на inject во время configuration роняет FunTime (socketClosed)
     });
 
     // .

@@ -929,7 +929,7 @@ async function main() {
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
-        applyVanillaClientSettings(bot);
+        // setSettings на inject во время configuration роняет FunTime (socketClosed)
     });
 
     bot.on('spawn', () => {
