@@ -15,6 +15,7 @@ import {
 } from './lib/auth-fault.mjs';
 import {
     STAFF_CHECK_EVACUATE_MS,
+    EXIT_STAFF_CHECK,
     isStaffCheckText,
 } from './lib/staff-check.mjs';
 
@@ -30,6 +31,7 @@ export {
 
 export {
     STAFF_CHECK_EVACUATE_MS,
+    EXIT_STAFF_CHECK,
     isStaffCheckText,
 } from './lib/staff-check.mjs';
 
@@ -847,15 +849,14 @@ export function notifyWorkersOwnerBanned(workers, safePostMessage, info = {}) {
     return n;
 }
 
-/** Staff SS-check — /hub всей анки на STAFF_CHECK_EVACUATE_MS. */
+/** Staff SS-check — disconnect всех воркеров, рестарт через STAFF_CHECK_EVACUATE_MS. */
 let staffEvacuateUntil = 0;
-let staffEvacuateTimer = null;
 
 export function notifyWorkersStaffCheck(workers, safePostMessage, info = {}) {
     if (!workers || typeof safePostMessage !== 'function') return 0;
     let n = 0;
     for (const nick of workers.keys()) {
-        if (safePostMessage(nick, { type: 'staff_check_evacuate', ...info })) n++;
+        if (safePostMessage(nick, { type: 'staff_check_disconnect', ...info })) n++;
     }
     return n;
 }
@@ -865,6 +866,15 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
     const until = Math.max(staffEvacuateUntil, now + STAFF_CHECK_EVACUATE_MS);
     const already = staffEvacuateUntil > now;
     staffEvacuateUntil = until;
+
+    for (const nick of ctx.bots?.keys?.() || []) {
+        const bot = ctx.bots.get(nick);
+        if (!bot) continue;
+        bot.staffCheckRestartUntil = until;
+        bot.staffCheckEvac = true;
+        markBotPresenceInactive(nick, ctx, 'staff_check');
+    }
+    ctx.pushPresenceToGo?.();
 
     const n = notifyWorkersStaffCheck(ctx.workers, (nick, msg) => {
         const entry = ctx.workers?.get(nick);
@@ -881,35 +891,28 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
         reason: String(reason || '').slice(0, 500),
     });
 
-    for (const nick of ctx.workers?.keys?.() || []) {
-        const bot = ctx.bots?.get(nick);
-        if (bot) bot.staffCheckEvac = true;
-        markBotPresenceInactive(nick, ctx, 'staff_check');
-    }
-    ctx.pushPresenceToGo?.();
-
-    if (staffEvacuateTimer) clearTimeout(staffEvacuateTimer);
-    staffEvacuateTimer = setTimeout(() => {
-        staffEvacuateUntil = 0;
-        staffEvacuateTimer = null;
-        for (const nick of ctx.bots?.keys?.() || []) {
-            const bot = ctx.bots.get(nick);
-            if (!bot?.staffCheckEvac) continue;
-            bot.staffCheckEvac = false;
-            clearBotPresenceInactive(nick, ctx, 'staff_check_done');
+    // если воркер завис — через 8с terminate; рестарт всё равно через staffCheckRestartUntil
+    setTimeout(() => {
+        for (const nick of [...(ctx.workers?.keys?.() || [])]) {
+            const entry = ctx.workers?.get(nick);
+            if (!entry?.worker || entry.worker.terminated) continue;
+            const bot = ctx.bots?.get(nick);
+            if (!bot?.staffCheckRestartUntil || bot.staffCheckRestartUntil <= Date.now()) continue;
+            console.warn(`[staff-check] ${nick} не вышел сам → terminate`);
+            try {
+                entry.worker.terminate();
+            } catch { /* ignore */ }
         }
-        ctx.pushPresenceToGo?.();
-        console.log('[staff-check] 10м прошло → presence снова активен, боты могут /an');
-    }, Math.max(1000, until - now));
+    }, 8000);
 
     const mins = Math.ceil((until - now) / 60_000);
     const anarchy = ctx.bots?.get(username)?.anarchy;
     const an = anarchy != null ? ` an${anarchy}` : '';
     console.warn(
-        `[staff-check] ${username}${an} → /hub на ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
+        `[staff-check] ${username}${an} → disconnect, рестарт через ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
     );
     await ctx.sendAlert?.(
-        `🚨${an} проверка читов у ${username} → все в /hub на ${mins} мин`,
+        `🚨${an} проверка читов у ${username} → отключаю всех, рестарт через ${mins} мин`,
         username,
     );
 }
@@ -975,12 +978,31 @@ export function shouldRestartWorkerOnExit(username, worker, workers) {
     return cur?.worker === worker;
 }
 
-export function getWorkerRestartDelayMs(code, kickReason = '') {
+export function getWorkerRestartDelayMs(code, kickReason = '', bot = null) {
+    const until = Number(bot?.staffCheckRestartUntil) || 0;
+    if (code === EXIT_STAFF_CHECK || (until > Date.now())) {
+        if (until > Date.now()) return Math.max(1000, until - Date.now());
+        return STAFF_CHECK_EVACUATE_MS;
+    }
     const s = String(kickReason);
     if (s.includes('ником уже онлайн') || s.includes('таким-же ником')) {
         return 45000;
     }
     return 5000;
+}
+
+/** Сброс staff-check флагов при успешном рестарте после паузы. */
+export function clearStaffCheckRestartFlags(bot, ctx, username) {
+    if (!bot) return;
+    const had = bot.staffCheckEvac || bot.staffCheckRestartUntil;
+    bot.staffCheckRestartUntil = 0;
+    bot.staffCheckEvac = false;
+    if (had && username && ctx) {
+        clearBotPresenceInactive(username, ctx, 'staff_check_done');
+    }
+    if (staffEvacuateUntil && Date.now() >= staffEvacuateUntil) {
+        staffEvacuateUntil = 0;
+    }
 }
 
 export function terminateWorkerEntry(entry) {

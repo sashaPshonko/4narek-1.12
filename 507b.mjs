@@ -17,6 +17,7 @@ import {
     tryAutoStartBots,
     shouldRestartWorkerOnExit,
     getWorkerRestartDelayMs,
+    clearStaffCheckRestartFlags,
     handleWorkerKicked,
     terminateWorkerEntry,
     createMarketFloorTracker,
@@ -192,6 +193,8 @@ function safePostMessage(username, message) {
 async function runWorker(bot) {
     const username = bot.username;
 
+    clearStaffCheckRestartFlags(bot, workerStatusCtx(), username);
+
     const pending = pendingRestarts.get(username);
     if (pending) {
         clearTimeout(pending);
@@ -323,7 +326,7 @@ async function runWorker(bot) {
                 workers.delete(username);
 
                 if (!bot.isManualStop && !isShuttingDown) {
-                    const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason);
+                    const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason, bot);
                     bot.lastKickReason = '';
                     const restartTimerId = setTimeout(() => {
                         pendingRestarts.delete(username);

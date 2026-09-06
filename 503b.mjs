@@ -17,6 +17,7 @@ import {
     tryAutoStartBots,
     shouldRestartWorkerOnExit,
     getWorkerRestartDelayMs,
+    clearStaffCheckRestartFlags,
     handleWorkerKicked,
     authFaultKindFromExitCode,
     markBotAuthFault,
@@ -209,6 +210,8 @@ async function runWorker(bot) {
         return null;
     }
 
+    clearStaffCheckRestartFlags(bot, workerStatusCtx(), username);
+
     const pending = pendingRestarts.get(username);
     if (pending) {
         clearTimeout(pending);
@@ -347,7 +350,7 @@ async function runWorker(bot) {
                 }
 
                 if (!bot.isManualStop && !bot.authFault && !bot.banned && !isShuttingDown) {
-                    const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason);
+                    const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason, bot);
                     bot.lastKickReason = '';
                     const restartTimerId = setTimeout(() => {
                         pendingRestarts.delete(username);

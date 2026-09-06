@@ -45,7 +45,7 @@ import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from '.
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
-import { isStaffCheckText } from './lib/staff-check.mjs';
+import { isStaffCheckText, EXIT_STAFF_CHECK } from './lib/staff-check.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -1524,12 +1524,16 @@ async function handleChatMessage(text) {
         return;
     }
     if (isStaffCheckText(text)) {
-        logWarn('проверка читов → эвакуация анки в /hub');
+        logWarn('проверка читов → репорт орку, жду disconnect');
         parentPort.postMessage({
             name: 'staff_check',
             username: workerData.username,
             reason: text,
         });
+        // если орк не успел разослать — сами рвём через 2с
+        setTimeout(() => {
+            if (!staffCheckExiting) void disconnectForStaffCheck('fallback');
+        }, 2000);
         return;
     }
     if (text.includes('Не так быстро..') || text.includes('[✘] Ошибка! Этот товар уже Купили!')) {
@@ -1614,39 +1618,28 @@ parentPort.on('message', (data) => {
         }
         return;
     }
-    if (data.type === 'staff_check_evacuate') {
-        void evacuateForStaffCheck(data.until, data.from);
+    if (data.type === 'staff_check_disconnect' || data.type === 'staff_check_evacuate') {
+        void disconnectForStaffCheck(data.from || 'orch');
         return;
     }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
 
-function staffCheckActive() {
-    return Date.now() < (config.staffCheckUntil || 0);
-}
+let staffCheckExiting = false;
 
-async function evacuateForStaffCheck(until, from = '') {
-    const t = Number(until) || (Date.now() + 10 * 60 * 1000);
-    if (t <= (config.staffCheckUntil || 0)) return;
-    config.staffCheckUntil = t;
-    const mins = Math.ceil((t - Date.now()) / 60_000);
-    logWarn(
-        `staff-check${from ? ` (${from})` : ''} → /hub, без /an ~${mins}м`,
-    );
+async function disconnectForStaffCheck(from = '') {
+    if (staffCheckExiting) return;
+    staffCheckExiting = true;
+    logWarn(`staff-check${from ? ` (${from})` : ''} → рву сокет, exit ${EXIT_STAFF_CHECK}`);
     abortSellSession('staff-check');
     cancelFunauthVerifyTimer();
-    config.timeJoinAnarchy = 0;
-    generateKey();
     try {
         await closeCurrentWindowSafe();
     } catch { /* ignore */ }
     try {
-        if (bot?.chat) {
-            bot.chat('/hub');
-            await sleepMs(1500);
-            bot.chat('/hub');
-        }
+        bot?.quit?.('staff-check');
     } catch { /* ignore */ }
+    setTimeout(() => process.exit(EXIT_STAFF_CHECK), 400);
 }
 
 function parseProxy(str) {
@@ -1796,10 +1789,6 @@ async function main() {
     });
 
     bot.on('physicTick', async () => {
-        if (staffCheckActive()) {
-            config.timeActive = Date.now();
-            return;
-        }
         if (config.sellInFlight) {
             if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
                 abortSellSession('таймаут');
@@ -1825,10 +1814,6 @@ async function main() {
     })
 
     bot.on('windowOpen', async () => {
-        if (staffCheckActive()) {
-            await closeCurrentWindowSafe();
-            return;
-        }
         if (config.ownerBanDrain) {
             await closeCurrentWindowSafe();
             await drainTreasuryAndLeaveClan();
@@ -2143,12 +2128,6 @@ main();
 async function joinAnarchy(gen = null) {
     for (;;) {
         if (gen != null && !isSellSessionAlive(gen)) return;
-        while (staffCheckActive()) {
-            if (gen != null && !isSellSessionAlive(gen)) return;
-            const leftSec = Math.ceil((config.staffCheckUntil - Date.now()) / 1000);
-            if (leftSec % 30 === 0) logInfo(`staff-check → жду /an ещё ${leftSec}с`);
-            await sleepMs(1000);
-        }
         if (!config.timeJoinAnarchy) {
             while (!config.timeJoinAnarchy) {
                 if (gen != null && !isSellSessionAlive(gen)) return;
@@ -2366,10 +2345,6 @@ async function closeCurrentWindowSafe() {
 }
 
 async function sellItems() {
-    if (staffCheckActive()) {
-        logWarn('продажа → staff-check, skip');
-        return;
-    }
     if (config.sellInFlight) {
         if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
             abortSellSession('таймаут');
@@ -2780,10 +2755,6 @@ async function safeAH() {
     }
     logOk('safeAH → старт');
     if (!bot) return;
-    if (staffCheckActive()) {
-        logWarn('safeAH → staff-check, пропускаю');
-        return;
-    }
     if (bot.currentWindow) logInfo('safeAH → закрываю окно');
     await closeCurrentWindowSafe();
     await joinAnarchy();
@@ -2796,10 +2767,6 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
-        if (staffCheckActive()) {
-            logWarn('safeAH → staff-check mid-search, стоп');
-            return;
-        }
         if (config.ownerBanDrain) {
             await drainTreasuryAndLeaveClan();
             return;
