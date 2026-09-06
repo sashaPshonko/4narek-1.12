@@ -142,6 +142,7 @@ async function loadBotsConfig() {
                 banned: !!b.banned,
                 bannedAt: b.bannedAt || null,
                 banReason: b.banReason || '',
+                banKind: b.banKind || '',
                 presenceInactive: !!b.presenceInactive,
             });
         }
@@ -163,6 +164,7 @@ async function loadBotsConfig() {
                 banned: !!prev.banned,
                 bannedAt: prev.bannedAt || null,
                 banReason: prev.banReason || '',
+                banKind: prev.banKind || '',
                 presenceInactive: !!prev.presenceInactive,
             });
         }

@@ -16,6 +16,8 @@ import {
 import {
     STAFF_CHECK_EVACUATE_MS,
     EXIT_STAFF_CHECK,
+    STAFF_CHECK_BAN_KIND,
+    STAFF_CHECK_BAN_REASON,
     isStaffCheckText,
 } from './lib/staff-check.mjs';
 
@@ -32,6 +34,8 @@ export {
 export {
     STAFF_CHECK_EVACUATE_MS,
     EXIT_STAFF_CHECK,
+    STAFF_CHECK_BAN_KIND,
+    STAFF_CHECK_BAN_REASON,
     isStaffCheckText,
 } from './lib/staff-check.mjs';
 
@@ -308,6 +312,7 @@ export function collectBannedBots(bots, extraBanned = []) {
                 go_type: resolveGoType(bot) || bot.goType || '',
                 banned_at: bot.bannedAt || null,
                 reason: bot.banReason || '',
+                kind: bot.banKind || '',
                 ip: botProxyHost(bot),
             });
         }
@@ -320,6 +325,7 @@ export function collectBannedBots(bots, extraBanned = []) {
             go_type: b.go_type || '',
             banned_at: b.banned_at || b.bannedAt || null,
             reason: b.reason || b.banReason || '',
+            kind: b.kind || b.banKind || '',
             ip: b.ip || '',
         });
     }
@@ -583,7 +589,7 @@ export async function stopWorkerNoRestart(username, ctx) {
     ctx.pushPresenceToGo?.();
 }
 
-export async function markBotBanned(username, ctx, reason = '') {
+export async function markBotBanned(username, ctx, reason = '', opts = {}) {
     const bot = ctx.bots.get(username);
     if (bot) {
         bot.banned = true;
@@ -591,10 +597,13 @@ export async function markBotBanned(username, ctx, reason = '') {
         bot.isManualStop = true;
         if (!bot.bannedAt) bot.bannedAt = new Date().toISOString();
         if (reason) bot.banReason = String(reason).slice(0, 2000);
+        if (opts.kind) bot.banKind = String(opts.kind);
     }
     await stopWorkerNoRestart(username, ctx);
+    if (opts.silent) return;
     const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
-    await ctx.sendAlert(`🚫 ${username}${anarchy} забанен`, username);
+    const tag = bot?.banKind === STAFF_CHECK_BAN_KIND ? ' (проверка)' : '';
+    await ctx.sendAlert(`🚫 ${username}${anarchy} забанен${tag}`, username);
 }
 
 /** Неверный пароль / мёртвая прокси — стоп рестартов, в /fleet как «сломанные». */
@@ -867,9 +876,18 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
     const already = staffEvacuateUntil > now;
     staffEvacuateUntil = until;
 
+    // вызванный акк = гарантированный бан (метка «проверка» в /fleet)
+    const banReason = reason
+        ? `${STAFF_CHECK_BAN_REASON}\n${String(reason).slice(0, 1500)}`
+        : STAFF_CHECK_BAN_REASON;
+    await markBotBanned(username, ctx, banReason, {
+        kind: STAFF_CHECK_BAN_KIND,
+        silent: true,
+    });
+
     for (const nick of ctx.bots?.keys?.() || []) {
         const bot = ctx.bots.get(nick);
-        if (!bot) continue;
+        if (!bot || bot.banned) continue;
         bot.staffCheckRestartUntil = until;
         bot.staffCheckEvac = true;
         markBotPresenceInactive(nick, ctx, 'staff_check');
@@ -877,6 +895,7 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
     ctx.pushPresenceToGo?.();
 
     const n = notifyWorkersStaffCheck(ctx.workers, (nick, msg) => {
+        if (nick === username) return false; // уже stopWorkerNoRestart
         const entry = ctx.workers?.get(nick);
         if (!entry?.worker || entry.worker.terminated) return false;
         try {
@@ -894,9 +913,11 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
     // если воркер завис — через 8с terminate; рестарт всё равно через staffCheckRestartUntil
     setTimeout(() => {
         for (const nick of [...(ctx.workers?.keys?.() || [])]) {
+            if (nick === username) continue;
             const entry = ctx.workers?.get(nick);
             if (!entry?.worker || entry.worker.terminated) continue;
             const bot = ctx.bots?.get(nick);
+            if (bot?.banned) continue;
             if (!bot?.staffCheckRestartUntil || bot.staffCheckRestartUntil <= Date.now()) continue;
             console.warn(`[staff-check] ${nick} не вышел сам → terminate`);
             try {
@@ -909,10 +930,10 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
     const anarchy = ctx.bots?.get(username)?.anarchy;
     const an = anarchy != null ? ` an${anarchy}` : '';
     console.warn(
-        `[staff-check] ${username}${an} → disconnect, рестарт через ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
+        `[staff-check] ${username}${an} → бан (проверка), остальные disconnect ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
     );
     await ctx.sendAlert?.(
-        `🚨${an} проверка читов у ${username} → отключаю всех, рестарт через ${mins} мин`,
+        `🚨${an} ${username} вызван на проверку → бан · остальные offline ${mins} мин`,
         username,
     );
 }
