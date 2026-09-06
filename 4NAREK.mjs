@@ -208,6 +208,7 @@ const CONFIG_BLOCKED_PACKETS = new Set([
     'window_click', 'close_window',
     'arm_animation', 'entity_action',
     'held_item_slot', 'set_creative_slot',
+    'settings',
 ]);
 
 /** Funtime/Bungee transfer: не слать gameplay-пакеты + ответы на configuration. */
