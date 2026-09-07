@@ -38,8 +38,9 @@ import {
     pickAhBrowseAction,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
-import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
+import { pickWarp } from './lib/warp-pick.mjs';
 import { runAntiAfkMotion, nextWalkGapMs } from './lib/afk-look.mjs';
+import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -2389,27 +2390,53 @@ async function sellItems() {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
             if (
-                shouldAttemptWarp(
+                shouldAttemptWalk(
                     config.username,
                     config.lastWarpTime || 0,
                     botWorkerStartTime,
                 )
             ) {
-                const warp = await pickWarpForSession();
-                if (warp && isSellSessionAlive(gen)) {
-                    await rnd('BASE_DELAY');
-                    if (!isSellSessionAlive(gen)) return;
-                    logInfo(
-                        `warp → ${warp}${config.lastWarp ? ` (был ${config.lastWarp})` : ''}`,
-                    );
-                    bot.chat(`/warp ${warp}`);
-                    config.lastWarp = warp;
+                await rnd('BASE_DELAY');
+                if (!isSellSessionAlive(gen)) return;
+                await waitForEventLoopOk({ log: (m) => logWarn(m) });
+                const prevPhysics = bot.physicsEnabled;
+                ensurePhysicsOn(bot);
+                lookLock = true;
+                try {
+                    const walk = await walkRandomRouteStop(bot, {
+                        shouldAbort: () => !isSellSessionAlive(gen),
+                        log: (msg) => logInfo(msg),
+                    });
                     config.lastWarpTime = Date.now();
-                    // lookAroundSpin сам ждёт flush chat + паузу после команды
+                    if (walk.ok) {
+                        logOk(
+                            `прогулка → стоп (${walk.stop.x.toFixed(0)}, ${walk.stop.z.toFixed(0)})`
+                            + (walk.legs != null ? ` legs=${walk.legs}` : ''),
+                        );
+                    } else {
+                        logWarn(`прогулка → ${walk.reason}`);
+                    }
+                } finally {
+                    try {
+                        for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
+                            bot.setControlState(key, false);
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                    lookLock = false;
+                    lastLookAt = Date.now();
+                    if (prevPhysics === false && isInConfigurationTransfer()) {
+                        bot.physicsEnabled = false;
+                    } else {
+                        ensurePhysicsOn(bot);
+                    }
                 }
+                // короткий anti-AFK на месте после стопа
+                await lookAroundSpin(() => !isSellSessionAlive(gen));
+            } else {
+                await lookAroundSpin(() => !isSellSessionAlive(gen));
             }
-
-            await lookAroundSpin(() => !isSellSessionAlive(gen));
             if (!isSellSessionAlive(gen)) return;
             await dropTrash();
         }
