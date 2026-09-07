@@ -138,6 +138,21 @@ async function loadBotsConfig() {
             await sendAlert(`❌ ${botsPath} должен содержать массив`);
             process.exit(1);
         }
+
+        // ONLY_BOTS=nick1,nick2 — тест одного/нескольких без правки json
+        const onlyRaw = String(process.env.ONLY_BOTS || '').trim();
+        if (onlyRaw) {
+            const only = new Set(
+                onlyRaw.split(',').map((s) => s.trim()).filter(Boolean),
+            );
+            const before = loadedBots.length;
+            loadedBots = loadedBots.filter((b) => only.has(b.username));
+            console.log(`🔎 ONLY_BOTS=${[...only].join(',')} → ${loadedBots.length}/${before}`);
+            if (!loadedBots.length) {
+                await sendAlert(`❌ ONLY_BOTS: никто не совпал (${onlyRaw})`);
+                process.exit(1);
+            }
+        }
         
         const prevRuntime = new Map();
         for (const [name, b] of bots) {

@@ -1,77 +1,29 @@
 {
-  "loop": true,
-  "arriveXZ": 1.25,
-  "maxMs": 120000,
-  "stopFracMin": 0.35,
-  "stopFracMax": 0.7,
+  "mode": "random",
+  "loop": false,
+  "arriveXZ": 1.4,
+  "maxMs": 180000,
+  "stopFracMin": 0.75,
+  "stopFracMax": 1.0,
   "lookAlignRad": 0.09,
   "lookMaxMs": 5500,
-  "preWalkChat": null,
-  "preWalkChatWaitMs": 7500,
-  "points": [
-    {
-      "x": 0,
-      "y": 89,
-      "z": 0
-    },
-    {
-      "x": -18,
-      "y": 89,
-      "z": 0
-    },
-    {
-      "x": -19,
-      "y": 89,
-      "z": -3
-    },
-    {
-      "x": -10,
-      "y": 89,
-      "z": -3
-    },
-    {
-      "x": 0,
-      "y": 90,
-      "z": -3
-    },
-    {
-      "x": 8,
-      "y": 89,
-      "z": -3
-    },
-    {
-      "x": 8,
-      "y": 89,
-      "z": 0
-    },
-    {
-      "x": 12,
-      "y": 89,
-      "z": 0
-    },
-    {
-      "x": 12,
-      "y": 89,
-      "z": 8
-    },
-    {
-      "x": 0,
-      "y": 90,
-      "z": 8
-    },
-    {
-      "x": 0,
-      "y": 89,
-      "z": 0
-    }
-  ],
-  "spawnOnStuck": true,
+  "preWalkChat": "/warp shop",
+  "preWalkChatWaitMs": 8000,
+  "skipSpawnHome": true,
+  "spawnOnStuck": false,
   "spawnWaitMs": 7500,
-  "autoAt": "2026-09-07T11:30:02.808Z",
   "spawnPoint": {
     "x": 0,
     "y": 90,
     "z": 0
   },
-  "routeNote": "short known-good corridor around spawn; avoid x<-20 and plaza barrier"
+  "random": {
+    "legsMin": 9,
+    "legsMax": 15,
+    "legLenMin": 12,
+    "legLenMax": 26,
+    "radiusMax": 52
+  },
+  "points": [],
+  "routeNote": "shop flat: /warp shop then unique random polyline per walk"
 }
