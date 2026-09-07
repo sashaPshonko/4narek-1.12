@@ -25,7 +25,7 @@
     "legsMax": 14,
     "goalDistMin": 30,
     "goalDistMax": 110,
-    "entryWarp": "/warp shop",
+    "entryWarp": "/warp portal",
     "entryWarpWaitMs": 8000,
     "onMapMaxDist": 5,
     "sessionMaxMs": 2700000,
