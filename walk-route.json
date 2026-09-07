@@ -1,0 +1,22 @@
+{
+  "loop": true,
+  "arriveXZ": 1.25,
+  "maxMs": 180000,
+  "stopFracMin": 0.25,
+  "stopFracMax": 0.5,
+  "lookAlignRad": 0.09,
+  "lookMaxMs": 5500,
+  "preWalkChat": null,
+  "preWalkChatWaitMs": 3500,
+  "points": [
+    { "x": 0, "y": 90, "z": 0 },
+    { "x": 17, "y": 89, "z": 10 },
+    { "x": 17, "y": 82, "z": 37 },
+    { "x": 6, "y": 83, "z": 48 },
+    { "x": 7, "y": 83, "z": 70 },
+    { "x": -12, "y": 82, "z": 67 },
+    { "x": -10, "y": 82, "z": 58 },
+    { "x": -18, "y": 82, "z": 30 },
+    { "x": -12, "y": 89, "z": 3 }
+  ]
+}
