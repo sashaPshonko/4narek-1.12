@@ -8,6 +8,8 @@
   "lookMaxMs": 5500,
   "preWalkChat": null,
   "preWalkChatWaitMs": 3500,
+  "spawnOnStuck": true,
+  "spawnWaitMs": 3500,
   "points": [
     {
       "x": 7,
