@@ -41,6 +41,7 @@ import {
 import { pickWarp } from './lib/warp-pick.mjs';
 import { runAntiAfkMotion, nextWalkGapMs } from './lib/afk-look.mjs';
 import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
+import { maybeDumpSpawnMap } from './lib/spawn-map.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -2372,6 +2373,11 @@ async function sellItems() {
             return;
         }
         config.timeActive = Date.now();
+        try {
+            await maybeDumpSpawnMap(bot, (m) => logInfo(m));
+        } catch (e) {
+            logWarn(`spawn-map → ${e?.message || e}`);
+        }
         let canSell = true;
 
         if (!bot) {
