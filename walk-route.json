@@ -18,21 +18,29 @@
     "z": 0
   },
   "map": {
-    "radiusXZ": 72,
+    "radiusXZ": 110,
     "minFlatCells": 250,
     "maxAgeMs": 43200000,
-    "legsMin": 6,
-    "legsMax": 10,
-    "goalDistMin": 28,
-    "goalDistMax": 70,
+    "legsMin": 8,
+    "legsMax": 14,
+    "goalDistMin": 30,
+    "goalDistMax": 110,
     "entryWarp": "/warp shop",
     "entryWarpWaitMs": 8000,
     "onMapMaxDist": 5,
     "sessionMaxMs": 2700000,
-    "cycleDistMin": 45,
-    "cycleDistMax": 110,
-    "replanMax": 4
+    "cycleDistMin": 60,
+    "cycleDistMax": 150,
+    "replanMax": 4,
+    "rescanDist": 55,
+    "maxCells": 160000,
+    "freshBonus": 30
   },
+  "zoneMargin": 2,
+  "forbiddenZones": [
+    { "name": "pvp", "z": ">105" }
+  ],
+  "zonesNote": "оси внутри записи по И, записи по ИЛИ. формат: '>105', '<-40', '20..90', '105' или {min,max}. пример: { name: 'угол', x: '>200', z: '-50..50' }",
   "points": [],
-  "routeNote": "one plan per worker launch; walk a slice each cycle; A* detour around learned obstacles"
+  "routeNote": "карта растёт за ботом (rescanDist), радиуса-потолка нет; многоуровневая (yBand off); спрямление пути только по проверенной земле"
 }
