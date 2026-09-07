@@ -1,9 +1,15 @@
 {
-  "_comment": "Маршрут прогулки со спавна (одинаковый на всех анках). Правь points без рестарта воркера — читается перед каждой прогулкой. loop=true замыкает последнюю→первую.",
+  "_comment": "Маршрут со спавна. Правь points без рестарта воркера. minFrac/maxFrac — доля длины пути за одну прогулку. cooldown* — как часто гулять.",
   "loop": true,
   "arriveXZ": 1.35,
-  "maxMs": 120000,
+  "maxMs": 90000,
   "maxYawRadPerSec": 2.4,
+  "minFrac": 0.25,
+  "maxFrac": 0.5,
+  "cooldownBaseMs": 480000,
+  "cooldownJitterMs": 240000,
+  "skipBps": 2800,
+  "startupDelayMaxMs": 180000,
   "points": [
     { "x": 0, "y": 90, "z": 0 },
     { "x": -17, "y": 89, "z": 3 },
