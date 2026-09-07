@@ -1,6 +1,6 @@
 [
   {
-    "username": "tumanVKoridore",
+    "username": "dymOtSvechi",
     "password": "ggggg",
     "anarchy": 502,
     "type": "4narek-old",
@@ -8,25 +8,5 @@
     "goType": "netherite_sword-1.21",
     "clanBalanceLimit": 10,
     "ip": "502-1"
-  },
-  {
-    "username": "shorohListvy",
-    "password": "ggggg",
-    "anarchy": 502,
-    "type": "4narek-old",
-    "item": "netherite sword",
-    "goType": "netherite_sword-1.21",
-    "clanBalanceLimit": 10,
-    "ip": "502-2"
-  },
-  {
-    "username": "bankaSMedom",
-    "password": "ggggg",
-    "anarchy": 502,
-    "type": "4narek-old",
-    "item": "netherite sword",
-    "goType": "netherite_sword-1.21",
-    "clanBalanceLimit": 10,
-    "ip": "502-3"
   }
 ]
