@@ -8,5 +8,25 @@
     "goType": "netherite_sword-1.21",
     "clanBalanceLimit": 10,
     "ip": "502-1"
+  },
+  {
+    "username": "chaiIzTermosa",
+    "password": "ggggg",
+    "anarchy": 502,
+    "type": "4narek-old",
+    "item": "netherite sword",
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "502-2"
+  },
+  {
+    "username": "pylNaPalke",
+    "password": "ggggg",
+    "anarchy": 502,
+    "type": "4narek-old",
+    "item": "netherite sword",
+    "goType": "netherite_sword-1.21",
+    "clanBalanceLimit": 10,
+    "ip": "502-3"
   }
 ]
