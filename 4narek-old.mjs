@@ -2407,7 +2407,8 @@ async function sellItems() {
                 await waitForEventLoopOk({ log: (m) => logWarn(m) });
                 const prevPhysics = bot.physicsEnabled;
                 ensurePhysicsOn(bot);
-                lookLock = true;
+                // lookLock НЕ держим на всю прогулку: иначе wrapChat копит /spawn
+                // пока lookLock=true и команда уходит только после walk.
                 try {
                     const walk = await walkRandomRouteStop(bot, {
                         shouldAbort: () => !isSellSessionAlive(gen),
@@ -2430,7 +2431,6 @@ async function sellItems() {
                     } catch {
                         /* ignore */
                     }
-                    lookLock = false;
                     lastLookAt = Date.now();
                     if (prevPhysics === false && isInConfigurationTransfer()) {
                         bot.physicsEnabled = false;
@@ -2439,7 +2439,13 @@ async function sellItems() {
                     }
                 }
                 // короткий anti-AFK на месте после стопа
-                await lookAroundSpin(() => !isSellSessionAlive(gen));
+                lookLock = true;
+                try {
+                    await lookAroundSpin(() => !isSellSessionAlive(gen));
+                } finally {
+                    lookLock = false;
+                    lastLookAt = Date.now();
+                }
             } else {
                 await lookAroundSpin(() => !isSellSessionAlive(gen));
             }
