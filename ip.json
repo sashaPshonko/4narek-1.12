@@ -1,8 +1,8 @@
 {
   "502-1": "socks5://XPB7LQ:zEfmSu@170.83.237.248:8000",
-  "502-2": "socks5://Lunarproxy1891:Yp3VRWb7x6P7h9QR@171.22.31.153:2920",
+  "502-2": "socks5://Lunarproxy1893:atdi7DvrbDkTzkPh@171.22.31.153:2922",
   "502-3": "socks5://Lunarproxy1892:4vkiAhZ4JXGke4s9@171.22.31.153:2921",
-  "503-1": "socks5://Lunarproxy1893:atdi7DvrbDkTzkPh@171.22.31.153:2922",
+  "503-1": "socks5://Lunarproxy1891:Yp3VRWb7x6P7h9QR@171.22.31.153:2920",
   "503-2": "socks5://Lunarproxy1894:Pt9dgDKPp2QGJKon@171.22.31.153:2923",
   "503-3": "socks5://Lunarproxy1895:tDrDNpbpvqXMtkyv@171.22.31.153:2924",
   "504-1": "socks5://Lunarproxy1896:UKNd2ox7oTLzy9ww@171.22.31.153:2925",
@@ -14,5 +14,6 @@
   "507": "socks5://privetnitron:jacb9eSh7e@212.236.230.108:50101",
   "508": "socks5://privetnitron:jacb9eSh7e@212.236.230.24:50101",
   "509": "socks5://privetnitron:jacb9eSh7e@212.236.230.196:50101",
-  "510": "socks5://privetnitron:jacb9eSh7e@212.236.230.62:50101"
+  "510": "socks5://privetnitron:jacb9eSh7e@212.236.230.62:50101",
+  "_TODO": "REPLACE 503-1 proxy — current is dead Lunarproxy1891 (moved working 503-1 → 502-2 for dimNaStene)"
 }
