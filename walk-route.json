@@ -1,7 +1,7 @@
 {
   "mode": "shop_map",
   "loop": false,
-  "arriveXZ": 1.4,
+  "arriveXZ": 0.8,
   "maxMs": 220000,
   "stopFracMin": 0.8,
   "stopFracMax": 1.0,
