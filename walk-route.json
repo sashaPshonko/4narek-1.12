@@ -2,12 +2,12 @@
   "mode": "shop_map",
   "loop": false,
   "arriveXZ": 1.4,
-  "maxMs": 200000,
-  "stopFracMin": 0.7,
+  "maxMs": 220000,
+  "stopFracMin": 0.8,
   "stopFracMax": 1.0,
   "lookAlignRad": 0.09,
   "lookMaxMs": 5500,
-  "preWalkChat": "/warp shop",
+  "preWalkChat": null,
   "preWalkChatWaitMs": 8000,
   "skipSpawnHome": true,
   "spawnOnStuck": false,
@@ -21,11 +21,14 @@
     "radiusXZ": 72,
     "minFlatCells": 250,
     "maxAgeMs": 43200000,
-    "legsMin": 5,
-    "legsMax": 9,
-    "goalDistMin": 18,
-    "goalDistMax": 48
+    "legsMin": 6,
+    "legsMax": 10,
+    "goalDistMin": 28,
+    "goalDistMax": 70,
+    "entryWarp": "/warp shop",
+    "entryWarpWaitMs": 8000,
+    "onMapMaxDist": 5
   },
   "points": [],
-  "routeNote": "shop: dump flat walkable band, A* routes, nick-sector spread"
+  "routeNote": "shop flat once via entryWarp if off-map; then roam full territory without re-warp"
 }
