@@ -27,8 +27,12 @@
     "goalDistMax": 70,
     "entryWarp": "/warp shop",
     "entryWarpWaitMs": 8000,
-    "onMapMaxDist": 5
+    "onMapMaxDist": 5,
+    "sessionMaxMs": 2700000,
+    "cycleDistMin": 45,
+    "cycleDistMax": 110,
+    "replanMax": 4
   },
   "points": [],
-  "routeNote": "shop flat once via entryWarp if off-map; then roam full territory without re-warp"
+  "routeNote": "one plan per worker launch; walk a slice each cycle; A* detour around learned obstacles"
 }

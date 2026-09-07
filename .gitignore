@@ -7,3 +7,6 @@ bot.log
 *.log
 # listing memory per bot (orchestrator)
 listings-state/
+# runtime walk maps (dumped on the server)
+shop-map.json
+shop-blocked.json
