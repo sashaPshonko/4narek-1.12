@@ -2413,6 +2413,7 @@ async function sellItems() {
                     const walk = await walkRandomRouteStop(bot, {
                         shouldAbort: () => !isSellSessionAlive(gen),
                         log: (msg) => logInfo(msg),
+                        username: config.username,
                     });
                     config.lastWarpTime = Date.now();
                     if (walk.ok) {

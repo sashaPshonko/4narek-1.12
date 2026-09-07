@@ -1,9 +1,9 @@
 {
-  "mode": "random",
+  "mode": "shop_map",
   "loop": false,
   "arriveXZ": 1.4,
-  "maxMs": 180000,
-  "stopFracMin": 0.75,
+  "maxMs": 200000,
+  "stopFracMin": 0.7,
   "stopFracMax": 1.0,
   "lookAlignRad": 0.09,
   "lookMaxMs": 5500,
@@ -17,13 +17,15 @@
     "y": 90,
     "z": 0
   },
-  "random": {
-    "legsMin": 9,
-    "legsMax": 15,
-    "legLenMin": 12,
-    "legLenMax": 26,
-    "radiusMax": 52
+  "map": {
+    "radiusXZ": 72,
+    "minFlatCells": 250,
+    "maxAgeMs": 43200000,
+    "legsMin": 5,
+    "legsMax": 9,
+    "goalDistMin": 18,
+    "goalDistMax": 48
   },
   "points": [],
-  "routeNote": "shop flat: /warp shop then unique random polyline per walk"
+  "routeNote": "shop: dump flat walkable band, A* routes, nick-sector spread"
 }
