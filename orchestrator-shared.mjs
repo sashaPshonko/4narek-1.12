@@ -15,6 +15,7 @@ import {
 } from './lib/auth-fault.mjs';
 import {
     STAFF_CHECK_EVACUATE_MS,
+    STAFF_CHECK_SESSION_MAX_MS,
     EXIT_STAFF_CHECK,
     STAFF_CHECK_BAN_KIND,
     STAFF_CHECK_BAN_REASON,
@@ -33,6 +34,7 @@ export {
 
 export {
     STAFF_CHECK_EVACUATE_MS,
+    STAFF_CHECK_SESSION_MAX_MS,
     EXIT_STAFF_CHECK,
     STAFF_CHECK_BAN_KIND,
     STAFF_CHECK_BAN_REASON,
@@ -630,6 +632,56 @@ export async function markBotAuthFault(username, ctx, kind, reason = '') {
     await ctx.sendAlert(`🔧 ${username}${anarchy} — ${label}`, username);
 }
 
+function goHttpBase() {
+    return process.env.GO_HTTP_URL
+        || (process.env.LOCAL_MODE === '1' || process.env.LOCAL_MODE === 'true'
+            ? 'http://127.0.0.1:8080'
+            : 'http://212.8.229.76:8080');
+}
+
+function postGoOrHttp(ctx, payload, httpPath) {
+    if (typeof ctx?.sendToGo === 'function' && ctx.sendToGo(payload)) return true;
+    if (!httpPath) return false;
+    fetch(`${goHttpBase()}${httpPath}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    }).catch((e) => console.warn(`[go] ${httpPath} fail: ${e.message}`));
+    return true;
+}
+
+export function reportStaffCheckToGo(username, ctx, reason = '') {
+    const bot = ctx?.bots?.get(username);
+    return postGoOrHttp(ctx, {
+        action: 'staff_check',
+        username,
+        anarchy: bot?.anarchy ?? null,
+        reason: String(reason || '').slice(0, 1500),
+    }, '/fleet/api/staff-check');
+}
+
+export function reportStaffCheckEndToGo(username, ctx) {
+    if (!username) return false;
+    return postGoOrHttp(ctx, {
+        action: 'staff_check_end',
+        username,
+        end: true,
+    }, '/fleet/api/staff-check');
+}
+
+export function reportDeskChatToGo(username, ctx, { from, text, anarchy } = {}) {
+    const t = String(text || '').trim();
+    if (!username || !t) return false;
+    const bot = ctx?.bots?.get(username);
+    return postGoOrHttp(ctx, {
+        action: 'desk_chat',
+        username,
+        from: String(from || '').slice(0, 32),
+        text: t.slice(0, 800),
+        anarchy: anarchy ?? bot?.anarchy ?? null,
+    }, '/fleet/api/desk-chat');
+}
+
 /** FunAuth game-verified: 5с на анке без «чтобы двигаться». */
 export function requestFunauthVerified(username, anarchy, ctx) {
     if (!username) return false;
@@ -771,6 +823,14 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         if (bot) bot.viewPort = Number(message.port) || null;
         return true;
     }
+    if (message?.name === 'desk_chat') {
+        reportDeskChatToGo(message.username || username, ctx, {
+            from: message.from,
+            text: message.text,
+            anarchy: message.anarchy,
+        });
+        return true;
+    }
     if (message?.name === 'clan_setup') {
         requestClanSetup({
             anarchy: message.anarchy,
@@ -863,66 +923,109 @@ export function notifyWorkersOwnerBanned(workers, safePostMessage, info = {}) {
     return n;
 }
 
-/** Staff SS-check — disconnect всех воркеров, рестарт через STAFF_CHECK_EVACUATE_MS. */
+/** Staff SS-check — все анки выходят, stay шлёт /anydesk, ждём GUI session_end. */
 let staffEvacuateUntil = 0;
+let deskStayNick = '';
+let deskGotAnydesk = false;
+let deskFallbackTimer = null;
+let deskCtxRef = null;
+let sendDeskVerifyFn = null;
+
+export function registerDeskVerify(fn) {
+    sendDeskVerifyFn = typeof fn === 'function' ? fn : null;
+}
+
+export function isStaffCheckHolding(bot) {
+    if (!bot?.staffCheckEvac) return false;
+    if (bot.staffCheckStay) return false;
+    return (Number(bot.staffCheckRestartUntil) || 0) > Date.now();
+}
+
+function postWorker(ctx, nick, msg) {
+    const entry = ctx.workers?.get(nick);
+    if (!entry?.worker || entry.worker.terminated) return false;
+    try {
+        entry.worker.postMessage(msg);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function armDeskFallback(ctx, ms) {
+    if (deskFallbackTimer) clearTimeout(deskFallbackTimer);
+    deskCtxRef = ctx;
+    deskFallbackTimer = setTimeout(() => {
+        deskFallbackTimer = null;
+        const ref = deskCtxRef;
+        if (!ref) return;
+        console.warn('[staff-check] fallback session_end (GUI молчит)');
+        resumeAfterDeskSession(ref);
+    }, ms);
+}
 
 export function notifyWorkersStaffCheck(workers, safePostMessage, info = {}) {
     if (!workers || typeof safePostMessage !== 'function') return 0;
+    const skip = String(info.stay || info.skip || '').trim();
     let n = 0;
     for (const nick of workers.keys()) {
+        if (skip && nick === skip) continue;
         if (safePostMessage(nick, { type: 'staff_check_disconnect', ...info })) n++;
     }
     return n;
 }
 
-export async function handleStaffCheckReport(username, ctx, reason = '') {
+export function applyDeskEvacuate(stay, ctx, info = {}) {
+    const stayNick = String(stay || '').trim();
+    if (!ctx?.bots) return 0;
+    if (deskStayNick && deskStayNick !== stayNick && staffEvacuateUntil > Date.now()) {
+        if (stayNick) {
+            const extra = ctx.bots.get(stayNick);
+            if (extra) extra.staffCheckStay = true;
+            postWorker(ctx, stayNick, { type: 'staff_check_stay', from: deskStayNick });
+        }
+        console.warn(`[staff-check] уже сессия stay=${deskStayNick}, второй ${stayNick} idle`);
+        return 0;
+    }
+
     const now = Date.now();
-    const until = Math.max(staffEvacuateUntil, now + STAFF_CHECK_EVACUATE_MS);
-    const already = staffEvacuateUntil > now;
+    const until = Math.max(staffEvacuateUntil, now + STAFF_CHECK_SESSION_MAX_MS);
     staffEvacuateUntil = until;
+    deskStayNick = stayNick;
+    deskCtxRef = ctx;
+    if (!deskGotAnydesk) armDeskFallback(ctx, STAFF_CHECK_EVACUATE_MS);
 
-    // вызванный акк = гарантированный бан (метка «проверка» в /fleet)
-    const banReason = reason
-        ? `${STAFF_CHECK_BAN_REASON}\n${String(reason).slice(0, 1500)}`
-        : STAFF_CHECK_BAN_REASON;
-    await markBotBanned(username, ctx, banReason, {
-        kind: STAFF_CHECK_BAN_KIND,
-        silent: true,
-    });
-
-    for (const nick of ctx.bots?.keys?.() || []) {
+    for (const nick of ctx.bots.keys()) {
         const bot = ctx.bots.get(nick);
         if (!bot || bot.banned) continue;
         bot.staffCheckRestartUntil = until;
+        if (nick === stayNick) {
+            bot.staffCheckStay = true;
+            bot.staffCheckEvac = false;
+            continue;
+        }
+        bot.staffCheckStay = false;
         bot.staffCheckEvac = true;
         markBotPresenceInactive(nick, ctx, 'staff_check');
     }
     ctx.pushPresenceToGo?.();
 
-    const n = notifyWorkersStaffCheck(ctx.workers, (nick, msg) => {
-        if (nick === username) return false; // уже stopWorkerNoRestart
-        const entry = ctx.workers?.get(nick);
-        if (!entry?.worker || entry.worker.terminated) return false;
-        try {
-            entry.worker.postMessage(msg);
-            return true;
-        } catch {
-            return false;
-        }
-    }, {
-        from: username,
+    if (stayNick) postWorker(ctx, stayNick, { type: 'staff_check_stay', from: info.from || 'desk' });
+
+    const n = notifyWorkersStaffCheck(ctx.workers, (nick, msg) => postWorker(ctx, nick, msg), {
+        from: stayNick || info.from || 'desk',
+        stay: stayNick,
         until,
-        reason: String(reason || '').slice(0, 500),
+        reason: String(info.reason || '').slice(0, 500),
     });
 
-    // если воркер завис — через 8с terminate; рестарт всё равно через staffCheckRestartUntil
     setTimeout(() => {
         for (const nick of [...(ctx.workers?.keys?.() || [])]) {
-            if (nick === username) continue;
+            if (nick === stayNick) continue;
             const entry = ctx.workers?.get(nick);
             if (!entry?.worker || entry.worker.terminated) continue;
             const bot = ctx.bots?.get(nick);
-            if (bot?.banned) continue;
+            if (bot?.banned || bot?.staffCheckStay) continue;
             if (!bot?.staffCheckRestartUntil || bot.staffCheckRestartUntil <= Date.now()) continue;
             console.warn(`[staff-check] ${nick} не вышел сам → terminate`);
             try {
@@ -931,16 +1034,85 @@ export async function handleStaffCheckReport(username, ctx, reason = '') {
         }
     }, 8000);
 
-    const mins = Math.ceil((until - now) / 60_000);
+    return n;
+}
+
+export function noteDeskAnydesk(ctx) {
+    deskGotAnydesk = true;
+    if (ctx) armDeskFallback(ctx, STAFF_CHECK_SESSION_MAX_MS);
+}
+
+export function resumeAfterDeskSession(ctx) {
+    if (deskFallbackTimer) {
+        clearTimeout(deskFallbackTimer);
+        deskFallbackTimer = null;
+    }
+    const stay = deskStayNick;
+    deskStayNick = '';
+    deskGotAnydesk = false;
+    staffEvacuateUntil = 0;
+    if (stay) reportStaffCheckEndToGo(stay, ctx);
+    if (!ctx?.bots) return;
+
+    for (const nick of [...ctx.bots.keys()]) {
+        const bot = ctx.bots.get(nick);
+        if (!bot) continue;
+        const wasStay = bot.staffCheckStay || nick === stay;
+        const wasEvac = bot.staffCheckEvac || bot.staffCheckRestartUntil;
+        bot.staffCheckStay = false;
+        bot.staffCheckEvac = false;
+        bot.staffCheckRestartUntil = 0;
+        if (wasEvac || wasStay) {
+            clearBotPresenceInactive(nick, ctx, 'staff_check_done');
+        }
+        if (wasStay) {
+            const entry = ctx.workers?.get(nick);
+            const alive = entry?.worker && !entry.worker.terminated;
+            if (alive) postWorker(ctx, nick, { type: 'staff_check_resume' });
+            else if (!bot.banned && !bot.authFault && typeof ctx.runWorker === 'function') {
+                console.log(`[staff-check] session_end → stay ${nick} упал, старт`);
+                void ctx.runWorker(bot);
+            }
+            continue;
+        }
+        if (bot.banned || bot.authFault) continue;
+        const pending = ctx.pendingRestarts?.get(nick);
+        if (pending) {
+            clearTimeout(pending);
+            ctx.pendingRestarts.delete(nick);
+        }
+        const entry = ctx.workers?.get(nick);
+        const alive = entry?.worker && !entry.worker.terminated;
+        if (!alive && typeof ctx.runWorker === 'function') {
+            console.log(`[staff-check] session_end → старт ${nick}`);
+            void ctx.runWorker(bot);
+        }
+    }
+    ctx.pushPresenceToGo?.();
+}
+
+export async function handleStaffCheckReport(username, ctx, reason = '') {
+    const already = Boolean(deskStayNick && staffEvacuateUntil > Date.now());
+    const n = applyDeskEvacuate(username, ctx, {
+        from: username,
+        reason: String(reason || '').slice(0, 500),
+    });
+
+    const sent = already ? false : Boolean(sendDeskVerifyFn?.(username, ctx));
     const anarchy = ctx.bots?.get(username)?.anarchy;
     const an = anarchy != null ? ` an${anarchy}` : '';
     console.warn(
-        `[staff-check] ${username}${an} → бан (проверка), остальные disconnect ${mins}м (воркеров: ${n})${already ? ' [extend]' : ''}`,
+        `[staff-check] ${username}${an} stay, остальные offline (воркеров: ${n})` +
+            `${already ? ' [уже сессия]' : ''}${sent ? '' : ' [нет GUI WS]'}`,
     );
     await ctx.sendAlert?.(
-        `🚨${an} ${username} вызван на проверку → бан · остальные offline ${mins} мин`,
+        already
+            ? `🚨${an} ${username} тоже на проверке, GUI занят (${deskStayNick || 'сессия'})`
+            : `🚨${an} ${username} на проверку → AnyDesk, остальные вышли` +
+                (sent ? '' : ' · GUI WS нет'),
         username,
     );
+    if (!already) reportStaffCheckToGo(username, ctx, reason);
 }
 
 /** Сумма предметов только от живых ботов (мёртвые = 0 в отчёте) */
@@ -1005,6 +1177,7 @@ export function shouldRestartWorkerOnExit(username, worker, workers) {
 }
 
 export function getWorkerRestartDelayMs(code, kickReason = '', bot = null) {
+    if (bot?.staffCheckStay) return 5000;
     const until = Number(bot?.staffCheckRestartUntil) || 0;
     if (code === EXIT_STAFF_CHECK || (until > Date.now())) {
         if (until > Date.now()) return Math.max(1000, until - Date.now());
@@ -1020,6 +1193,9 @@ export function getWorkerRestartDelayMs(code, kickReason = '', bot = null) {
 /** Сброс staff-check флагов при успешном рестарте после паузы. */
 export function clearStaffCheckRestartFlags(bot, ctx, username) {
     if (!bot) return;
+    if (bot.staffCheckStay && (Number(bot.staffCheckRestartUntil) || 0) > Date.now()) {
+        return;
+    }
     const had = bot.staffCheckEvac || bot.staffCheckRestartUntil;
     bot.staffCheckRestartUntil = 0;
     bot.staffCheckEvac = false;

@@ -1,5 +1,6 @@
 node_modules/
 xray.local.env
+.gui-desk.env
 .vless-applied.stamp
 .xray-runtime/
 .xray-start.lock

@@ -657,6 +657,8 @@ const config = {
     ownerBanDrain: false,
     ownerBanLeaveDone: false,
     ip: workerData.ip,
+    staffCheckIdle: false,
+    staffCheckStay: false,
 };
 
 initBotDelayProfile(config.username);
@@ -1527,16 +1529,13 @@ async function handleChatMessage(text) {
         return;
     }
     if (isStaffCheckText(text)) {
-        logWarn('проверка читов → репорт орку, жду disconnect');
+        enterStaffCheckIdle('chat');
+        logWarn('проверка читов → репорт орку, жду AnyDesk');
         parentPort.postMessage({
             name: 'staff_check',
             username: workerData.username,
             reason: text,
         });
-        // если орк не успел разослать — сами рвём через 2с
-        setTimeout(() => {
-            if (!staffCheckExiting) void disconnectForStaffCheck('fallback');
-        }, 2000);
         return;
     }
     if (text.includes('Не так быстро..') || text.includes('[✘] Ошибка! Этот товар уже Купили!')) {
@@ -1621,7 +1620,34 @@ parentPort.on('message', (data) => {
         }
         return;
     }
+    if (data.type === 'staff_check_stay') {
+        enterStaffCheckIdle(data.from || 'orch');
+        return;
+    }
+    if (data.type === 'anydesk_id') {
+        const id = String(data.id || '').replace(/\D/g, '');
+        enterStaffCheckIdle('anydesk');
+        if (id && bot) {
+            logOk(`проверка → /anydesk ${id}`);
+            try { bot.chat(`/anydesk ${id}`); } catch { /* ignore */ }
+        } else {
+            logWarn('проверка → AnyDesk id пустой');
+        }
+        return;
+    }
+    if (data.type === 'staff_check_resume') {
+        if (!config.staffCheckIdle && !config.staffCheckStay) return;
+        config.staffCheckIdle = false;
+        config.staffCheckStay = false;
+        logOk('AnyDesk сессия кончилась → снова АХ');
+        void sellItems().then(() => safeAH());
+        return;
+    }
     if (data.type === 'staff_check_disconnect' || data.type === 'staff_check_evacuate') {
+        if (config.staffCheckStay || config.staffCheckIdle) {
+            logInfo('staff-check disconnect skip (stay)');
+            return;
+        }
         void disconnectForStaffCheck(data.from || 'orch');
         return;
     }
@@ -1629,6 +1655,17 @@ parentPort.on('message', (data) => {
 });
 
 let staffCheckExiting = false;
+
+function enterStaffCheckIdle(from = '') {
+    if (!config.staffCheckIdle) {
+        logWarn(`проверка → idle${from ? ` (${from})` : ''}, жду AnyDesk, АХ стоп`);
+    }
+    config.staffCheckIdle = true;
+    config.staffCheckStay = true;
+    abortSellSession('staff-check');
+    generateKey();
+    void closeCurrentWindowSafe();
+}
 
 async function disconnectForStaffCheck(from = '') {
     if (staffCheckExiting) return;
@@ -1743,6 +1780,20 @@ async function main() {
                     if (noisy.test(s)) return;
                     logInfo(`view ${s}`);
                 },
+                onSpectatorChat: (text, from) => {
+                    try { bot.chat(text); } catch { /* ignore */ }
+                    const t = String(text || '').trim();
+                    if (!t) return;
+                    try {
+                        parentPort.postMessage({
+                            name: 'desk_chat',
+                            username: config.username,
+                            from: from || '',
+                            text: t.slice(0, 800),
+                            anarchy: config.anarchy,
+                        });
+                    } catch { /* parent gone */ }
+                },
             });
         }
     } catch (err) {
@@ -1813,6 +1864,10 @@ async function main() {
     });
 
     bot.on('physicTick', async () => {
+        if (config.staffCheckIdle) {
+            config.timeActive = Date.now();
+            return;
+        }
         if (config.sellInFlight) {
             if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
                 abortSellSession('таймаут');
@@ -2369,6 +2424,7 @@ async function closeCurrentWindowSafe() {
 }
 
 async function sellItems() {
+    if (config.staffCheckIdle) return;
     if (config.sellInFlight) {
         if (config.sellStartedAt && Date.now() - config.sellStartedAt > SELL_ITEMS_MAX_MS) {
             abortSellSession('таймаут');
@@ -2811,6 +2867,7 @@ async function antiAfkIfNeeded(shouldAbort = null) {
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
 async function safeAH() {
+    if (config.staffCheckIdle) return;
     if (config.ownerBanDrain) {
         await drainTreasuryAndLeaveClan();
         return;
@@ -2829,6 +2886,7 @@ async function safeAH() {
 
     let searchCount = 0;
     while (key === config.key) {
+        if (config.staffCheckIdle) return;
         if (config.ownerBanDrain) {
             await drainTreasuryAndLeaveClan();
             return;

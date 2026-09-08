@@ -43,10 +43,12 @@ import {
     createWarpCoordinator,
     handleWorkerWarpPick,
     notifyWorkersOwnerBanned,
+    isStaffCheckHolding,
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 import { runWorkersStaggered } from './lib/bot-tempo.mjs';
 import { attachBotViewTelegram } from './lib/bot-view/telegram.mjs';
+import { startGuiDeskClient } from './lib/gui-desk.mjs';
 import { startLogRotate } from './lib/log-rotate.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
@@ -214,6 +216,11 @@ async function runWorker(bot) {
         return null;
     }
 
+    if (isStaffCheckHolding(bot)) {
+        console.warn(`⏭ ${username} ждём конца AnyDesk`);
+        return null;
+    }
+
     clearStaffCheckRestartFlags(bot, workerStatusCtx(), username);
 
     const pending = pendingRestarts.get(username);
@@ -262,6 +269,9 @@ async function runWorker(bot) {
                         if (ackWorkerReady(bots, workers, username)) {
                             console.log(`✅ ${username} запущен`);
                             pushPresenceToGo();
+                        }
+                        if (bot.staffCheckStay) {
+                            safePostMessage(username, { type: 'staff_check_stay' });
                         }
                     } else if (message.name === 'listing') {
                         const result = listingStore.handle(username, message);
@@ -655,6 +665,7 @@ process.on('uncaughtException', async (error) => {
 async function main() {
     await initTelegram();
     await loadBotsConfig();
+    startGuiDeskClient(() => workerStatusCtx());
     connectWebSocket();
     clanOwnerWatch.start({
         pushPresenceToGo,
