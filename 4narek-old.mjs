@@ -40,6 +40,11 @@ import {
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
 import { runAntiAfkMotion, nextWalkGapMs } from './lib/afk-look.mjs';
+import {
+    runAntiAfkMotion as runVanillaMove,
+    nextWalkGapMs as nextVanillaWalkGapMs,
+    patchWalking as patchVanillaMove,
+} from './lib/vanilla-move.mjs';
 import { maybeDumpSpawnMap } from './lib/spawn-map.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
@@ -659,6 +664,11 @@ const config = {
     staffCheckIdle: false,
     staffCheckStay: false,
 };
+
+/** Только an502 — новый осмотр/WASD/tick_end. 503/504/506 остаются на afk-look. */
+function useVanillaMove() {
+    return Number(config.anarchy) === 502;
+}
 
 initBotDelayProfile(config.username);
 initAhTempo(config.username);
@@ -1756,7 +1766,12 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    patchWalking121(bot);
+    if (useVanillaMove()) {
+        patchVanillaMove(bot);
+        logOk('vanilla-move → осмотр/WASD как клиент (только 502)');
+    } else {
+        patchWalking121(bot);
+    }
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2788,7 +2803,11 @@ async function lookAroundSpin(shouldAbort = null) {
     ensurePhysicsOn(bot);
     lookLock = true;
     try {
-        await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort, { force: Boolean(config.afk) });
+        if (useVanillaMove()) {
+            await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort);
+        } else {
+            await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort, { force: Boolean(config.afk) });
+        }
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -2813,7 +2832,7 @@ async function lookAroundSpin(shouldAbort = null) {
         await sleepMs(Math.min(50, deadline - Date.now()));
     }
     config.walkTime = Date.now();
-    config.walkGapMs = nextWalkGapMs();
+    config.walkGapMs = useVanillaMove() ? nextVanillaWalkGapMs() : nextWalkGapMs();
 }
 
 /** Сход с AFK — тот же motion (force через config.afk). */
