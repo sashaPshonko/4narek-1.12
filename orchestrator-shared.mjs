@@ -766,6 +766,11 @@ export async function handleFunauthGoMessage(dataObj, ctx) {
 
 /** true — обработано, не слать как обычный лог */
 export async function handleWorkerStatusMessage(message, username, ctx) {
+    if (message?.name === 'view_listen') {
+        const bot = ctx.bots?.get(username);
+        if (bot) bot.viewPort = Number(message.port) || null;
+        return true;
+    }
     if (message?.name === 'clan_setup') {
         requestClanSetup({
             anarchy: message.anarchy,

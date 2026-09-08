@@ -46,6 +46,8 @@ import {
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 import { runWorkersStaggered } from './lib/bot-tempo.mjs';
+import { attachBotViewTelegram } from './lib/bot-view/telegram.mjs';
+import { startLogRotate } from './lib/log-rotate.mjs';
 
 const marketFloorTracker = createMarketFloorTracker({
     onFlush(floors, meta) {
@@ -529,6 +531,8 @@ async function initTelegram() {
         isShuttingDown = true;
         process.exit(0);
     });
+
+    attachBotViewTelegram(tgBot, alertChatID, { bots });
     
     console.log('✅ Telegram бот готов');
 }
@@ -621,14 +625,11 @@ setInterval(() => {
     }
 }, 120000);
 
-// Очистка лога раз в 5 часов
-setInterval(async () => {
-    try {
-        exec('> bot.log', (err) => {
-            if (err) console.error('Clean log error:', err.message);
-        });
-    } catch (error) {}
-}, 5 * 60 * 60 * 1000);
+startLogRotate([
+    join(__dirname, 'logs/504.log'),
+    join(__dirname, '504.log'),
+    join(__dirname, 'bot.log'),
+], { keepDays: 7, maxBytes: 80 * 1024 * 1024 });
 
 // ========== ГЛОБАЛЬНЫЕ ОБРАБОТЧИКИ ==========
 process.on('unhandledRejection', async (reason) => {

@@ -44,6 +44,7 @@ import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { maybeDumpSpawnMap } from './lib/spawn-map.mjs';
 import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
+import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
@@ -1726,6 +1727,27 @@ async function main() {
 
     setupConfigurationTransferFix(bot);
     attachWindowCloseTrace(bot);
+
+    try {
+        const owners = JSON.parse(fs.readFileSync(join(OLD_ROOT, 'clan-owners.json'), 'utf8'));
+        if (isClanOwnerUsername(config.username, owners)) {
+            logInfo('view: пропуск (овнер)');
+        } else {
+            const noisy = /^(configuration replay|chunk0 |hud:|FunTime login:|login отправлен|known packs |finish_configuration |мир:|ждём чанки)/;
+            installBotView(bot, {
+                username: config.username,
+                ip: config.ip,
+                anarchy: config.anarchy,
+                log: (msg) => {
+                    const s = String(msg || '');
+                    if (noisy.test(s)) return;
+                    logInfo(`view ${s}`);
+                },
+            });
+        }
+    } catch (err) {
+        logInfo(`view: не поставил (${err?.message || err})`);
+    }
 
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
