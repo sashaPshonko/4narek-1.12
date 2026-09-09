@@ -1760,7 +1760,7 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
-    logOk('vanilla-move → осмотр/WASD как клиент');
+    logOk('vanilla-move → только WASD, без поворота головы');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2782,7 +2782,7 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK: микро мышь + одна WASD (как рабочий FunTime-клиент). */
+/** Anti-AFK: только WASD, без look. */
 async function lookAroundSpin(shouldAbort = null) {
     if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
