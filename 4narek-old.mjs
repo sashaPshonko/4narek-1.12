@@ -39,14 +39,12 @@ import {
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
-import { runAntiAfkMotion, nextWalkGapMs } from './lib/afk-look.mjs';
 import {
     runAntiAfkMotion as runVanillaMove,
     nextWalkGapMs as nextVanillaWalkGapMs,
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
 import { maybeDumpSpawnMap } from './lib/spawn-map.mjs';
-import { patchWalking121 } from './lib/walk-121.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -664,11 +662,6 @@ const config = {
     staffCheckIdle: false,
     staffCheckStay: false,
 };
-
-/** Только an502 — новый осмотр/WASD/tick_end. 503/504/506 остаются на afk-look. */
-function useVanillaMove() {
-    return Number(config.anarchy) === 502;
-}
 
 initBotDelayProfile(config.username);
 initAhTempo(config.username);
@@ -1766,12 +1759,8 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    if (useVanillaMove()) {
-        patchVanillaMove(bot);
-        logOk('vanilla-move → осмотр/WASD как клиент (только 502)');
-    } else {
-        patchWalking121(bot);
-    }
+    patchVanillaMove(bot);
+    logOk('vanilla-move → осмотр/WASD как клиент');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2803,11 +2792,7 @@ async function lookAroundSpin(shouldAbort = null) {
     ensurePhysicsOn(bot);
     lookLock = true;
     try {
-        if (useVanillaMove()) {
-            await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort);
-        } else {
-            await runAntiAfkMotion(bot, (msg) => logOk(msg), shouldAbort, { force: Boolean(config.afk) });
-        }
+        await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort);
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -2832,7 +2817,7 @@ async function lookAroundSpin(shouldAbort = null) {
         await sleepMs(Math.min(50, deadline - Date.now()));
     }
     config.walkTime = Date.now();
-    config.walkGapMs = useVanillaMove() ? nextVanillaWalkGapMs() : nextWalkGapMs();
+    config.walkGapMs = nextVanillaWalkGapMs();
 }
 
 /** Сход с AFK — тот же motion (force через config.afk). */
