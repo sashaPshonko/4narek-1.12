@@ -44,7 +44,6 @@ import {
     nextWalkGapMs as nextVanillaWalkGapMs,
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
-import { maybeDumpSpawnMap } from './lib/spawn-map.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -2454,11 +2453,6 @@ async function sellItems() {
             return;
         }
         config.timeActive = Date.now();
-        try {
-            await maybeDumpSpawnMap(bot, (m) => logInfo(m));
-        } catch (e) {
-            logWarn(`spawn-map → ${e?.message || e}`);
-        }
         let canSell = true;
 
         if (!bot) {
