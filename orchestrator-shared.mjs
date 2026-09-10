@@ -765,7 +765,46 @@ export function requestFunauthTwoFa(username, ctx) {
     return true;
 }
 
-/** После FunAuth: ok → поднять воркер; no_accounts → тоже поднять позже, чтобы снова поймать хуйню и ретрайнуть bind. */
+/**
+ * Гасим воркер (если ещё жив) и поднимаем через delayMs.
+ * Нужно для «хуйня неведомая»: воркер иногда шлёт алерт, но process.exit не срабатывает —
+ * exit-handler тогда молчит и бот висит на анке без рестарта.
+ */
+export async function killWorkerAndRestartIn(username, ctx, delayMs = 5000, reason = 'restart') {
+    const bot = ctx.bots?.get(username);
+    if (!bot || bot.banned || bot.authFault) return false;
+
+    bot.isManualStop = false;
+
+    const pending = ctx.pendingRestarts?.get(username);
+    if (pending) {
+        clearTimeout(pending);
+        ctx.pendingRestarts.delete(username);
+    }
+
+    const entry = ctx.workers?.get(username);
+    if (entry) {
+        bot.success = false;
+        clearBotPresence(username, ctx.botItems, ctx.botInventory);
+        await ctx.terminateWorkerEntry?.(entry);
+        ctx.workers.delete(username);
+        ctx.pushPresenceToGo?.();
+    }
+
+    const ms = Math.max(1000, Number(delayMs) || 5000);
+    console.log(`🔁 ${username}: ${reason} → рестарт через ${ms / 1000}с`);
+    const tid = setTimeout(() => {
+        ctx.pendingRestarts?.delete(username);
+        if (bot.isManualStop || bot.authFault || bot.banned) return;
+        if (ctx.workers?.get(username)) return;
+        console.log(`🔁 Перезапуск ${username} (${reason})`);
+        ctx.runWorker?.(bot);
+    }, ms);
+    ctx.pendingRestarts?.set(username, tid);
+    return true;
+}
+
+/** После FunAuth: ok → поднять воркер; no_accounts → убить застрявшего и поднять через 5с. */
 export async function handleFunauthGoMessage(dataObj, ctx) {
     if (!dataObj || typeof dataObj !== 'object') return false;
     const action = dataObj.action;
@@ -787,24 +826,23 @@ export async function handleFunauthGoMessage(dataObj, ctx) {
             : dataObj.error === 'all_accounts_busy'
               ? ' (все TG уже заняты другими MC)'
               : '';
-        console.log(`[funauth] no_accounts${errHint} → ${nick}, рестарт через 45с`);
+        console.log(`[funauth] no_accounts${errHint} → ${nick}, рестарт через 5с`);
         await ctx.sendAlert?.(
-            `🚨 FunAuth: нет TG для ${nick}${errHint} — воркер встанет через 45с`,
+            `🚨 FunAuth: нет TG для ${nick}${errHint} — рестарт через 5с`,
             nick,
         );
-        setTimeout(() => {
-            if (bot.isManualStop && !ctx.workers?.get(nick)) {
-                bot.isManualStop = false;
-                console.log(`[funauth] рестарт после no_accounts → ${nick}`);
-                ctx.runWorker?.(bot);
-            }
-        }, 45_000);
+        await killWorkerAndRestartIn(nick, ctx, 5000, 'funauth no_accounts');
         return true;
     }
 
     if (dataObj.ok) {
         console.log(`[funauth] ok → рестарт ${nick}`);
         bot.isManualStop = false;
+        const pending = ctx.pendingRestarts?.get(nick);
+        if (pending) {
+            clearTimeout(pending);
+            ctx.pendingRestarts.delete(nick);
+        }
         if (!ctx.workers?.get(nick)) {
             ctx.runWorker?.(bot);
         }
@@ -863,6 +901,7 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (message?.name === 'funauth_2fa') {
         requestFunauthTwoFa(message.username || username, ctx);
+        await killWorkerAndRestartIn(username, ctx, 5000, 'funauth 2fa');
         return true;
     }
     if (message?.name === 'funauth_verified') {
@@ -901,7 +940,8 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
         requestFunauthBind(username, ctx);
         await ctx.sendAlert?.(message, username);
-        // воркер сам exit → оркестратор перезапустит по exit handler
+        // не ждём process.exit воркера — он иногда зависает после хуйни
+        await killWorkerAndRestartIn(username, ctx, 5000, 'хуйня неведомая');
         return true;
     }
     return false;

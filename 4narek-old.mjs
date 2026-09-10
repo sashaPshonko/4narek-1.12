@@ -1512,7 +1512,11 @@ async function handleChatMessage(text) {
         funauthBindRequired = true;
         cancelFunauthVerifyTimer();
         parentPort.postMessage(`${workerData.username} - хуйня неведомая`);
+        // орк сам terminate+рестарт через 5с; exit — запасной путь
         setTimeout(() => process.exit(0), 500);
+        setTimeout(() => {
+            try { process.exit(0); } catch { /* already dead */ }
+        }, 3000);
         return;
     }
     if (
