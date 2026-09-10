@@ -4,8 +4,8 @@
     "password": "ggggg",
     "anarchy": 506,
     "type": "4narek-old",
-    "item": "netherite armour",
-    "goType": "netherite_armor-1.21",
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
     "clanBalanceLimit": 10,
     "ip": "506-1"
   },
@@ -14,8 +14,8 @@
     "password": "ggggg",
     "anarchy": 506,
     "type": "4narek-old",
-    "item": "netherite armour",
-    "goType": "netherite_armor-1.21",
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
     "clanBalanceLimit": 10,
     "ip": "506-2"
   },
@@ -24,9 +24,9 @@
     "password": "ggggg",
     "anarchy": 506,
     "type": "4narek-old",
-    "item": "netherite armour",
-    "goType": "позорная-броня-1.21",
-    "clanBalanceLimit": 20,
+    "item": "netherite pickaxe",
+    "goType": "netherite_pickaxe-1.21",
+    "clanBalanceLimit": 10,
     "ip": "506-3"
   }
 ]

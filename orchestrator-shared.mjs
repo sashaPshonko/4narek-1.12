@@ -123,9 +123,9 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
  * Общая логика оркестраторов: каталог с Go, активные типы, цены.
  *
  * Старая/новая броня в одном items_config.json:
- * — отдельные piece-типы: netherite_helmet-1.21, …
+ * — отдельные piece-типы: netherite_helmet-1.21, netherite_boots-1.21, …
  * — позорная: "позорная-броня-1.21"
- * — an503: goType "netherite_armor-1.21" — все piece-типы кроме позорной
+ * — legacy: goType "netherite_armor-1.21" матчит все piece-типы кроме позорной
  * Матч: catalogTypeMatchesGoType(catalog.type, bot.goType).
  */
 
