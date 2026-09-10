@@ -11,8 +11,16 @@
   "506-1": "socks5://GJrTN8:dbBHc7@170.83.237.240:8000",
   "506-2": "socks5://GJrTN8:dbBHc7@170.83.237.83:8000",
   "506-3": "socks5://38n9vZ:0kx0mN@170.83.239.129:8000",
-  "507": "socks5://Lunarproxy107:6LLQ8ffu8mtgABV9@89.125.51.223:1106",
-  "508": "socks5://Lunarproxy108:gSvypUf5mZaMa5de@89.125.51.223:1107",
-  "509": "socks5://Lunarproxy109:BZrpnQbYceR3nCzv@89.125.51.223:1108",
-  "510": "socks5://Lunarproxy110:rkxq66qpBsuVFDPt@89.125.51.223:1109"
+  "507-1": "socks5://Lunarproxy107:6LLQ8ffu8mtgABV9@89.125.51.223:1106",
+  "508-1": "socks5://Lunarproxy108:gSvypUf5mZaMa5de@89.125.51.223:1107",
+  "509-1": "socks5://Lunarproxy109:BZrpnQbYceR3nCzv@89.125.51.223:1108",
+  "510-1": "socks5://Lunarproxy110:rkxq66qpBsuVFDPt@89.125.51.223:1109",
+  "507-2": "socks5://Lunarproxy1891:Yp3VRWb7x6P7h9QR@171.22.31.153:2920",
+  "507-3": "socks5://Lunarproxy1892:4vkiAhZ4JXGke4s9@171.22.31.153:2921",
+  "508-2": "socks5://Lunarproxy1893:atdi7DvrbDkTzkPh@171.22.31.153:2922",
+  "508-3": "socks5://Lunarproxy1894:Pt9dgDKPp2QGJKon@171.22.31.153:2923",
+  "509-2": "socks5://Lunarproxy1895:tDrDNpbpvqXMtkyv@171.22.31.153:2924",
+  "509-3": "socks5://Lunarproxy1896:UKNd2ox7oTLzy9ww@171.22.31.153:2925",
+  "510-2": "socks5://Lunarproxy1897:g3hEzQFqFZcTWMSk@171.22.31.153:2926",
+  "510-3": "socks5://Lunarproxy1898:KRkkhTRwRsswy5Ab@171.22.31.153:2927"
 }
