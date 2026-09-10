@@ -80,6 +80,17 @@ function isVkTgLoginConfirm(text) {
     );
 }
 
+/** FunTime: акк ещё не привязан к TG — надо /tg + FunAuth bind, сессию рвём. */
+function isTgBindRequired(text) {
+    const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+    if (!s) return false;
+    if (s.includes('чтобы двигаться')) return true;
+    if (s.includes('после привязки')) return true;
+    if (s.includes('защитит') && (s.includes('аккаунт') || s.includes('взлом'))) return true;
+    if (s.includes('/tg') && (s.includes('привяз') || s.includes('телеграм') || s.includes('вк'))) return true;
+    return false;
+}
+
 const CONFIG_BLOCKED = new Set([
     'position', 'look', 'position_look', 'flying',
     'chat', 'chat_command', 'chat_command_signed', 'chat_message',
@@ -301,15 +312,6 @@ function buildProxyConnect(proxyString) {
 async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowedNicks }) {
     let sessionReject = null;
     let finishedOk = false;
-    const failSession = (msg) => {
-        if (finishedOk) return;
-        console.error(`[clan-setup] ${msg}`);
-        if (sessionReject) {
-            const rej = sessionReject;
-            sessionReject = null;
-            rej(new Error(msg));
-        }
-    };
 
     log(`owner=${owner.username} an=${anarchy} me=${me || '(нет — только боты)'}`);
     log(`invite: ${inviteNicks.join(', ') || '(пусто)'}`);
@@ -317,6 +319,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
 
     const state = {
         afk: false,
+        aborted: false,
         timeJoinAnarchy: 0,
         captchaBusy: false,
         createOk: false,
@@ -355,6 +358,22 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         agent: proxy.agent,
         connect: proxy.connect,
     });
+
+    const failSession = (msg) => {
+        if (finishedOk || state.aborted) return;
+        state.aborted = true;
+        console.error(`[clan-setup] ${msg}`);
+        try {
+            bot.quit();
+        } catch {
+            /* ignore */
+        }
+        if (sessionReject) {
+            const rej = sessionReject;
+            sessionReject = null;
+            rej(new Error(msg));
+        }
+    };
 
     const dead = new Promise((_, reject) => {
         sessionReject = reject;
@@ -483,10 +502,10 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             return;
         }
 
-        if (text.toLowerCase().includes('чтобы двигаться')) {
+        if (isTgBindRequired(text)) {
             if (state.funauthRequested) return;
             state.funauthRequested = true;
-            log('хуйня неведомая → FunAuth bind → убиваем сессию');
+            log('TG bind required → FunAuth bind → выходим');
             requestFunauthBindHttp(owner.username, owner.password, Number(anarchy));
             failSession('хуйня неведомая (funauth)');
             return;
@@ -567,7 +586,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         bot.chat(`/l ${owner.password}`);
         await rnd(1500, 2500);
 
-        for (let i = 0; i < 40 && !state.timeJoinAnarchy; i++) {
+        for (let i = 0; i < 40 && !state.timeJoinAnarchy && !state.aborted; i++) {
             if (bot._client?.state === 'configuration') {
                 await sleep(500);
                 continue;
@@ -578,6 +597,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             bot.chat(`/an${anarchy}`);
             await sleep(4000);
         }
+        if (state.aborted) throw new Error('хуйня неведомая (funauth)');
         if (!state.timeJoinAnarchy) {
             throw new Error(`не вошли на анархию ${anarchy}`);
         }
@@ -586,8 +606,9 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         await lookAroundSpin(bot, log);
 
         const createDeadline = Date.now() + 180_000;
-        while (!state.createOk && !state.alreadyInClan && Date.now() < createDeadline) {
+        while (!state.createOk && !state.alreadyInClan && !state.aborted && Date.now() < createDeadline) {
             await antiAfkIfNeeded(bot, state, log);
+            if (state.aborted) break;
             if (state.afk) {
                 await sleep(1000);
                 continue;
@@ -603,11 +624,13 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 Date.now() < waitUntil
                 && !state.createOk
                 && !state.alreadyInClan
+                && !state.aborted
             ) {
                 await antiAfkIfNeeded(bot, state, log);
                 await sleep(400);
             }
         }
+        if (state.aborted) throw new Error('хуйня неведомая (funauth)');
         if (!state.createOk && !state.alreadyInClan) {
             throw new Error('не удалось создать клан');
         }
