@@ -1763,7 +1763,7 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
-    logOk('vanilla-move → только WASD, без поворота головы');
+    logOk('anti-AFK → WASD-бурст ~4с, без поворота головы');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
