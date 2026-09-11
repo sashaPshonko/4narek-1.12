@@ -1,31 +1,31 @@
 [
   {
-    "username": "lunnyjPyl",
+    "username": "ash_in_cup",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite armour",
+    "goType": "netherite_armor-1.21",
     "clanBalanceLimit": 10,
     "ip": "504-1"
   },
   {
-    "username": "koraBerezy",
+    "username": "moon8trail",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite armour",
+    "goType": "netherite_armor-1.21",
     "clanBalanceLimit": 10,
     "ip": "504-2"
   },
   {
-    "username": "svetVPodvale",
+    "username": "rekaBezMostov",
     "password": "ggggg",
     "anarchy": 504,
     "type": "4narek-old",
-    "item": "netherite helmet",
-    "goType": "netherite_helmet-1.21",
+    "item": "netherite armour",
+    "goType": "netherite_armor-1.21",
     "clanBalanceLimit": 10,
     "ip": "504-3"
   }
