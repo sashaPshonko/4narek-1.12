@@ -38,12 +38,13 @@ import {
     pickAhBrowseAction,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
-import { pickWarp, shouldAttemptWarp } from './lib/warp-pick.mjs';
+import { pickWarp } from './lib/warp-pick.mjs';
 import {
     runAntiAfkMotion as runVanillaMove,
     nextWalkGapMs as nextVanillaWalkGapMs,
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
+import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -1763,7 +1764,7 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
-    logOk('anti-AFK → WASD-бурст ~4с, без поворота головы');
+    logOk('anti-AFK → walk-route WASD (без look), portal если только назад');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2475,26 +2476,59 @@ async function sellItems() {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
             if (
-                shouldAttemptWarp(
+                shouldAttemptWalk(
                     config.username,
                     config.lastWarpTime || 0,
                     botWorkerStartTime,
                 )
             ) {
-                const warp = await pickWarpForSession();
-                if (warp && isSellSessionAlive(gen)) {
-                    await rnd('BASE_DELAY');
-                    if (!isSellSessionAlive(gen)) return;
-                    logInfo(
-                        `warp → ${warp}${config.lastWarp ? ` (был ${config.lastWarp})` : ''}`,
-                    );
-                    bot.chat(`/warp ${warp}`);
-                    config.lastWarp = warp;
+                await rnd('BASE_DELAY');
+                if (!isSellSessionAlive(gen)) return;
+                await waitForEventLoopOk({ log: (m) => logWarn(m) });
+                const prevPhysics = bot.physicsEnabled;
+                ensurePhysicsOn(bot);
+                // lookLock НЕ держим на всю прогулку: иначе wrapChat копит команды.
+                try {
+                    const walk = await walkRandomRouteStop(bot, {
+                        shouldAbort: () => !isSellSessionAlive(gen),
+                        log: (msg) => logInfo(msg),
+                        username: config.username,
+                    });
                     config.lastWarpTime = Date.now();
+                    if (walk.ok) {
+                        logOk(
+                            `прогулка → стоп (${walk.stop.x.toFixed(0)}, ${walk.stop.z.toFixed(0)})`
+                            + (walk.legs != null ? ` legs=${walk.legs}` : ''),
+                        );
+                    } else {
+                        logWarn(`прогулка → ${walk.reason}`);
+                    }
+                } finally {
+                    try {
+                        for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
+                            bot.setControlState(key, false);
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                    lastLookAt = Date.now();
+                    if (prevPhysics === false && isInConfigurationTransfer()) {
+                        bot.physicsEnabled = false;
+                    } else {
+                        ensurePhysicsOn(bot);
+                    }
                 }
+                // короткий anti-AFK на месте после стопа
+                lookLock = true;
+                try {
+                    await lookAroundSpin(() => !isSellSessionAlive(gen));
+                } finally {
+                    lookLock = false;
+                    lastLookAt = Date.now();
+                }
+            } else {
+                await lookAroundSpin(() => !isSellSessionAlive(gen));
             }
-
-            await lookAroundSpin(() => !isSellSessionAlive(gen));
             if (!isSellSessionAlive(gen)) return;
             await dropTrash();
         }
