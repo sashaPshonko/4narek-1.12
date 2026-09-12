@@ -25,8 +25,9 @@
     "legsMax": 14,
     "goalDistMin": 30,
     "goalDistMax": 110,
-    "entryWarp": "/warp portal",
+    "entryWarp": "rotate",
     "entryWarpWaitMs": 8000,
+    "relocateEachCycle": true,
     "onMapMaxDist": 5,
     "sessionMaxMs": 2700000,
     "cycleDistMin": 60,
@@ -43,5 +44,5 @@
   ],
   "zonesNote": "pvp — полуплоскость; автошахта — квадрат по двум углам [x,z]. смена спавна: поправь from/to или z. оси в записи по И, записи по ИЛИ. ещё: '>105', '20..90', {min,max}",
   "points": [],
-  "routeNote": "WASD без look; цели сзади → крюк/новый план вперёд, не portal; portal только вне карты/зона"
+  "routeNote": "WASD вперёд+вбок; каждый цикл /warp из списка (mine/casino/…); цели сзади → крюк, не portal"
 }

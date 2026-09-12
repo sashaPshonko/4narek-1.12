@@ -2493,6 +2493,10 @@ async function sellItems() {
                         shouldAbort: () => !isSellSessionAlive(gen),
                         log: (msg) => logInfo(msg),
                         username: config.username,
+                        anarchy: config.anarchy,
+                        onWarp: (name) => {
+                            config.lastWarp = name;
+                        },
                     });
                     config.lastWarpTime = Date.now();
                     if (walk.ok) {
