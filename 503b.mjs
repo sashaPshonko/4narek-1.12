@@ -156,6 +156,7 @@ async function loadBotsConfig() {
                 authFaultAt: b.authFaultAt || null,
                 authFaultReason: b.authFaultReason || '',
                 presenceInactive: !!b.presenceInactive,
+                presenceInactiveReason: b.presenceInactiveReason || '',
             });
         }
         bots.clear();
@@ -181,6 +182,7 @@ async function loadBotsConfig() {
                 authFaultAt: prev.authFaultAt || null,
                 authFaultReason: prev.authFaultReason || '',
                 presenceInactive: !!prev.presenceInactive,
+                presenceInactiveReason: prev.presenceInactiveReason || '',
             });
         }
         

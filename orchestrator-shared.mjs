@@ -276,6 +276,7 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
         inventory: presence.inventory,
         active_types: collectActiveTypes(bots, workers),
         bots_per_type: collectBotsPerType(bots, workers),
+        treasury_empty_types: collectTreasuryEmptyTypes(bots, workers),
         banned: collectBannedBots(bots, extraBanned),
         auth_faults: collectAuthFaultBots(bots),
         clan_owners: clanOwners,
@@ -412,6 +413,7 @@ export function markBotPresenceInactive(username, ctx, reason = 'presence_inacti
     const bot = ctx.bots?.get(username);
     if (!bot || bot.presenceInactive) return false;
     bot.presenceInactive = true;
+    bot.presenceInactiveReason = String(reason || 'presence_inactive');
     clearBotPresence(username, ctx.botItems, ctx.botInventory);
     ctx.pushPresenceToGo?.();
     console.log(`[presence] ${username} inactive (${reason}) — слоты не в ценообразовании`);
@@ -423,9 +425,28 @@ export function clearBotPresenceInactive(username, ctx, reason = 'presence_ok') 
     const bot = ctx.bots?.get(username);
     if (!bot?.presenceInactive) return false;
     bot.presenceInactive = false;
+    delete bot.presenceInactiveReason;
     ctx.pushPresenceToGo?.();
     console.log(`[presence] ${username} active again (${reason})`);
     return true;
+}
+
+/**
+ * goType'ы, у которых воркер ещё жив, но слоты вычищены из presence из‑за пустой казны.
+ * Go отличает TREASURY_EMPTY_INACTIVE от REAL_EMPTY (не качает floor_escape ↑).
+ */
+export function collectTreasuryEmptyTypes(bots, workers) {
+    const types = new Set();
+    if (!bots || !workers) return [];
+    for (const [username, workerData] of workers) {
+        if (!workerData?.worker || workerData.worker.terminated) continue;
+        const bot = bots.get(username);
+        if (!bot?.presenceInactive) continue;
+        if (bot.presenceInactiveReason !== 'treasury_empty') continue;
+        const goType = resolveGoType(bot);
+        if (goType) types.add(goType);
+    }
+    return [...types];
 }
 
 export function clearBotPresence(username, botItems, botInventory) {
