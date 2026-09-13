@@ -371,10 +371,26 @@ export function isBanKickReason(_reason) {
     return false;
 }
 
+/** Если воркер после kicked не сделал process.exit (pipe/hang) — terminate с parent */
+export function armWorkerExitWatchdog(username, ctx, { delayMs = 3000, reason = 'kicked' } = {}) {
+    const entry = ctx.workers?.get(username);
+    if (!entry?.worker) return;
+    if (entry.exitWatchdogId) clearTimeout(entry.exitWatchdogId);
+    const worker = entry.worker;
+    entry.exitWatchdogId = setTimeout(() => {
+        entry.exitWatchdogId = null;
+        const cur = ctx.workers?.get(username);
+        if (!cur || cur.worker !== worker) return;
+        console.warn(`⏱ ${username} не вышел после ${reason} → terminate`);
+        void terminateWorkerEntry(entry);
+    }, delayMs);
+}
+
 export async function handleWorkerKicked(username, reason, ctx) {
     const bot = ctx.bots?.get(username);
     const text = String(reason || '');
     if (bot) bot.lastKickReason = text;
+    armWorkerExitWatchdog(username, ctx, { reason: 'kicked' });
     if (isWrongPasswordText(text)) {
         await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, text);
         return true;
@@ -1272,6 +1288,10 @@ export function terminateWorkerEntry(entry) {
     if (!entry?.worker) return Promise.resolve();
     if (entry.timeoutId) clearTimeout(entry.timeoutId);
     if (entry.restartTimerId) clearTimeout(entry.restartTimerId);
+    if (entry.exitWatchdogId) {
+        clearTimeout(entry.exitWatchdogId);
+        entry.exitWatchdogId = null;
+    }
 
     const w = entry.worker;
     return new Promise((resolve) => {

@@ -52,6 +52,30 @@ import { extractBanReason } from './lib/clan-owner-ping.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
 import { isStaffCheckText, EXIT_STAFF_CHECK } from './lib/staff-check.mjs';
 
+/** sync process.exit после жирного console.* зависает, если stdout/stderr pipe забит (walk spam) → зомби без 'exit' у parent */
+function forceWorkerExit(code = 1) {
+    if (globalThis.__forceWorkerExitArmed) return;
+    globalThis.__forceWorkerExitArmed = true;
+    const go = () => {
+        try {
+            process.exit(code);
+        } catch {
+            /* ignore */
+        }
+    };
+    setTimeout(go, 0);
+    setTimeout(go, 500);
+    setTimeout(go, 2500);
+}
+
+function shortKickReason(reason) {
+    const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
+    if (/ReadTimeoutException/i.test(text)) return 'ReadTimeoutException';
+    if (/ConnectTimeoutException/i.test(text)) return 'ConnectTimeoutException';
+    if (text.length > 220) return `${text.slice(0, 220)}…`;
+    return text;
+}
+
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
     console.error('UNCAUGHT EXCEPTION');
@@ -1821,7 +1845,7 @@ async function main() {
 
     bot.on('kicked', (reason) => {
         const text = typeof reason === 'string' ? reason : JSON.stringify(reason);
-        console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${text}`);
+        console.error(`${logTag()} ${ANSI.red}⛔ kicked${ANSI.reset}: ${shortKickReason(reason)}`);
         let authFault = false;
         try {
             if (isWrongPasswordText(text)) {
@@ -1835,24 +1859,25 @@ async function main() {
                 parentPort.postMessage({ name: 'kicked', reason: text });
             }
         } catch { /* parent gone */ }
-        // immediate exit дропает bad_password у parent (worker_threads)
-        if (authFault) setTimeout(() => process.exit(EXIT_BAD_PASSWORD), 400);
-        else process.exit(1);
+        // immediate exit дропает bad_password у parent (worker_threads);
+        // sync exit после console — зомби при забитом pipe
+        if (authFault) setTimeout(() => forceWorkerExit(EXIT_BAD_PASSWORD), 400);
+        else forceWorkerExit(1);
     });
     bot.on('end', (reason) => {
-        console.log(reason)
-        process.exit(1);
+        console.log(shortKickReason(reason));
+        forceWorkerExit(1);
     });
     bot.on('error', (err) => {
         if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
-        process.exit(1);
+        forceWorkerExit(1);
     });
 
     bot._client?.on('error', (err) => {
         if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ client error${ANSI.reset}: ${err}`);
-        process.exit(1);
+        forceWorkerExit(1);
     });
 
     bot.once('spawn', async () => {
