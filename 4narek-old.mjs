@@ -45,6 +45,7 @@ import {
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
 import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
+import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
@@ -1788,6 +1789,11 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
+    attachFloorWatchdog(bot, {
+        log: (msg) => logWarn(msg),
+        warpCmd: '/warp shop',
+        shouldIgnore: () => Boolean(config.staffCheckIdle || config.ownerBanDrain),
+    });
     logOk('anti-AFK → walk-route WASD (без look), portal если только назад');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
