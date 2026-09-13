@@ -250,7 +250,7 @@ async function runWorker(bot) {
             const worker = new Worker(workerScriptPath, {
                 workerData: bot,
                 resourceLimits: {
-                    maxOldGenerationSizeMb: 200,
+                    maxOldGenerationSizeMb: 384,
                 }
             });
 

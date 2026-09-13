@@ -264,7 +264,8 @@ async function runWorker(bot) {
             const worker = new Worker(workerScriptPath, {
                 workerData: bot,
                 resourceLimits: {
-                    maxOldGenerationSizeMb: 200,
+                    // mineflayer + bot-view; 200MB ловил JS heap OOM на анке за минуты
+                    maxOldGenerationSizeMb: 384,
                 }
             });
 
