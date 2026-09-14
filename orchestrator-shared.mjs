@@ -46,7 +46,7 @@ const execFileAsync = promisify(execFile);
 const ORCH_ROOT = dirname(fileURLToPath(import.meta.url));
 const CLAN_SETUP_SCRIPT = join(ORCH_ROOT, 'scripts', 'clan-setup.mjs');
 /** Не чаще одного запуска на анархию раз в 3 минуты (от предыдущего start) */
-const CLAN_SETUP_COOLDOWN_MS = 3 * 60 * 1000;
+const CLAN_SETUP_COOLDOWN_MS = 90 * 1000; // было 3м — быстрее ретрай incomplete
 /** anarchy → { child?, startedAt?, finishedAt? } */
 const clanSetupByAnarchy = new Map();
 

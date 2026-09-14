@@ -310,7 +310,7 @@ function buildProxyConnect(proxyString) {
     return { agent, connect, label: `${proxyHost}:${proxyPort}` };
 }
 
-async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowedNicks }) {
+async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requiredBotNicks, allowedNicks }) {
     let sessionReject = null;
     let finishedOk = false;
 
@@ -701,10 +701,10 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             log(`уже в клане (invite skip): ${[...alreadyIn].join(', ')}`);
         }
 
-        for (const nick of inviteNicks) {
+        const inviteOne = async (nick) => {
             if (alreadyIn.has(String(nick).toLowerCase())) {
                 log(`⊘ invite skip ${nick} — уже в clan info`);
-                continue;
+                return;
             }
             state.lastInvite = nick;
             state.inviteOk = false;
@@ -744,8 +744,12 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                     await antiAfkIfNeeded(bot, state, log);
                     await sleep(400);
                 }
-                if (state.joinedNicks.has(key)) log(`✓ joined ${nick}`);
-                else log(`? join timeout ${nick} — идём дальше`);
+                if (state.joinedNicks.has(key)) {
+                    log(`✓ joined ${nick}`);
+                    alreadyIn.add(key);
+                } else {
+                    log(`? join timeout ${nick} — идём дальше`);
+                }
             } else if (state.inviteOtherClan) {
                 log(`⊘ ${nick} уже в клане / другой клан`);
             } else if (state.inviteOffline) {
@@ -754,6 +758,33 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 log(`? invite timeout ${nick}`);
             }
             await rnd(800, 1500);
+        };
+
+        // requiredBots — только ферма из bots/*.json; myNick не считается «успехом»
+        const requiredBots = (Array.isArray(requiredBotNicks) ? requiredBotNicks : inviteNicks)
+            .map((n) => String(n || '').trim())
+            .filter(Boolean);
+
+        for (let round = 0; round < 3; round++) {
+            const missing = requiredBots.filter((n) => !alreadyIn.has(String(n).toLowerCase()));
+            if (!missing.length) break;
+            if (round > 0) {
+                log(`re-invite round ${round + 1}/3 missing=${missing.join(', ')}`);
+                await rnd(2000, 4000);
+            }
+            for (const nick of round === 0 ? inviteNicks : missing) {
+                await inviteOne(nick);
+            }
+            const members = (await safeClanInfo(bot, state)) || [];
+            alreadyIn = new Set(members.map((n) => String(n).toLowerCase()));
+            log(`clan info after invites: ${members.join(', ') || '(пусто)'}`);
+        }
+
+        {
+            const missing = requiredBots.filter((n) => !alreadyIn.has(String(n).toLowerCase()));
+            if (missing.length) {
+                throw new Error(`clan incomplete: missing ${missing.join(', ')}`);
+            }
         }
 
         await grantAllRights(bot, state, inviteNicks, owner.username);
@@ -798,8 +829,9 @@ async function main() {
     const botsPath = join(ROOT, 'bots', `${anarchy}b.json`);
     const bots = existsSync(botsPath) ? loadJson(botsPath) : [];
     const inviteNicks = [];
+    const requiredBotNicks = [];
     const seen = new Set();
-    const pushNick = (n) => {
+    const pushNick = (n, intoRequired = false) => {
         const nick = String(n || '').trim();
         if (!nick) return;
         const key = nick.toLowerCase();
@@ -807,9 +839,10 @@ async function main() {
         if (key === String(owner.username).toLowerCase()) return;
         seen.add(key);
         inviteNicks.push(nick);
+        if (intoRequired) requiredBotNicks.push(nick);
     };
-    pushNick(me);
-    for (const b of bots) pushNick(b.username);
+    pushNick(me, false);
+    for (const b of bots) pushNick(b?.username, true);
 
     const allowedNicks = [
         owner.username,
@@ -826,6 +859,7 @@ async function main() {
                 owner,
                 proxyString,
                 inviteNicks,
+                requiredBotNicks,
                 allowedNicks,
             });
             log('готово — выход');
@@ -840,8 +874,10 @@ async function main() {
                 log(`VPN/Proxy block FunTime — stop clan-setup (смени owner SOCKS): ${msg.slice(0, 120)}`);
                 process.exit(3);
             }
-            // FunAuth через TG не мгновенный — даём время добить bind до рестарта
-            const waitMs = /хуйня|funauth|vk\/tg|confirm/i.test(msg) ? 45_000 : 5_000;
+            // incomplete — мягкий ретрай; FunAuth — дольше
+            let waitMs = 5_000;
+            if (/хуйня|funauth|vk\/tg|confirm/i.test(msg)) waitMs = 45_000;
+            else if (/clan incomplete/i.test(msg)) waitMs = 12_000;
             log(`сбой: ${msg} — через ${Math.round(waitMs / 1000)}с снова`);
             await sleep(waitMs);
         }
