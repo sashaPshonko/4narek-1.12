@@ -29,6 +29,7 @@ import {
     formatOrchestratorPing,
     handleWorkerStatusMessage,
     handleFunauthGoMessage,
+    handleGoClanSetupMessage,
     applyWorkerBuyingClaim,
     buyingUuidForGo,
     applyGoJsonUpdate,
@@ -556,6 +557,8 @@ function connectWebSocket() {
                     itemsBuying = merged;
                 } else if (dataObj.action === 'funauth_result' || dataObj.action === 'funauth_no_accounts') {
                     await handleFunauthGoMessage(dataObj, workerStatusCtx());
+                } else if (dataObj.action === 'run_clan_setup') {
+                    handleGoClanSetupMessage(dataObj, workerStatusCtx());
                 } else if (dataObj.prices) {
                     handleServerPriceMessage(dataObj);
                 }

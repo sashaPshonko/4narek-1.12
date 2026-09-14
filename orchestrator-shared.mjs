@@ -50,12 +50,71 @@ const CLAN_SETUP_COOLDOWN_MS = 3 * 60 * 1000;
 /** anarchy → { child?, startedAt?, finishedAt? } */
 const clanSetupByAnarchy = new Map();
 
+function clanLocalBypass() {
+    return process.env.FLEET_CLAN_LOCAL === '1'
+        || process.env.FLEET_CLAN_LOCAL === 'true'
+        || process.env.LOCAL_MODE === '1'
+        || process.env.LOCAL_MODE === 'true';
+}
+
 /**
- * Запуск scripts/clan-setup.mjs <an>.
- * myNick берётся из clan-owners.json (корневой myNick / per-an myNick).
- * Дедуп: один процесс на анархию + не чаще раза в 3 мин.
+ * Бот не в клане → только репорт в Go (решение о owner — у Go).
+ * LOCAL_MODE / FLEET_CLAN_LOCAL — старый локальный spawn.
  */
-export function requestClanSetup({ anarchy, reason, username }, ctx) {
+export function reportClanNeeded({ anarchy, reason, username }, ctx) {
+    const an = String(anarchy ?? '').replace(/\D/g, '').slice(0, 3);
+    if (!/^\d{3}$/.test(an)) {
+        console.warn(`[clan] bad anarchy from ${username}: ${anarchy}`);
+        return false;
+    }
+    if (clanLocalBypass()) {
+        return requestClanSetup({ anarchy: an, reason, username }, ctx);
+    }
+    const payload = {
+        action: 'clan_needed',
+        anarchy: Number(an),
+        username: String(username || '').trim(),
+        reason: String(reason || 'clan'),
+    };
+    console.log(`[clan] → Go need an${an} ${payload.username} (${payload.reason})`);
+    if (typeof ctx?.sendToGo === 'function' && ctx.sendToGo(payload)) {
+        return true;
+    }
+    // HTTP fallback
+    import('./lib/go-http-base.mjs').then(({ goHttpBase }) => {
+        fetch(`${goHttpBase()}/api/fleet/clan-needed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch((e) => console.warn(`[clan] HTTP clan-needed fail: ${e.message}`));
+    });
+    return true;
+}
+
+function reportClanSetupResultToGo(anarchy, { ok, banned, detail }, ctx) {
+    const an = Number(String(anarchy).replace(/\D/g, '').slice(0, 3)) || 0;
+    const payload = {
+        action: 'clan_setup_result',
+        anarchy: an,
+        ok: !!ok,
+        banned: !!banned,
+        detail: String(detail || '').slice(0, 200),
+    };
+    if (typeof ctx?.sendToGo === 'function' && ctx.sendToGo(payload)) return;
+    import('./lib/go-http-base.mjs').then(({ goHttpBase }) => {
+        fetch(`${goHttpBase()}/api/fleet/clan-setup-result`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        }).catch((e) => console.warn(`[clan] HTTP result fail: ${e.message}`));
+    });
+}
+
+/**
+ * Запуск scripts/clan-setup.mjs <an> — только по приказу Go (или LOCAL bypass).
+ * @param {{ force?: boolean }} [opts] force=true — без локального 3м cooldown (Go уже ждал)
+ */
+export function requestClanSetup({ anarchy, reason, username }, ctx, opts = {}) {
     const an = String(anarchy ?? '').replace(/\D/g, '').slice(0, 3);
     if (!/^\d{3}$/.test(an)) {
         console.warn(`[clan-setup] bad anarchy from ${username}: ${anarchy}`);
@@ -67,16 +126,16 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
         console.log(`[clan-setup] an${an} уже запущен (триггер ${username}, reason=${reason})`);
         return false;
     }
-    if (cur?.startedAt && now - cur.startedAt < CLAN_SETUP_COOLDOWN_MS) {
+    if (!opts.force && cur?.startedAt && now - cur.startedAt < CLAN_SETUP_COOLDOWN_MS) {
         const left = Math.ceil((CLAN_SETUP_COOLDOWN_MS - (now - cur.startedAt)) / 1000);
         console.log(`[clan-setup] an${an} cooldown ещё ${left}с (триггер ${username})`);
         return false;
     }
 
-    console.log(`[clan-setup] start an${an} reason=${reason} trigger=${username}`);
+    console.log(`[clan-setup] start an${an} reason=${reason} trigger=${username || 'go'}`);
     try {
         ctx?.sendAlert?.(
-            `⚔ clan-setup an${an}: ${reason} ← ${username}`,
+            `⚔ clan-setup an${an}: ${reason} ← ${username || 'go'}`,
             username,
         );
     } catch {
@@ -91,6 +150,7 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
     clanSetupByAnarchy.set(an, { child, startedAt: now });
 
     const prefix = `[clan-setup an${an}]`;
+    let bannedSeen = false;
     const pipe = (stream, write) => {
         let buf = '';
         stream?.on('data', (chunk) => {
@@ -98,7 +158,10 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
             const parts = buf.split('\n');
             buf = parts.pop() || '';
             for (const line of parts) {
-                if (line) write(`${prefix} ${line}`);
+                if (line) {
+                    write(`${prefix} ${line}`);
+                    if (/BAN — stop|ВЫ ЗАБАНЕНЫ|Пункт 4\.3/i.test(line)) bannedSeen = true;
+                }
             }
         });
         stream?.on('end', () => {
@@ -111,11 +174,33 @@ export function requestClanSetup({ anarchy, reason, username }, ctx) {
     child.on('error', (err) => {
         console.error(`${prefix} spawn error: ${err.message}`);
         clanSetupByAnarchy.set(an, { startedAt: now, finishedAt: Date.now() });
+        reportClanSetupResultToGo(an, { ok: false, banned: false, detail: err.message }, ctx);
     });
     child.on('exit', (code, signal) => {
         console.log(`${prefix} exit code=${code} signal=${signal || '-'}`);
         clanSetupByAnarchy.set(an, { startedAt: now, finishedAt: Date.now() });
+        const banned = bannedSeen || code === 2;
+        const ok = code === 0;
+        reportClanSetupResultToGo(an, {
+            ok,
+            banned,
+            detail: `code=${code} signal=${signal || '-'}`,
+        }, ctx);
     });
+    return true;
+}
+
+/** Go → орх: пора запускать owner clan-setup. */
+export function handleGoClanSetupMessage(dataObj, ctx) {
+    if (!dataObj || dataObj.action !== 'run_clan_setup') return false;
+    const an = dataObj.anarchy;
+    const nicks = Array.isArray(dataObj.nicks) ? dataObj.nicks.join(',') : '';
+    console.log(`[clan] Go run_clan_setup an${an} nicks=${nicks || '-'} reason=${dataObj.reason || ''}`);
+    requestClanSetup({
+        anarchy: an,
+        reason: dataObj.reason || 'go_dispatch',
+        username: 'go',
+    }, ctx, { force: true });
     return true;
 }
 
@@ -917,7 +1002,7 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (message?.name === 'clan_setup') {
-        requestClanSetup({
+        reportClanNeeded({
             anarchy: message.anarchy,
             reason: message.reason || 'clan',
             username,

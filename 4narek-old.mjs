@@ -1326,7 +1326,7 @@ async function handleChatMessage(text) {
             return;
         }
         const reason = text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms';
-        logWarn(`clan → ${reason} → clan-setup an${config.anarchy}`);
+        logWarn(`clan → ${reason} → Go clan_needed an${config.anarchy}`);
         parentPort.postMessage({
             name: 'clan_setup',
             anarchy: config.anarchy,
