@@ -640,7 +640,8 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             ) {
                 await sleep(400);
             }
-            if (state.alreadyInClan) {
+            if (state.alreadyInClan || (state.clanMembersSnapshot && state.clanMembersSnapshot.length)) {
+                state.alreadyInClan = true;
                 log('уже в клане (по /clan info) — create skip');
             }
         }
