@@ -3,7 +3,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import mineflayer from 'mineflayer';
 import { workerData, parentPort } from 'worker_threads';
-import { rnd, rndPoll, initBotDelayProfile } from './delay/delay.mjs';
+import { rnd, rndPoll, initBotDelayProfile, getDelayMs } from './delay/delay.mjs';
 import net from 'net';
 import { SocksClient } from 'socks';
 import { SocksProxyAgent } from 'socks-proxy-agent';
@@ -902,6 +902,35 @@ function ahWindowContentKey(win) {
         );
     }
     return parts.join('|');
+}
+
+/**
+ * После клика buy/reload в АХ: не жечь полный WINDOW_DELAY вслепую.
+ * Поллим слоты и выходим раньше при in-place update / смене окна / закрытии GUI.
+ * max = WINDOW_DELAY (как раньше), minSettle — антидребезг ~250мс.
+ * @returns {'changed'|'other_menu'|'no_window'|'newkey'|'timeout'}
+ */
+async function waitAhGuiSettle(bot, { key, contentBefore, minSettleMs = 250, pollMs = 100 } = {}) {
+    const maxMs = getDelayMs('WINDOW_DELAY');
+    const t0 = Date.now();
+    while (true) {
+        if (config.key !== key) return 'newkey';
+        const elapsed = Date.now() - t0;
+        if (elapsed >= maxMs) return 'timeout';
+
+        const chunk = Math.min(pollMs, maxMs - elapsed);
+        if (chunk > 0) await sleep(chunk);
+
+        if (config.key !== key) return 'newkey';
+        if (!bot.currentWindow) return 'no_window';
+
+        const menu = resolveWindowMenu(bot.currentWindow);
+        if (menu !== analysisAH) return 'other_menu';
+
+        if (Date.now() - t0 >= minSettleMs && contentBefore != null) {
+            if (ahWindowContentKey(bot.currentWindow) !== contentBefore) return 'changed';
+        }
+    }
 }
 
 /** Новый ключ: этот windowOpen. Клик не бросаем — дожимаем остаток задержки уже с новым ключом. */
@@ -2030,12 +2059,11 @@ async function main() {
                             key,
                             true,
                         );
-                        // Раньше тут был return → ждали windowOpen. FunTime часто обновляет
-                        // АХ in-place после клика → бот мёртв до physicTick (~60с).
+                        // FunTime часто обновляет АХ in-place без windowOpen — ждём слоты, не полный WINDOW_DELAY.
                         if (config.key !== key) return;
-                        await rnd('WINDOW_DELAY');
-                        if (config.key !== key) return;
-                        if (!bot.currentWindow) {
+                        const settleBuy = await waitAhGuiSettle(bot, { key, contentBefore: contentBeforeBuy });
+                        if (settleBuy === 'newkey') return;
+                        if (settleBuy === 'no_window') {
                             const waited = await waitForCurrentWindow(2500, key);
                             if (waited === 'newkey') return;
                             if (!bot.currentWindow) {
@@ -2046,15 +2074,14 @@ async function main() {
                         }
                         config.menu = resolveWindowMenu(bot.currentWindow);
                         if (config.menu !== analysisAH) {
-                            logInfo(`АХ → после buy окно «${config.menu}»`);
+                            logInfo(`АХ → после buy окно «${config.menu}» (${settleBuy})`);
                             break;
                         }
-                        const contentAfterBuy = ahWindowContentKey(bot.currentWindow);
-                        if (contentAfterBuy !== contentBeforeBuy) {
+                        if (settleBuy === 'changed') {
                             staleContentPasses = 0;
-                            logInfo('АХ → buy in-place (слоты сменились, windowOpen нет)');
+                            logInfo('АХ → buy in-place (слоты сменились, early settle)');
                         } else {
-                            logInfo('АХ → после buy всё ещё Анализ, продолжаю цикл');
+                            logInfo(`АХ → после buy Анализ (${settleBuy}), продолжаю цикл`);
                         }
                         continue;
                     }
@@ -2073,9 +2100,9 @@ async function main() {
                     await safeClickBuy(bot, browse.slot, delayMs({ min: 1500, max: 4500 }), key);
                     if (config.key !== key) return;
 
-                    await rnd('WINDOW_DELAY');
-                    if (config.key !== key) return;
-                    if (!bot.currentWindow) {
+                    const settleReload = await waitAhGuiSettle(bot, { key, contentBefore });
+                    if (settleReload === 'newkey') return;
+                    if (settleReload === 'no_window') {
                         const waited = await waitForCurrentWindow(2500, key);
                         if (waited === 'newkey') return;
                         if (!bot.currentWindow) {
@@ -2085,11 +2112,17 @@ async function main() {
                         }
                     }
 
+                    if (settleReload === 'other_menu') {
+                        config.menu = resolveWindowMenu(bot.currentWindow);
+                        logInfo(`АХ → после reload окно «${config.menu}»`);
+                        // fall through to outer menu switch on next windowOpen / loop
+                    }
+
                     const contentAfter = ahWindowContentKey(bot.currentWindow);
-                    if (contentAfter !== contentBefore) {
+                    if (settleReload === 'changed' || contentAfter !== contentBefore) {
                         // FunTime часто обновляет АХ in-place без windowOpen — это не зависание
                         staleContentPasses = 0;
-                        logInfo('АХ → reload in-place (слоты сменились, windowOpen нет)');
+                        logInfo('АХ → reload in-place (слоты сменились, early settle)');
                         continue;
                     }
 
