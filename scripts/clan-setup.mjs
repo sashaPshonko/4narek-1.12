@@ -21,7 +21,7 @@ import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
 import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
 import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
 import { proxyHostFromString } from '../lib/proxy-host.mjs';
-import { awaitFleetLaunchGrant } from '../lib/fleet-launch-gate.mjs';
+import { awaitFleetLaunchGrant, cancelFleetLaunch } from '../lib/fleet-launch-gate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -787,7 +787,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
             }
         }
 
-        await grantAllRights(bot, state, inviteNicks, owner.username);
+        await grantAllRights(bot, state, inviteNicks, owner.username, requiredBotNicks);
         log('цель достигнута');
         finishedOk = true;
         sessionReject = null;
@@ -798,6 +798,11 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
     } finally {
         finishedOk = true;
         sessionReject = null;
+        try {
+            await cancelFleetLaunch({ username: owner.username, anarchy, log });
+        } catch {
+            /* ignore */
+        }
         try {
             bot.removeAllListeners();
             bot.quit();
@@ -1064,15 +1069,29 @@ function findSlotWithNick(bot, nick) {
     return -1;
 }
 
-/** Головы участников в верхнем GUI (type 1235 на FunTime 1.21). */
+/** Головы участников в верхнем GUI (FunTime 1.21: type 1235, иногда name/head). */
+function isMemberHeadItem(item) {
+    if (!item) return false;
+    if (item.type === 1235) return true;
+    const n = String(item.name || '').toLowerCase();
+    const d = String(item.displayName || '').toLowerCase();
+    if (n.includes('head') || n.includes('skull') || d.includes('head') || d.includes('skull')) {
+        return true;
+    }
+    // fallback: player profile в NBT/components часто есть у голов
+    const blob = collectStrings(item).join(' ').toLowerCase();
+    if (blob.includes('profile') || blob.includes('skullowner') || blob.includes('minecraft:profile')) {
+        return true;
+    }
+    return false;
+}
+
 function listMemberHeadSlots(bot) {
     const slots = bot.currentWindow?.slots || [];
     const out = [];
     for (let i = 0; i < Math.min(slots.length, 27); i++) {
         const item = slots[i];
-        if (!item) continue;
-        // player head / skull в этом GUI
-        if (item.type === 1235) out.push(i);
+        if (isMemberHeadItem(item)) out.push(i);
     }
     return out;
 }
@@ -1132,25 +1151,55 @@ async function doRightsShift2(bot, state) {
 
 /**
  * /clan menu → участники → shift по каждой голове в GUI → shift в окне прав.
- * Ники не из clan info — skip (не в клане / другой клан).
+ * Успех только если выдали права ≥ числу ферм-ботов (или всех не-лидеров в info).
  */
-async function grantAllRights(bot, state, grantNicks, ownerUsername) {
+async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBotNicks = []) {
     const ownerKey = String(ownerUsername || '').toLowerCase();
+    const required = (requiredBotNicks || [])
+        .map((n) => String(n || '').trim())
+        .filter(Boolean);
     const members = (await safeClanInfo(bot, state)) || state.clanMembersSnapshot || [];
     const inClan = new Set(members.map((m) => String(m).toLowerCase()));
 
-    for (const n of grantNicks || []) {
-        const key = String(n || '').toLowerCase();
-        if (!key || key === ownerKey) continue;
-        if (!inClan.has(key)) {
-            log(`права skip ${n} — нет в clan info (не вступил / другой клан)`);
+    for (const n of required) {
+        if (!inClan.has(String(n).toLowerCase())) {
+            throw new Error(`права: бот ${n} не в clan info — сначала invite`);
         }
     }
 
-    // открываем members один раз — собираем слоты голов
-    const headSlots = await discoverMemberHeadSlots(bot, state);
+    const wantHeads = Math.max(
+        required.length,
+        Math.max(0, members.filter((m) => String(m).toLowerCase() !== ownerKey).length),
+    );
+
+    // открываем members — собираем слоты голов (несколько попыток)
+    let headSlots = [];
+    for (let attempt = 1; attempt <= 4; attempt++) {
+        headSlots = await discoverMemberHeadSlots(bot, state);
+        const nonOwner = headSlots.filter(
+            (h) => !h.label || String(h.label).toLowerCase() !== ownerKey,
+        );
+        if (nonOwner.length >= wantHeads && wantHeads > 0) {
+            headSlots = headSlots; // keep all, skip leader in loop
+            break;
+        }
+        if (headSlots.length && wantHeads === 0) break;
+        log(`головы attempt ${attempt}: got=${headSlots.length} nonOwner=${nonOwner.length} want≥${wantHeads}`);
+        dumpMemberSlots(bot);
+        await rnd(1500, 2500);
+    }
     if (!headSlots.length) {
+        dumpMemberSlots(bot);
         throw new Error('в /clan members нет голов участников');
+    }
+    const grantTargets = headSlots.filter(
+        (h) => !h.label || String(h.label).toLowerCase() !== ownerKey,
+    );
+    if (wantHeads > 0 && grantTargets.length < wantHeads) {
+        dumpMemberSlots(bot);
+        throw new Error(
+            `мало голов для прав: ${grantTargets.length} < ${wantHeads} (members=${members.join(',') || '—'})`,
+        );
     }
     log(`права по слотам голов: ${headSlots.map((s) => `${s.slot}:${s.label}`).join(', ')}`);
 
@@ -1164,11 +1213,11 @@ async function grantAllRights(bot, state, grantNicks, ownerUsername) {
         log(`✓ права ${label || `slot${slot}`}`);
         await rnd(800, 1500);
     }
-    log('права выданы');
+    log(`права выданы (heads=${grantTargets.length}, requiredBots=${required.length})`);
 }
 
-async function discoverMemberHeadSlots(bot, state) {
-    const deadline = Date.now() + 40_000;
+async function discoverMemberHeadSlots(bot, state, waitMs = 40_000) {
+    const deadline = Date.now() + waitMs;
     while (Date.now() < deadline) {
         state.menu = 'clan_menu';
         state.grantMemberSlot = null;
@@ -1178,11 +1227,28 @@ async function discoverMemberHeadSlots(bot, state) {
         log('/clan menu → список голов');
         bot.chat('/clan menu');
         const roundEnd = Date.now() + 15_000;
+        const roundStart = Date.now();
+        let membersFallback = false;
         while (Date.now() < roundEnd) {
             await sleep(300);
             if (!bot.currentWindow) await antiAfkIfNeeded(bot, state, log);
+            if (
+                bot.currentWindow
+                && state.menu === 'clan_menu'
+                && !membersFallback
+                && Date.now() - roundStart > 3500
+            ) {
+                try {
+                    log(`клик слот ${MEMBERS_MENU_SLOT} (members, fallback)`);
+                    state.menu = 'clan_members';
+                    await bot.clickWindow(MEMBERS_MENU_SLOT, LMB, 0);
+                    membersFallback = true;
+                } catch {
+                    /* ignore */
+                }
+            }
             if (bot.currentWindow && state.menu === 'clan_members') {
-                await sleep(500);
+                await sleep(600);
                 const slots = listMemberHeadSlots(bot);
                 if (slots.length) {
                     const out = slots.map((slot) => ({
@@ -1194,6 +1260,7 @@ async function discoverMemberHeadSlots(bot, state) {
                     state.menu = null;
                     return out;
                 }
+                log('members GUI без голов — dump:');
                 dumpMemberSlots(bot);
             }
         }
