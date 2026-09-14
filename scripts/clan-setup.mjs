@@ -21,6 +21,7 @@ import { loadClanOwnerSession } from '../lib/owner-proxy.mjs';
 import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
 import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
 import { proxyHostFromString } from '../lib/proxy-host.mjs';
+import { awaitFleetLaunchGrant } from '../lib/fleet-launch-gate.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -317,6 +318,16 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
     log(`invite: ${inviteNicks.join(', ') || '(пусто)'}`);
     log(`solver: ${SOLVER_URL}`);
 
+    const granted = await awaitFleetLaunchGrant({
+        username: owner.username,
+        anarchy,
+        kind: 'owner',
+        log,
+    });
+    if (!granted) {
+        throw new Error('launch-gate aborted');
+    }
+
     const state = {
         afk: false,
         aborted: false,
@@ -413,6 +424,9 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 ip: proxyHostFromString(proxyString),
             });
             failSession(`banned: ${banReason.slice(0, 220)}`);
+            // Не retry: повторный логин забаненного owner → FunAC 4.3.1
+            log(`BAN — stop clan-setup (no retry)`);
+            process.exit(2);
             return;
         }
         failSession(`kicked ${JSON.stringify(reason)}`);
@@ -439,6 +453,8 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
                 ip: proxyHostFromString(proxyString),
             });
             failSession(`banned: ${reason.slice(0, 220)}`);
+            log(`BAN — stop clan-setup (no retry)`);
+            process.exit(2);
             return;
         }
 
@@ -783,6 +799,10 @@ async function main() {
             process.exit(0);
         } catch (e) {
             const msg = String(e?.message || e);
+            if (/^banned:/i.test(msg) || /ВЫ ЗАБАНЕНЫ/i.test(msg)) {
+                log(`BAN — stop clan-setup (no retry): ${msg.slice(0, 120)}`);
+                process.exit(2);
+            }
             // FunAuth через TG не мгновенный — даём время добить bind до рестарта
             const waitMs = /хуйня|funauth|vk\/tg|confirm/i.test(msg) ? 45_000 : 5_000;
             log(`сбой: ${msg} — через ${Math.round(waitMs / 1000)}с снова`);

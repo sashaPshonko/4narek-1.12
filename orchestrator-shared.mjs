@@ -831,11 +831,28 @@ export async function killWorkerAndRestartIn(username, ctx, delayMs = 5000, reas
     const ms = Math.max(1000, Number(delayMs) || 5000);
     console.log(`🔁 ${username}: ${reason} → рестарт через ${ms / 1000}с`);
     const tid = setTimeout(() => {
-        ctx.pendingRestarts?.delete(username);
-        if (bot.isManualStop || bot.authFault || bot.banned) return;
-        if (ctx.workers?.get(username)) return;
-        console.log(`🔁 Перезапуск ${username} (${reason})`);
-        ctx.runWorker?.(bot);
+        void (async () => {
+            ctx.pendingRestarts?.delete(username);
+            if (bot.isManualStop || bot.authFault || bot.banned) return;
+            if (ctx.workers?.get(username)) return;
+            try {
+                const { awaitFleetLaunchGrant } = await import('./lib/fleet-launch-gate.mjs');
+                const ok = await awaitFleetLaunchGrant({
+                    username,
+                    anarchy: bot.anarchy,
+                    kind: 'bot',
+                    log: console.log,
+                });
+                if (!ok) return;
+            } catch (e) {
+                console.warn(`[launch-gate] restart ${username}: ${e.message}`);
+                return;
+            }
+            if (bot.isManualStop || bot.authFault || bot.banned) return;
+            if (ctx.workers?.get(username)) return;
+            console.log(`🔁 Перезапуск ${username} (${reason})`);
+            ctx.runWorker?.(bot);
+        })();
     }, ms);
     ctx.pendingRestarts?.set(username, tid);
     return true;
@@ -875,14 +892,7 @@ export async function handleFunauthGoMessage(dataObj, ctx) {
     if (dataObj.ok) {
         console.log(`[funauth] ok → рестарт ${nick}`);
         bot.isManualStop = false;
-        const pending = ctx.pendingRestarts?.get(nick);
-        if (pending) {
-            clearTimeout(pending);
-            ctx.pendingRestarts.delete(nick);
-        }
-        if (!ctx.workers?.get(nick)) {
-            ctx.runWorker?.(bot);
-        }
+        await killWorkerAndRestartIn(nick, ctx, 1500, 'funauth ok');
         return true;
     }
 
