@@ -458,6 +458,11 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
             return;
         }
 
+        if (/отключите\s+vpn|vpn и proxy|proxy и повторите/i.test(text)) {
+            failSession('funtime_vpn_proxy_block');
+            return;
+        }
+
         if (text.includes(AFK_MARKER)) {
             state.afk = true;
             log('AFK');
@@ -621,13 +626,40 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, allowe
         bot.physicsEnabled = true;
         await lookAroundSpin(bot, log);
 
-        const createDeadline = Date.now() + 180_000;
+        // Уже в клане? не спамить create
+        {
+            state.clanMembersSnapshot = null;
+            bot.chat('/clan info');
+            const infoDeadline = Date.now() + 12_000;
+            while (
+                !state.alreadyInClan
+                && !state.createOk
+                && !state.aborted
+                && state.clanMembersSnapshot == null
+                && Date.now() < infoDeadline
+            ) {
+                await sleep(400);
+            }
+            if (state.alreadyInClan) {
+                log('уже в клане (по /clan info) — create skip');
+            }
+        }
+
+        const createDeadline = Date.now() + 90_000;
+        let createTries = 0;
         while (!state.createOk && !state.alreadyInClan && !state.aborted && Date.now() < createDeadline) {
+            if (!state.timeJoinAnarchy) {
+                throw new Error('не на анархии — create abort');
+            }
             await antiAfkIfNeeded(bot, state, log);
             if (state.aborted) break;
             if (state.afk) {
                 await sleep(1000);
                 continue;
+            }
+            createTries += 1;
+            if (createTries > 8) {
+                throw new Error('не удалось создать клан (too many tries)');
             }
             const name = randomClanName();
             // без кавычек: FunTime считает "hdblz" за >5 символов
@@ -802,6 +834,10 @@ async function main() {
             if (/^banned:/i.test(msg) || /ВЫ ЗАБАНЕНЫ/i.test(msg)) {
                 log(`BAN — stop clan-setup (no retry): ${msg.slice(0, 120)}`);
                 process.exit(2);
+            }
+            if (/funtime_vpn_proxy|vpn_proxy_block/i.test(msg)) {
+                log(`VPN/Proxy block FunTime — stop clan-setup (смени owner SOCKS): ${msg.slice(0, 120)}`);
+                process.exit(3);
             }
             // FunAuth через TG не мгновенный — даём время добить bind до рестарта
             const waitMs = /хуйня|funauth|vk\/tg|confirm/i.test(msg) ? 45_000 : 5_000;

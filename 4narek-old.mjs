@@ -2367,13 +2367,20 @@ async function drainTreasuryAndLeaveClan({ skipIfOurClan = false } = {}) {
         logInfo('/clan info…');
         bot.chat('/clan info');
         await waitChatFlag(() => Boolean(clanLeaderNick || notInClanHint), 12_000);
-        if (notInClanHint) {
-            logInfo('клана нет — leave skip');
+        if (notInClanHint || !clanLeaderNick) {
+            if (skipIfOurClan) {
+                // Раньше: leave skip без clan_needed → Go никогда не звал owner
+                const reason = notInClanHint ? 'not_in_clan' : 'no_clan_leader';
+                logWarn(`/clan info → ${reason} → Go clan_needed an${config.anarchy}`);
+                parentPort.postMessage({
+                    name: 'clan_setup',
+                    anarchy: config.anarchy,
+                    reason,
+                });
+            } else {
+                logInfo('клана нет — leave skip');
+            }
             if (config.ownerBanDrain) config.ownerBanLeaveDone = true;
-            return;
-        }
-        if (!clanLeaderNick) {
-            logWarn('/clan info — нет лидера, leave skip');
             return;
         }
         if (skipIfOurClan) {
