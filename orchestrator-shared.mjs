@@ -336,10 +336,10 @@ export function collectOrchRoster(bots, clanOwners = []) {
 }
 
 /** Живые боты по go-типу (для ML / Go) */
-export function collectBotsPerType(bots, workers) {
+export function collectBotsPerType(bots, workers, botItems = null, botInventory = null) {
     const counts = {};
     for (const [username, workerData] of workers) {
-        if (!isBotAliveForPresence(username, bots, workers)) continue;
+        if (!isBotAliveForPresence(username, bots, workers, botItems, botInventory)) continue;
         const bot = bots.get(username);
         const goType = resolveGoType(bot);
         if (!goType) continue;
@@ -359,8 +359,8 @@ export function buildPresencePayload(bots, workers, botItems, botInventory, extr
         action: 'presence',
         items: presence.items,
         inventory: presence.inventory,
-        active_types: collectActiveTypes(bots, workers),
-        bots_per_type: collectBotsPerType(bots, workers),
+        active_types: collectActiveTypes(bots, workers, botItems, botInventory),
+        bots_per_type: collectBotsPerType(bots, workers, botItems, botInventory),
         treasury_empty_types: collectTreasuryEmptyTypes(bots, workers),
         banned: collectBannedBots(bots, extraBanned),
         auth_faults: collectAuthFaultBots(bots),
@@ -483,10 +483,10 @@ export async function handleWorkerKicked(username, reason, ctx) {
     return false;
 }
 
-export function collectActiveTypes(bots, workers) {
+export function collectActiveTypes(bots, workers, botItems = null, botInventory = null) {
     const types = new Set();
     for (const username of workers.keys()) {
-        if (!isBotAliveForPresence(username, bots, workers)) continue;
+        if (!isBotAliveForPresence(username, bots, workers, botItems, botInventory)) continue;
         const bot = bots.get(username);
         const goType = resolveGoType(bot);
         if (goType) types.add(goType);
@@ -494,30 +494,57 @@ export function collectActiveTypes(bots, workers) {
     return [...types];
 }
 
-/** Бот считается «живым» для presence, active_types и слотов в ценообразовании */
-export function isBotAliveForPresence(username, bots, workers) {
+/** Есть ли у бота товар на АХ / в инвентаре для учёта в pricing. */
+export function botHasPricingStock(username, botItems, botInventory) {
+    const ah = botItems?.get?.(username);
+    const inv = botInventory?.get?.(username);
+    return (Array.isArray(ah) && ah.length > 0) || (Array.isArray(inv) && inv.length > 0);
+}
+
+/** Воркер online + success (без presenceInactive). */
+export function isBotWorkerOnline(username, bots, workers) {
     const workerData = workers.get(username);
     const bot = bots.get(username);
     return !!(
         workerData?.worker
         && !workerData.worker.terminated
         && bot?.success
-        && !bot.presenceInactive
     );
 }
 
 /**
+ * Бот учитывается в presence / active_types / слотах ценообразования.
+ * treasury_empty + товар на руках → всё равно считаем (иначе Go SKIP и held=0).
+ * staff_check / прочий inactive — нет.
+ */
+export function isBotAliveForPresence(username, bots, workers, botItems = null, botInventory = null) {
+    if (!isBotWorkerOnline(username, bots, workers)) return false;
+    const bot = bots.get(username);
+    if (!bot.presenceInactive) return true;
+    if (bot.presenceInactiveReason === 'treasury_empty') {
+        return botHasPricingStock(username, botItems, botInventory);
+    }
+    return false;
+}
+
+/**
  * Мягко убрать бота из Go presence (слоты/типы), не останавливая воркер.
- * Как бан для ценообразования; снимается только через clearBotPresenceInactive.
+ * treasury_empty: слоты не чистим — товар реален; Go узнаёт через treasury_empty_types.
+ * staff_check и пр.: слоты вычищаем. Снимается через clearBotPresenceInactive.
  */
 export function markBotPresenceInactive(username, ctx, reason = 'presence_inactive') {
     const bot = ctx.bots?.get(username);
     if (!bot || bot.presenceInactive) return false;
     bot.presenceInactive = true;
     bot.presenceInactiveReason = String(reason || 'presence_inactive');
-    clearBotPresence(username, ctx.botItems, ctx.botInventory);
+    const why = String(reason || 'presence_inactive');
+    if (why !== 'treasury_empty') {
+        clearBotPresence(username, ctx.botItems, ctx.botInventory);
+        console.log(`[presence] ${username} inactive (${why}) — слоты не в ценообразовании`);
+    } else {
+        console.log(`[presence] ${username} inactive (treasury_empty) — слоты оставляем, если есть товар`);
+    }
     ctx.pushPresenceToGo?.();
-    console.log(`[presence] ${username} inactive (${reason}) — слоты не в ценообразовании`);
     return true;
 }
 
@@ -1012,7 +1039,7 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     if (message?.name === 'treasury_empty') {
         if (markBotPresenceInactive(username, ctx, 'treasury_empty')) {
             await ctx.sendAlert?.(
-                `💸 ${username}: казна пуста — как бан для Go, слоты вне ценообразования`,
+                `💸 ${username}: казна пуста — покупки без кэша; товар на руках всё ещё в ценообразовании`,
                 username,
             );
         }
@@ -1293,7 +1320,7 @@ export function collectPresenceItemCounts(bots, workers, botItems, botInventory)
     const inventoryCount = new Map();
 
     for (const [username, itemsList] of botItems) {
-        if (!isBotAliveForPresence(username, bots, workers)) continue;
+        if (!isBotAliveForPresence(username, bots, workers, botItems, botInventory)) continue;
         if (!Array.isArray(itemsList)) continue;
         for (const itemId of itemsList) {
             itemsCount.set(itemId, (itemsCount.get(itemId) || 0) + 1);
@@ -1301,7 +1328,7 @@ export function collectPresenceItemCounts(bots, workers, botItems, botInventory)
     }
 
     for (const [username, itemsList] of botInventory) {
-        if (!isBotAliveForPresence(username, bots, workers)) continue;
+        if (!isBotAliveForPresence(username, bots, workers, botItems, botInventory)) continue;
         if (!Array.isArray(itemsList)) continue;
         for (const itemId of itemsList) {
             inventoryCount.set(itemId, (inventoryCount.get(itemId) || 0) + 1);
