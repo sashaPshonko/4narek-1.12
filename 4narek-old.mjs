@@ -1945,6 +1945,8 @@ async function main() {
                 username: config.username,
                 ip: config.ip,
                 anarchy: config.anarchy,
+                pilot: process.env.VIEW_PILOT === '1' || process.env.VIEW_PILOT === 'true',
+                ensurePhysicsOn: (b) => ensurePhysicsOn(b),
                 log: (msg) => {
                     const s = String(msg || '');
                     if (noisy.test(s)) return;
@@ -3173,6 +3175,10 @@ function isBotInventoryFull() {
 async function lookAroundSpin(shouldAbort = null) {
     if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
+    if (bot?._viewPilotActive) {
+        logInfo('anti-AFK → skip, pilot активен');
+        return;
+    }
 
     await waitForEventLoopOk({ log: (m) => logWarn(m) });
     const prevPhysics = bot.physicsEnabled;

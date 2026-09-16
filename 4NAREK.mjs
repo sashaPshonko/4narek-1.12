@@ -38,6 +38,7 @@ import {
 } from './lib/vanilla-move.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
+import { installBotView } from './lib/bot-view/install.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
 
@@ -1097,6 +1098,22 @@ async function main() {
     logOk('anti-AFK → vanilla WASD input-only (physics patch off)');
     setupConfigurationTransferFix(bot);
 
+    try {
+        installBotView(bot, {
+            username: config.username,
+            ip: config.ip || 'local',
+            anarchy: config.anarchy,
+            pilot: process.env.VIEW_PILOT === '1' || process.env.VIEW_PILOT === 'true',
+            ensurePhysicsOn: (b) => ensurePhysicsOn(b),
+            log: (msg) => logInfo(String(msg || '')),
+            onSpectatorChat: (text) => {
+                try { bot.chat(text); } catch { /* ignore */ }
+            },
+        });
+    } catch (err) {
+        logInfo(`view: не поставил (${err?.message || err})`);
+    }
+
     bot.once('inject_allowed', () => {
         setupChatSafeGuard(bot);
         // setSettings на inject во время configuration роняет FunTime (socketClosed)
@@ -1786,6 +1803,10 @@ function hasBotItem() {
 /** Anti-AFK: только WASD через input-only vanilla patch (без look). */
 async function lookAroundSpin() {
     if (!bot?.entity) return;
+    if (bot._viewPilotActive) {
+        logInfo('anti-AFK → skip, pilot активен');
+        return;
+    }
     ensurePhysicsOn(bot);
     await runVanillaMove(bot, (msg) => logOk(msg), null);
     config.walkTime = Date.now();
