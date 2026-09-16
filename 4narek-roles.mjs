@@ -830,13 +830,7 @@ async function handleChatMessage(text) {
         return;
     }
     if (isLobbyBroadcastMessage(text)) {
-        if (Date.now() - botWorkerStartTime < LOBBY_IGNORE_MS) return;
-        // Те же ⚡-рекламы FunTime иногда идут и на анке — не сбрасывать живую сессию.
-        if (config.timeJoinAnarchy > 0) return;
-        const preview = text.trim().length > 50 ? `${text.trim().slice(0, 50)}…` : text.trim();
-        logWarn(`лобби «${preview}» → sellItems`);
-        config.timeJoinAnarchy = 0;
-        await sellItems();
+        // ⚡-рекламы FunTime идут и в хабе, и на анке — по ним лобби не детектим.
         return;
     }
 }
@@ -940,10 +934,16 @@ async function main() {
         applyVanillaClientSettings(bot);
     });
 
-    // .
     bot.on('scoreboardCreated', (scoreboard) => {
-        if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
+        const raw = JSON.stringify(scoreboard);
+        if (raw.includes(`${config.anarchy}`)) {
             markAnarchyJoined();
+            return;
+        }
+        if (config.timeJoinAnarchy > 0) {
+            logWarn(`scoreboard без an${config.anarchy} → лобби, sellItems`);
+            config.timeJoinAnarchy = 0;
+            void sellItems();
         }
     });
 
