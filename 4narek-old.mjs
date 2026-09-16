@@ -419,6 +419,8 @@ const CONFIG_BLOCKED_PACKETS = new Set([
 let configTransferStartedAt = 0;
 /** Когда закончился последний configuration — floor-watchdog молчит ещё пару секунд. */
 let configTransferEndedAt = 0;
+/** Scoreboard видел номер анки — mark только после выхода из configuration. */
+let anarchyBoardSeenAt = 0;
 
 function setupConfigurationTransferFix(bot) {
     const client = bot._client;
@@ -454,15 +456,21 @@ function setupConfigurationTransferFix(bot) {
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = false;
         logInfo('transfer → configuration phase (жду finish_configuration)');
-        // FunTime часто шлёт 2-й configuration сразу после scoreboard «анка».
-        // Warp/walk в этот момент → «нет команд» / лимобо. Глушим команды.
+        // Любой configuration = смена мира. Scoreboard «анка» часто приходит ДО 2-го
+        // transfer — если оставить timeJoin, sell/AH идут в хаб/лимобо без ответов.
         const joined = config.timeJoinAnarchy;
-        if (joined > 0 && Date.now() - joined > 25_000) {
-            logWarn('transfer → уход с анки mid-session, сброс');
-            abortSellSession('configuration');
-            cancelFunauthVerifyTimer();
-            funauthBindRequired = false;
+        if (joined > 0) {
+            const age = Date.now() - joined;
+            if (age > 25_000) {
+                logWarn('transfer → уход с анки mid-session, сброс');
+                abortSellSession('configuration');
+                cancelFunauthVerifyTimer();
+                funauthBindRequired = false;
+            } else {
+                logInfo('transfer → сброс early-join (жду finish + board)');
+            }
             config.timeJoinAnarchy = 0;
+            anarchyBoardSeenAt = Math.max(anarchyBoardSeenAt, joined);
             config.noCommandsUntil = Date.now() + 15_000;
         } else {
             config.noCommandsUntil = Math.max(
@@ -479,11 +487,26 @@ function setupConfigurationTransferFix(bot) {
         bot.physicsEnabled = true;
         applyVanillaClientSettings(bot);
         logOk('transfer → configuration завершён');
-        // ещё чуть не слать /warp — entity часто «падает» после transfer
         config.noCommandsUntil = Math.max(
             config.noCommandsUntil || 0,
-            Date.now() + 8_000,
+            Date.now() + 3_000,
         );
+        // 2-й transfer после /an: board уже был — mark после settle
+        if (anarchyBoardSeenAt > 0 && !config.timeJoinAnarchy) {
+            const seen = anarchyBoardSeenAt;
+            setTimeout(() => {
+                if (config.timeJoinAnarchy) return;
+                if (isInConfigurationTransfer()) return;
+                if (anarchyBoardSeenAt !== seen) return;
+                const y = bot?.entity?.position?.y;
+                if (typeof y === 'number' && y < 15) {
+                    logWarn(`finish → board был, но y=${y.toFixed(1)} — не mark`);
+                    return;
+                }
+                logInfo('finish → mark анки после configuration settle');
+                markAnarchyJoined();
+            }, 800);
+        }
     });
 
     client.on('cookie_request', (data) => {
@@ -1948,8 +1971,12 @@ async function main() {
     // шлёт побочные scoreboard и на анке (ломало AH так же, как ⚡-реклама).
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
+            anarchyBoardSeenAt = Date.now();
+            if (isInConfigurationTransfer()) {
+                logInfo(`scoreboard an${config.anarchy} в configuration — mark после finish`);
+                return;
+            }
             const y = bot.entity?.position?.y;
-            // Либобо/void часто дают scoreboard с номером анки при y≈0..5.
             if (typeof y === 'number' && Number.isFinite(y) && y < 15) {
                 logWarn(
                     `scoreboard an${config.anarchy} при y=${y.toFixed(1)} — не вход, жду пол`,
@@ -2586,6 +2613,53 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
     return ok;
 }
 
+/**
+ * Проверка, что мы реально на анке: /warp shop должен дать «Телепортация!».
+ * Scoreboard+early-mark часто оставляют бота в хабе — /clan ещё жив, /ah нет.
+ */
+async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
+    if (!bot?.chat || !config.timeJoinAnarchy) return false;
+    if (Date.now() < (config.noCommandsUntil || 0)) {
+        const wait = config.noCommandsUntil - Date.now();
+        const until = Date.now() + Math.min(wait + 50, 5_000);
+        while (Date.now() < until) {
+            if (typeof shouldAbort === 'function' && shouldAbort()) return false;
+            if (Date.now() >= (config.noCommandsUntil || 0)) break;
+            await sleepMs(100);
+        }
+    }
+    if (!config.timeJoinAnarchy) return false;
+
+    const warpAt = config.lastWarpTime || 0;
+    logInfo(`${label} → probe /warp shop`);
+    try {
+        bot.chat('/warp shop');
+    } catch {
+        /* ignore */
+    }
+    await chatChain;
+    const deadline = Date.now() + 7_000;
+    while (Date.now() < deadline) {
+        if (typeof shouldAbort === 'function' && shouldAbort()) return false;
+        if ((config.lastWarpTime || 0) > warpAt) {
+            logOk(`${label} → телепорт ок, на анке`);
+            config.lastWarp = 'shop';
+            return true;
+        }
+        if (Date.now() < (config.noCommandsUntil || 0) && !config.timeJoinAnarchy) {
+            return false;
+        }
+        await sleepMs(150);
+    }
+    logWarn(`${label} → нет телепорта после /warp shop — сброс анки, rejoin`);
+    cancelFunauthVerifyTimer();
+    funauthBindRequired = false;
+    config.timeJoinAnarchy = 0;
+    anarchyBoardSeenAt = 0;
+    config.noCommandsUntil = Date.now() + 8_000;
+    return false;
+}
+
 /** Выброс мусора в слоте. true = ушли на RTP (нужно прервать sellItems). */
 async function tossTrashAtSlot(slot) {
     while (true) {
@@ -2651,6 +2725,11 @@ async function sellItems() {
             logWarn('продажа → abort после joinAnarchy');
             return;
         }
+        if (!(await confirmAnarchyWithWarp('sell', () => !isSellSessionAlive(gen)))) {
+            logWarn('продажа → abort: анка не подтвердилась warp');
+            return;
+        }
+        if (!isSellSessionAlive(gen)) return;
         config.timeActive = Date.now();
         let canSell = true;
 
@@ -3105,6 +3184,10 @@ async function safeAH() {
         await joinAnarchy();
         if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
             logWarn('safeAH → нет анки / no-cmd');
+            return;
+        }
+        if (!(await confirmAnarchyWithWarp('safeAH'))) {
+            logWarn('safeAH → abort: анка не подтвердилась');
             return;
         }
         await ensureGroundedForCommands('safeAH');
