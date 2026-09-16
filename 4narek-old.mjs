@@ -2614,8 +2614,27 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
 }
 
 /**
- * Проверка реальной анки: /balance или варп ≠ shop (shop часто no-op без «Телепортация!»).
- * Scoreboard+early-mark иногда оставляют хаб — /clan жив, экономика нет.
+ * Разблокировка после transfer: FunTime иногда глушит /ah,/balance,/warp,
+ * пока не было player_input. /clan при этом уже отвечает.
+ */
+async function nudgePlayerInput(shouldAbort = null) {
+    if (!bot?.entity || !bot.setControlState) return;
+    try {
+        ensurePhysicsOn(bot);
+        if (typeof shouldAbort === 'function' && shouldAbort()) return;
+        bot.setControlState('forward', true);
+        await sleepMs(280);
+        bot.setControlState('forward', false);
+        if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
+        await sleepMs(200);
+    } catch {
+        /* ignore */
+    }
+}
+
+/**
+ * Мягкая проверка анки. Не сбрасываем timeJoin при фейле — иначе rejoin-шторм.
+ * Сначала nudge, потом /balance; при удаче — ок. При фейле только warn.
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
@@ -2635,7 +2654,13 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
         || !config.timeJoinAnarchy;
 
-    // 1) /balance — надёжный маркер экономики на анке
+    const y = bot.entity?.position?.y;
+    logInfo(
+        `${label} → probe state=${bot._client?.state || '?'} y=${Number.isFinite(y) ? y.toFixed(1) : '?'}`,
+    );
+    await nudgePlayerInput(shouldAbort);
+    if (abort()) return false;
+
     config.balance = null;
     logInfo(`${label} → probe /balance`);
     try {
@@ -2654,22 +2679,20 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
         await sleepMs(150);
     }
 
-    // 2) варп не shop — если уже на shop, /warp shop молчит без телепорта
-    const warpAt = config.lastWarpTime || 0;
-    const warpCmd = '/warp portal';
-    logInfo(`${label} → probe ${warpCmd}`);
+    // /ah без search — если окно открылось, экономика жива
+    const keyBefore = config.key;
+    logInfo(`${label} → probe /ah`);
     try {
-        bot.chat(warpCmd);
+        bot.chat('/ah');
     } catch {
         /* ignore */
     }
     await chatChain;
-    deadline = Date.now() + 7_000;
+    deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
         if (abort()) return false;
-        if ((config.lastWarpTime || 0) > warpAt) {
-            logOk(`${label} → телепорт ок, на анке`);
-            config.lastWarp = 'portal';
+        if (config.key !== keyBefore) {
+            logOk(`${label} → AH window ok`);
             return true;
         }
         if (config.balance != null) {
@@ -2679,12 +2702,9 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
         await sleepMs(150);
     }
 
-    logWarn(`${label} → нет balance/телепорта — сброс анки, rejoin`);
-    cancelFunauthVerifyTimer();
-    funauthBindRequired = false;
-    config.timeJoinAnarchy = 0;
-    anarchyBoardSeenAt = 0;
-    config.noCommandsUntil = Date.now() + 3_000;
+    logWarn(
+        `${label} → probe без ответа (balance/ah) — продолжаем, не сбрасываем анку`,
+    );
     return false;
 }
 
@@ -2754,8 +2774,7 @@ async function sellItems() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('sell', () => !isSellSessionAlive(gen)))) {
-            logWarn('продажа → abort: анка не подтвердилась warp');
-            return;
+            logWarn('продажа → confirm fail, всё равно идём в sell/AH');
         }
         if (!isSellSessionAlive(gen)) return;
         config.timeActive = Date.now();
@@ -3215,8 +3234,7 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            logWarn('safeAH → abort: анка не подтвердилась');
-            return;
+            logWarn('safeAH → confirm fail, пробуем /ah search');
         }
         await ensureGroundedForCommands('safeAH');
         if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
@@ -3224,6 +3242,12 @@ async function safeAH() {
             return;
         }
         await rnd('BASE_DELAY');
+
+        // если probe /ah уже открыл окно — выходим, windowOpen крутит browse
+        if (config.key && bot.currentWindow) {
+            logOk('safeAH → окно уже открыто после probe');
+            return;
+        }
 
         config.needReloadAH = true;
         config.menu = analysisAH;
