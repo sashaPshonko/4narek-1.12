@@ -32,7 +32,7 @@ import {
     pickAhReloadSlot,
 } from './lib/ah-buy-tempo.mjs';
 import { lookAroundSpin as lookAroundSpinLib, nextWalkGapMs } from './lib/afk-look.mjs';
-import { patchWalking121 } from './lib/walk-121.mjs';
+import { patchWalking } from './lib/vanilla-move.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
@@ -1062,8 +1062,8 @@ async function main() {
         },
     });
 
-    patchWalking121(bot);
-    patchVanillaPhysics(bot);
+    patchWalking(bot);
+    patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     setupConfigurationTransferFix(bot);
 
     bot.once('inject_allowed', () => {
