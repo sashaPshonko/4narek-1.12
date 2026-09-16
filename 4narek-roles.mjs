@@ -935,15 +935,8 @@ async function main() {
     });
 
     bot.on('scoreboardCreated', (scoreboard) => {
-        const raw = JSON.stringify(scoreboard);
-        if (raw.includes(`${config.anarchy}`)) {
+        if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
-            return;
-        }
-        if (config.timeJoinAnarchy > 0) {
-            logWarn(`scoreboard без an${config.anarchy} → лобби, sellItems`);
-            config.timeJoinAnarchy = 0;
-            void sellItems();
         }
     });
 

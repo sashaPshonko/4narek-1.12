@@ -1631,7 +1631,6 @@ async function handleChatMessage(text) {
     if (isLobbyBroadcastMessage(text)) {
         // ⚡-рекламы FunTime идут и в хабе, и на анке — по ним лобби НЕ детектим.
         // Иначе AH рвётся каждые N секунд (timeJoin сбрасывается, книга пустая).
-        // Реальный выброс в лобби: scoreboard без номера анки (см. scoreboardCreated).
         return;
     }
 }
@@ -1866,20 +1865,11 @@ async function main() {
         // setSettings на inject во время configuration роняет FunTime (socketClosed)
     });
 
+    // Только вход на анку. Сброс лобби по «board без номера» нельзя — FunTime
+    // шлёт побочные scoreboard и на анке (ломало AH так же, как ⚡-реклама).
     bot.on('scoreboardCreated', (scoreboard) => {
-        const raw = JSON.stringify(scoreboard);
-        if (raw.includes(`${config.anarchy}`)) {
+        if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
             markAnarchyJoined();
-            return;
-        }
-        // Хаб/лобби: board без номера анки после того, как уже были на анке.
-        if (config.timeJoinAnarchy > 0) {
-            logWarn(`scoreboard без an${config.anarchy} → лобби, sellItems`);
-            abortSellSession('лобби-scoreboard');
-            cancelFunauthVerifyTimer();
-            funauthBindRequired = false;
-            config.timeJoinAnarchy = 0;
-            void sellItems();
         }
     });
 
