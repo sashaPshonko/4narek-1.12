@@ -888,6 +888,8 @@ function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
     // Сначала AH/balance, не shop_map walk — иначе ложный Y-desync и очередь chat.
     config.preferAhUntil = Date.now() + 120_000;
+    // иначе walkTime=0 → каждый windowOpen сразу sellItems, книга не пишется
+    config.walkTime = Date.now();
     funauthBindRequired = false;
     ensurePhysicsOn(bot);
     scheduleFunauthVerify();
@@ -1894,11 +1896,11 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    // physics patch ронял entity на y≈70 → FunTime глушил /ah,/balance.
-    // walk-пакеты оставляем (маскировка без лома экономики).
-    patchVanillaMove(bot);
+    // vanilla move+physics: FunTime глушит /ah,/balance и сажает y≈70.
+    // A/B 16.09: оба OFF → balance+AH+y=82; move ON alone → снова мёртвая экономика.
+    // RP timing / client settings оставляем. Патчи движения — отдельно, когда починим.
+    // patchVanillaMove(bot);
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
-    logWarn('TEMP → vanilla physics OFF, move ON');
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
@@ -2124,6 +2126,8 @@ async function main() {
                         logInfo(`АХ-цикл → окно уже «${config.menu}», не жму reload`);
                         break;
                     }
+
+                    flushAhBookLots();
 
                     // Сброс / инвентарь≥27 раньше sellItems — иначе осмотр съедает минуту или не даёт цикл снять→продать.
                     // enoughItems сюда НЕ входит: это «АХ забит при выставлении» — стоп sellItems, не повод лезть в хранилище.

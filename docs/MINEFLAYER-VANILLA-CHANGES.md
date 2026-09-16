@@ -13,15 +13,9 @@
 
 | Файл | Что делает |
 |------|------------|
-| `lib/vanilla-move.mjs` | Единый walk-patch: полный `player_input` (7 флагов), `tick_end` после move и на каждый physics tick, `fround` в move-пакетах, `hasHorizontalCollision` из `bot.entity.isCollidedHorizontally`, **sprint выключен** (ignore `true` + глотаем `start_sprinting`) |
-| `lib/walk-121.mjs` | Re-export `patchWalking` / `patchWalking121` → `vanilla-move` |
-| `lib/vanilla-tick.mjs` | Хук `setInterval(50)` из `mineflayer/.../physics.js` → абсолютный 20 TPS (`nextAt += 50`), при лаге resync без пачки тиков |
-| `lib/vanilla-physics.mjs` | `maxCatchupTicks: 1`, fround **vel** (не pos каждый тик — иначе fall-through), константы LivingEntity, `simulatePlayer`, reconcile Δpos + dampen ghost-fall |
-| `lib/vanilla-client.mjs` | brand/settings + импорт `vanilla-tick` до createBot |
-| `lib/vanilla-resource-pack.mjs` | ACCEPTED → пауза download → DOWNLOADED → LOADED (не мгновенно) |
-| `lib/floor-watchdog.mjs` | Warp только при реальном Δy≥1.25; ghost-vy без падения Y — suppress; чанк-гейт; без долгого physics-off |
-| `lib/walk-route.mjs` | sprint больше не включается при маршруте |
-| `4narek-old.mjs` / `4NAREK.mjs` / `4narek-roles.mjs` | `patchWalking` + `patchVanillaPhysics({ log })` |
+| `lib/vanilla-move.mjs` | Walk-patch: полный `player_input`, `tick_end` после move (**не** на каждый physicsTick — FunTime иначе глушит /ah), `fround` move, `hasHorizontalCollision`, sprint off |
+| `lib/vanilla-physics.mjs` | LivingEntity / reconcile / ghost-fall |
+| `4narek-old.mjs` | **16.09.2026:** `patchVanillaMove` + `patchVanillaPhysics` **выключены** в проде. A/B: с патчами entity на y≈70, `/clan` жив, `/ah`/`/balance`/`/warp` молчат; без патчей y≈82, AH открывается. RP timing / client settings остаются. Включать обратно только после фикса. |
 
 Stock mineflayer сам по себе этого не делает.
 
