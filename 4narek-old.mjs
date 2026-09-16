@@ -663,6 +663,8 @@ const config = {
     item: workerData.item,
     goType: workerData.goType,
     timeJoinAnarchy: 0,
+    /** До этого ts не слать /warp (мир без команд / лимобо). */
+    noCommandsUntil: 0,
     lastWarpTime: 0,
     lastWarp: null,
     enoughItems: false,
@@ -1641,6 +1643,18 @@ async function handleChatMessage(text) {
         await safeAH();
         return;
     }
+    if (text.includes('Здесь нет команд')) {
+        const now = Date.now();
+        config.noCommandsUntil = now + 20_000;
+        if (config.timeJoinAnarchy > 0) {
+            logWarn('нет команд → сброс анки (лимобо/хаб), rejoin');
+            abortSellSession('нет команд');
+            cancelFunauthVerifyTimer();
+            funauthBindRequired = false;
+            config.timeJoinAnarchy = 0;
+        }
+        return;
+    }
     if (isLobbyBroadcastMessage(text)) {
         // ⚡-рекламы FunTime идут и в хабе, и на анке — по ним лобби НЕ детектим.
         // Иначе AH рвётся каждые N секунд (timeJoin сбрасывается, книга пустая).
@@ -2556,7 +2570,8 @@ async function sellItems() {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
             if (
-                shouldAttemptWalk(
+                Date.now() >= (config.noCommandsUntil || 0)
+                && shouldAttemptWalk(
                     config.username,
                     config.lastWarpTime || 0,
                     botWorkerStartTime,
