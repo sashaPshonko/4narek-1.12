@@ -1923,7 +1923,11 @@ async function main() {
             config.noCommandsUntil = Date.now() + 15_000;
         },
     });
-    logOk('anti-AFK → walk-route WASD (без look), portal если только назад');
+    logOk(
+        Number(config.anarchy) === 502
+            ? 'anti-AFK → forward+мышь (look-steer), portal если только назад'
+            : 'anti-AFK → walk-route WASD (без look), portal если только назад',
+    );
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -3165,7 +3169,7 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK: только WASD, без look. */
+/** Anti-AFK: на 502 — forward+мышь; иначе WASD. */
 async function lookAroundSpin(shouldAbort = null) {
     if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
@@ -3175,7 +3179,10 @@ async function lookAroundSpin(shouldAbort = null) {
     ensurePhysicsOn(bot);
     lookLock = true;
     try {
-        await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort);
+        await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort, {
+            anarchy: config.anarchy,
+            lookSteer: Number(config.anarchy) === 502,
+        });
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
