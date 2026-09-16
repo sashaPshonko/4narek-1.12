@@ -1879,8 +1879,17 @@ async function main() {
             if (isInConfigurationTransfer()) return true;
             if (configTransferEndedAt && Date.now() - configTransferEndedAt < 8_000) return true;
             // первые секунды на анке entity часто «летит» после transfer
-            if (Date.now() - config.timeJoinAnarchy < 15_000) return true;
+            if (Date.now() - config.timeJoinAnarchy < 45_000) return true;
             return false;
+        },
+        onVoidFall: () => {
+            if (!config.timeJoinAnarchy) return;
+            logWarn('floor-watchdog → void/limbo, сброс анки');
+            abortSellSession('void');
+            cancelFunauthVerifyTimer();
+            funauthBindRequired = false;
+            config.timeJoinAnarchy = 0;
+            config.noCommandsUntil = Date.now() + 15_000;
         },
     });
     logOk('anti-AFK → walk-route WASD (без look), portal если только назад');
@@ -1935,6 +1944,14 @@ async function main() {
     // шлёт побочные scoreboard и на анке (ломало AH так же, как ⚡-реклама).
     bot.on('scoreboardCreated', (scoreboard) => {
         if (JSON.stringify(scoreboard).includes(`${config.anarchy}`)) {
+            const y = bot.entity?.position?.y;
+            // Либобо/void часто дают scoreboard с номером анки при y≈0..5.
+            if (typeof y === 'number' && Number.isFinite(y) && y < 15) {
+                logWarn(
+                    `scoreboard an${config.anarchy} при y=${y.toFixed(1)} — не вход, жду пол`,
+                );
+                return;
+            }
             markAnarchyJoined();
         }
     });
@@ -3072,6 +3089,10 @@ async function safeAH() {
 }
 async function safeBalance() {
     if (!bot) return;
+    if (Date.now() < (config.noCommandsUntil || 0)) {
+        logWarn('safeBalance → skip (no-commands)');
+        return;
+    }
     config.balance = null;
     await closeCurrentWindowSafe();
     await joinAnarchy();
@@ -3079,13 +3100,23 @@ async function safeBalance() {
 
     config.botUpdateWindow = true;
 
-    while (config.balance === null) {
+    const deadline = Date.now() + 15_000;
+    let tries = 0;
+    while (config.balance === null && Date.now() < deadline) {
         if (config.ownerBanDrain) return;
+        if (Date.now() < (config.noCommandsUntil || 0) || !config.timeJoinAnarchy) {
+            logWarn('safeBalance → abort (лимобо)');
+            return;
+        }
+        tries++;
         await antiAfkIfNeeded();
         await rnd('AH_CMD');
         config.menu = analysisAH;
         bot.chat(`/balance`);
         await rnd('POLL');
+    }
+    if (config.balance == null) {
+        logWarn(`safeBalance → timeout после ${tries} попыток`);
     }
 }
 
