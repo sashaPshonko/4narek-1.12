@@ -1898,7 +1898,7 @@ async function main() {
     setEnchantRegistry();
     // input-only: полный player_input + tick_end на WASD (AFK сходит).
     // position fround/collision — нет (сажало y≈70, глушило /ah). physics patch — нет.
-    patchVanillaMove(bot);
+    patchVanillaMove(bot, { tickEndEveryTick: true });
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),

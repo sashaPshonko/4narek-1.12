@@ -931,7 +931,7 @@ async function main() {
         },
     });
 
-    patchWalking(bot);
+    patchWalking(bot, { tickEndEveryTick: true });
     patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     setupConfigurationTransferFix(bot);
 

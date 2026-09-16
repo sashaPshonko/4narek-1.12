@@ -391,7 +391,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
     });
 
     attachMapCache(bot);
-    patchWalking121(bot);
+    patchWalking121(bot, { tickEndEveryTick: true });
     setupConfigurationTransferFix(bot);
 
     bot.on('scoreboardCreated', (scoreboard) => {

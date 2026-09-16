@@ -1075,7 +1075,8 @@ async function main() {
         },
     });
 
-    patchWalking(bot);
+    // E14: ClientTickEnd каждый physicsTick (лок. PASS 16.09); rewrite pos/collision выкл
+    patchWalking(bot, { tickEndEveryTick: true });
     // physics OFF — вместе с full move сажал y≈70 и глушил /ah (см. 4narek-old A/B 16.09)
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
