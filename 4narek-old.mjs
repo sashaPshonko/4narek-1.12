@@ -417,6 +417,8 @@ const CONFIG_BLOCKED_PACKETS = new Set([
 ]);
 
 let configTransferStartedAt = 0;
+/** Когда закончился последний configuration — floor-watchdog молчит ещё пару секунд. */
+let configTransferEndedAt = 0;
 
 function setupConfigurationTransferFix(bot) {
     const client = bot._client;
@@ -452,14 +454,36 @@ function setupConfigurationTransferFix(bot) {
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = false;
         logInfo('transfer → configuration phase (жду finish_configuration)');
+        // FunTime часто шлёт 2-й configuration сразу после scoreboard «анка».
+        // Warp/walk в этот момент → «нет команд» / лимобо. Глушим команды.
+        const joined = config.timeJoinAnarchy;
+        if (joined > 0 && Date.now() - joined > 25_000) {
+            logWarn('transfer → уход с анки mid-session, сброс');
+            abortSellSession('configuration');
+            cancelFunauthVerifyTimer();
+            funauthBindRequired = false;
+            config.timeJoinAnarchy = 0;
+            config.noCommandsUntil = Date.now() + 15_000;
+        } else {
+            config.noCommandsUntil = Math.max(
+                config.noCommandsUntil || 0,
+                Date.now() + 12_000,
+            );
+        }
     });
 
     client.on('finish_configuration', () => {
         configTransferStartedAt = 0;
+        configTransferEndedAt = Date.now();
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = true;
         applyVanillaClientSettings(bot);
         logOk('transfer → configuration завершён');
+        // ещё чуть не слать /warp — entity часто «падает» после transfer
+        config.noCommandsUntil = Math.max(
+            config.noCommandsUntil || 0,
+            Date.now() + 8_000,
+        );
     });
 
     client.on('cookie_request', (data) => {
@@ -1646,8 +1670,13 @@ async function handleChatMessage(text) {
     if (text.includes('Здесь нет команд')) {
         const now = Date.now();
         config.noCommandsUntil = now + 20_000;
-        if (config.timeJoinAnarchy > 0) {
-            logWarn('нет команд → сброс анки (лимобо/хаб), rejoin');
+        const wasOnAnarchy = config.timeJoinAnarchy > 0;
+        if (wasOnAnarchy || config.sellInFlight) {
+            logWarn(
+                wasOnAnarchy
+                    ? 'нет команд → сброс анки (лимобо/хаб), rejoin'
+                    : 'нет команд → abort sell, rejoin',
+            );
             abortSellSession('нет команд');
             cancelFunauthVerifyTimer();
             funauthBindRequired = false;
@@ -1843,7 +1872,16 @@ async function main() {
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
-        shouldIgnore: () => Boolean(config.staffCheckIdle || config.ownerBanDrain),
+        shouldIgnore: () => {
+            if (config.staffCheckIdle || config.ownerBanDrain) return true;
+            if (Date.now() < (config.noCommandsUntil || 0)) return true;
+            if (!config.timeJoinAnarchy) return true; // хаб/лимобо — /warp бесполезен
+            if (isInConfigurationTransfer()) return true;
+            if (configTransferEndedAt && Date.now() - configTransferEndedAt < 8_000) return true;
+            // первые секунды на анке entity часто «летит» после transfer
+            if (Date.now() - config.timeJoinAnarchy < 15_000) return true;
+            return false;
+        },
     });
     logOk('anti-AFK → walk-route WASD (без look), portal если только назад');
     installPlayerActionGate(bot);
@@ -2608,17 +2646,21 @@ async function sellItems() {
                         logWarn(`прогулка → ${why}`);
                         // off_map / y_desync: один /warp shop и дальше sell→AH, не крутить 3мин
                         if (why === 'off_map' || why === 'y_desync' || why === 'walk_budget') {
-                            try {
-                                bot.chat('/warp shop');
-                            } catch {
-                                /* ignore */
-                            }
-                            config.lastWarp = 'shop';
-                            config.lastWarpTime = Date.now();
-                            const until = Date.now() + 4500;
-                            while (Date.now() < until) {
-                                if (!isSellSessionAlive(gen)) break;
-                                await sleepMs(200);
+                            if (Date.now() >= (config.noCommandsUntil || 0) && config.timeJoinAnarchy > 0) {
+                                try {
+                                    bot.chat('/warp shop');
+                                } catch {
+                                    /* ignore */
+                                }
+                                config.lastWarp = 'shop';
+                                config.lastWarpTime = Date.now();
+                                const until = Date.now() + 4500;
+                                while (Date.now() < until) {
+                                    if (!isSellSessionAlive(gen)) break;
+                                    await sleepMs(200);
+                                }
+                            } else {
+                                logWarn(`прогулка → ${why}, warp skip (лимобо/no-cmd)`);
                             }
                         }
                     }
