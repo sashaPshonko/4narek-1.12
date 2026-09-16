@@ -783,11 +783,21 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
         {
             const missing = requiredBots.filter((n) => !alreadyIn.has(String(n).toLowerCase()));
             if (missing.length) {
-                throw new Error(`clan incomplete: missing ${missing.join(', ')}`);
+                log(`⚠ incomplete roster (права всё равно): missing ${missing.join(', ')}`);
             }
         }
 
+        // Права тем, кто уже в клане — не ждём офлайн tip9/qxEmber
         await grantAllRights(bot, state, inviteNicks, owner.username, requiredBotNicks);
+
+        {
+            const missing = requiredBots.filter((n) => !alreadyIn.has(String(n).toLowerCase()));
+            if (missing.length) {
+                // права живым уже выдали; incomplete → Go снова позовёт когда офлайны оживут
+                throw new Error(`clan incomplete after grants: missing ${missing.join(', ')}`);
+            }
+        }
+
         log('цель достигнута');
         finishedOk = true;
         sessionReject = null;
@@ -1151,7 +1161,7 @@ async function doRightsShift2(bot, state) {
 
 /**
  * /clan menu → участники → shift по каждой голове в GUI → shift в окне прав.
- * Успех только если выдали права ≥ числу ферм-ботов (или всех не-лидеров в info).
+ * Выдаём всем не-лидерам, кто сейчас в clan info (офлайн из ростера не блокирует).
  */
 async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBotNicks = []) {
     const ownerKey = String(ownerUsername || '').toLowerCase();
@@ -1161,16 +1171,24 @@ async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBot
     const members = (await safeClanInfo(bot, state)) || state.clanMembersSnapshot || [];
     const inClan = new Set(members.map((m) => String(m).toLowerCase()));
 
-    for (const n of required) {
-        if (!inClan.has(String(n).toLowerCase())) {
-            throw new Error(`права: бот ${n} не в clan info — сначала invite`);
-        }
+    const presentRequired = required.filter((n) => inClan.has(String(n).toLowerCase()));
+    const missingRequired = required.filter((n) => !inClan.has(String(n).toLowerCase()));
+    if (missingRequired.length) {
+        log(`права: нет в клане (skip, выдаём кто есть): ${missingRequired.join(', ')}`);
+    }
+    if (!presentRequired.length && required.length) {
+        log('права: ни одного ферм-бота в clan info — всё равно пройдём головы не-лидеров');
     }
 
+    // Сколько голов ждём в GUI: только кто реально в клане сейчас (не весь ростер)
     const wantHeads = Math.max(
-        required.length,
-        Math.max(0, members.filter((m) => String(m).toLowerCase() !== ownerKey).length),
+        0,
+        members.filter((m) => String(m).toLowerCase() !== ownerKey).length,
     );
+    if (wantHeads === 0) {
+        log('права: в клане только лидер — нечего выдавать');
+        return;
+    }
 
     // открываем members — собираем слоты голов (несколько попыток)
     let headSlots = [];
@@ -1180,7 +1198,6 @@ async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBot
             (h) => !h.label || String(h.label).toLowerCase() !== ownerKey,
         );
         if (nonOwner.length >= wantHeads && wantHeads > 0) {
-            headSlots = headSlots; // keep all, skip leader in loop
             break;
         }
         if (headSlots.length && wantHeads === 0) break;
@@ -1195,11 +1212,13 @@ async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBot
     const grantTargets = headSlots.filter(
         (h) => !h.label || String(h.label).toLowerCase() !== ownerKey,
     );
-    if (wantHeads > 0 && grantTargets.length < wantHeads) {
+    if (!grantTargets.length) {
         dumpMemberSlots(bot);
-        throw new Error(
-            `мало голов для прав: ${grantTargets.length} < ${wantHeads} (members=${members.join(',') || '—'})`,
-        );
+        throw new Error(`нет голов не-лидеров для прав (members=${members.join(',') || '—'})`);
+    }
+    if (grantTargets.length < wantHeads) {
+        // не фейлим сессию: выдадим сколько нашли (GUI мог не отрисовать всех)
+        log(`⚠ голов меньше чем в info: ${grantTargets.length} < ${wantHeads} — выдаём найденные`);
     }
     log(`права по слотам голов: ${headSlots.map((s) => `${s.slot}:${s.label}`).join(', ')}`);
 
@@ -1213,7 +1232,7 @@ async function grantAllRights(bot, state, grantNicks, ownerUsername, requiredBot
         log(`✓ права ${label || `slot${slot}`}`);
         await rnd(800, 1500);
     }
-    log(`права выданы (heads=${grantTargets.length}, requiredBots=${required.length})`);
+    log(`права выданы (heads=${grantTargets.length}, presentBots=${presentRequired.length}/${required.length})`);
 }
 
 async function discoverMemberHeadSlots(bot, state, waitMs = 40_000) {
