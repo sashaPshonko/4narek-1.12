@@ -1894,8 +1894,10 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    patchVanillaMove(bot);
-    patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
+    // TEMP A/B: vanilla move/physics off — FunTime глушит /ah,/balance при патчах.
+    // patchVanillaMove(bot);
+    // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
+    logWarn('TEMP → vanilla move/physics PATCH OFF (диагностика AH)');
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
