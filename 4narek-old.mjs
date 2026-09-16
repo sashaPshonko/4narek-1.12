@@ -47,6 +47,8 @@ import {
 import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
+import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
+import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
 import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
@@ -431,8 +433,6 @@ function setupConfigurationTransferFix(bot) {
     client.prependListener('login', () => ensureRegistryDimensionStub(bot));
     client.prependListener('respawn', () => ensureRegistryDimensionStub(bot));
 
-    const PACK_ACCEPTED = 3;
-    const PACK_LOADED = 0;
     let blockSelectKnownPacksWrite = false;
 
     const origWrite = client.write.bind(client);
@@ -469,9 +469,13 @@ function setupConfigurationTransferFix(bot) {
 
     client.prependListener('add_resource_pack', (data) => {
         if (client.state !== 'configuration') return;
-        logInfo('config → add_resource_pack, принимаю');
-        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_ACCEPTED });
-        origWrite('resource_pack_receive', { uuid: data.uuid, result: PACK_LOADED });
+        logInfo('config → add_resource_pack (ванильная задержка download)');
+        void acceptResourcePackVanilla(origWrite, {
+            uuid: data.uuid,
+            url: data.url,
+            log: (m) => logInfo(m),
+            shouldAbort: () => !bot?._client || bot._client.ended,
+        });
     });
 
     client.prependListener('select_known_packs', (data) => {
@@ -491,9 +495,15 @@ function setupConfigurationTransferFix(bot) {
         logWarn(`config → disconnect: ${JSON.stringify(data.reason ?? data)}`);
     });
 
-    bot.on('resourcePack', () => {
+    bot.on('resourcePack', (url, id) => {
         if (client.state === 'configuration') return;
-        bot.acceptResourcePack();
+        const uuid = id && typeof id === 'object' && id.toString ? id.toString() : id;
+        logInfo('play → resource pack (ванильная задержка download)');
+        void acceptResourcePackVanilla(client.write.bind(client), {
+            uuid,
+            url,
+            log: (m) => logInfo(m),
+        });
     });
 }
 
@@ -1812,6 +1822,7 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
+    patchVanillaPhysics(bot);
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
