@@ -16,10 +16,10 @@
 | `lib/vanilla-move.mjs` | Единый walk-patch: полный `player_input` (7 флагов), `tick_end` после move и на каждый physics tick, `fround` в move-пакетах, `hasHorizontalCollision` из `bot.entity.isCollidedHorizontally`, **sprint выключен** (ignore `true` + глотаем `start_sprinting`) |
 | `lib/walk-121.mjs` | Re-export `patchWalking` / `patchWalking121` → `vanilla-move` |
 | `lib/vanilla-tick.mjs` | Хук `setInterval(50)` из `mineflayer/.../physics.js` → абсолютный 20 TPS (`nextAt += 50`), при лаге resync без пачки тиков |
-| `lib/vanilla-physics.mjs` | `maxCatchupTicks: 1`, fround entity, константы LivingEntity, обёртка `simulatePlayer`, **reconcile Δpos** (`forcedMove`; варпы >4 блоков не в avg) |
+| `lib/vanilla-physics.mjs` | `maxCatchupTicks: 1`, fround **vel** (не pos каждый тик — иначе fall-through), константы LivingEntity, `simulatePlayer`, reconcile Δpos + dampen ghost-fall |
 | `lib/vanilla-client.mjs` | brand/settings + импорт `vanilla-tick` до createBot |
 | `lib/vanilla-resource-pack.mjs` | ACCEPTED → пауза download → DOWNLOADED → LOADED (не мгновенно) |
-| `lib/floor-watchdog.mjs` | Падение → `/warp shop`; **не** триггерит без загруженного чанка; антиспам 15с; physics off на время warp |
+| `lib/floor-watchdog.mjs` | Warp только при реальном Δy≥1.25; ghost-vy без падения Y — suppress; чанк-гейт; без долгого physics-off |
 | `lib/walk-route.mjs` | sprint больше не включается при маршруте |
 | `4narek-old.mjs` / `4NAREK.mjs` / `4narek-roles.mjs` | `patchWalking` + `patchVanillaPhysics({ log })` |
 
