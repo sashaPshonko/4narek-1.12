@@ -46,7 +46,7 @@ import {
 } from './lib/vanilla-move.mjs';
 import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
-import { isStandingOnFloor } from './lib/wasd-pit-guard.mjs';
+import { isStandingOnFloor, isNearPitEdge } from './lib/wasd-pit-guard.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
@@ -696,6 +696,8 @@ const config = {
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
     sellInFlight: false,
+    /** safeAH крутится — physicTick не стартует параллельный sell. */
+    ahInFlight: false,
     /** Поколение sellItems — лобби/таймаут бампят, старая сессия выходит. */
     sellGen: 0,
     sellStartedAt: 0,
@@ -2020,6 +2022,10 @@ async function main() {
                 return;
             }
         }
+        if (config.ahInFlight) {
+            config.timeActive = Date.now();
+            return;
+        }
         if (config.ownerBanDrain) {
             config.timeActive = Date.now();
             await drainTreasuryAndLeaveClan();
@@ -2541,6 +2547,43 @@ async function waitWarpTeleport() {
     while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
+/**
+ * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
+ * После anti-AFK у края часто «полёт» → команды без ответа → AH мёртв.
+ */
+async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
+    if (!bot?.entity) return false;
+    const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
+        || Date.now() < (config.noCommandsUntil || 0)
+        || !config.timeJoinAnarchy;
+
+    if (abort()) return false;
+
+    if (isStandingOnFloor(bot) && !isNearPitEdge(bot)) {
+        return true;
+    }
+
+    logWarn(`${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), /warp shop`);
+    try {
+        bot.chat('/warp shop');
+    } catch {
+        /* ignore */
+    }
+    config.lastWarp = 'shop';
+    const until = Date.now() + 8_000;
+    while (Date.now() < until) {
+        if (abort()) return false;
+        if (isStandingOnFloor(bot) && !isNearPitEdge(bot)) {
+            logOk(`${label} → на полу после warp`);
+            return true;
+        }
+        await sleepMs(200);
+    }
+    const ok = isStandingOnFloor(bot);
+    if (!ok) logWarn(`${label} → всё ещё не на полу`);
+    return ok;
+}
+
 /** Выброс мусора в слоте. true = ушли на RTP (нужно прервать sellItems). */
 async function tossTrashAtSlot(slot) {
     while (true) {
@@ -2696,19 +2739,12 @@ async function sellItems() {
                         ensurePhysicsOn(bot);
                     }
                 }
-                // anti-AFK только на полу — у края/в полёте awaitSettled бессмысленен
-                if (isStandingOnFloor(bot) && isSellSessionAlive(gen)) {
-                    lookLock = true;
-                    try {
-                        await lookAroundSpin(() => !isSellSessionAlive(gen));
-                    } finally {
-                        lookLock = false;
-                        lastLookAt = Date.now();
-                    }
-                }
-            } else if (isStandingOnFloor(bot)) {
-                await lookAroundSpin(() => !isSellSessionAlive(gen));
+                // anti-AFK/look — ПОСЛЕ listing/AH: иначе полёт у ямы → FunTime глушит /ah,/balance
+            } else {
+                // без прогулки не крутим WASD до команд
             }
+            if (!isSellSessionAlive(gen)) return;
+            await ensureGroundedForCommands('sell', () => !isSellSessionAlive(gen));
             if (!isSellSessionAlive(gen)) return;
             await dropTrash();
         }
@@ -3053,39 +3089,69 @@ async function safeAH() {
         await drainTreasuryAndLeaveClan();
         return;
     }
+    if (config.ahInFlight) {
+        logWarn('safeAH → уже идёт, skip');
+        return;
+    }
+    config.ahInFlight = true;
     logOk('safeAH → старт');
-    if (!bot) return;
-    if (bot.currentWindow) logInfo('safeAH → закрываю окно');
-    await closeCurrentWindowSafe();
-    await joinAnarchy();
-    await rnd('BASE_DELAY');
-
-    config.needReloadAH = true;
-    config.menu = analysisAH;
-    config.botUpdateWindow = true;
-    const key = config.key;
-
-    let searchCount = 0;
-    while (key === config.key) {
-        if (config.staffCheckIdle) return;
-        if (config.ownerBanDrain) {
-            await drainTreasuryAndLeaveClan();
+    try {
+        if (!bot) return;
+        if (bot.currentWindow) logInfo('safeAH → закрываю окно');
+        await closeCurrentWindowSafe();
+        await joinAnarchy();
+        if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
+            logWarn('safeAH → нет анки / no-cmd');
             return;
         }
-        if (config.afk) logAfk('режим AFK (safeAH)');
-        searchCount++;
-        logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
-        await antiAfkIfNeeded();
-        if (config.afk) {
-            await rnd('AH_CMD');
-            continue;
+        await ensureGroundedForCommands('safeAH');
+        if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
+            logWarn('safeAH → abort после ground');
+            return;
         }
-        await rnd('AH_CMD');
+        await rnd('BASE_DELAY');
+
+        config.needReloadAH = true;
         config.menu = analysisAH;
-        bot.chat(`/ah search ${config.item}`);
-        await rnd('AH_CMD');
+        config.botUpdateWindow = true;
+        const key = config.key;
+
+        let searchCount = 0;
+        while (key === config.key) {
+            if (config.staffCheckIdle) return;
+            if (config.ownerBanDrain) {
+                await drainTreasuryAndLeaveClan();
+                return;
+            }
+            if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
+                logWarn(`safeAH → стоп (лимобо) после ${searchCount} search`);
+                return;
+            }
+            if (searchCount > 0 && searchCount % 5 === 0) {
+                await ensureGroundedForCommands('safeAH');
+            }
+            if (config.afk) logAfk('режим AFK (safeAH)');
+            searchCount++;
+            logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
+            await antiAfkIfNeeded();
+            if (config.afk) {
+                await rnd('AH_CMD');
+                continue;
+            }
+            await rnd('AH_CMD');
+            config.menu = analysisAH;
+            bot.chat(`/ah search ${config.item}`);
+            await rnd('AH_CMD');
+            if (searchCount >= 40) {
+                logWarn('safeAH → 40 search без окна, выход');
+                return;
+            }
+        }
+        logOk(`safeAH → выход после ${searchCount} search (открылось окно)`);
+    } finally {
+        config.ahInFlight = false;
+        config.timeActive = Date.now();
     }
-    logOk(`safeAH → выход после ${searchCount} search (открылось окно)`);
 }
 async function safeBalance() {
     if (!bot) return;
@@ -3096,6 +3162,7 @@ async function safeBalance() {
     config.balance = null;
     await closeCurrentWindowSafe();
     await joinAnarchy();
+    await ensureGroundedForCommands('safeBalance');
     await rnd('BASE_DELAY');
 
     config.botUpdateWindow = true;
@@ -3107,6 +3174,9 @@ async function safeBalance() {
         if (Date.now() < (config.noCommandsUntil || 0) || !config.timeJoinAnarchy) {
             logWarn('safeBalance → abort (лимобо)');
             return;
+        }
+        if (!isStandingOnFloor(bot)) {
+            await ensureGroundedForCommands('safeBalance');
         }
         tries++;
         await antiAfkIfNeeded();
