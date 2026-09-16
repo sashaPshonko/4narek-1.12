@@ -15,7 +15,7 @@
 |------|------------|
 | `lib/vanilla-move.mjs` | **input-only (prod):** полный `player_input` + `tick_end` после input, sprint off. **`rewriteMovePackets` выкл** — fround pos/collision сажали y≈70 и глушили /ah. Полный режим: `patchWalking(bot, { rewriteMovePackets: true })` |
 | `lib/vanilla-physics.mjs` | **выкл в 4narek-old** (16.09). Опция `maxCatchupTicks: 1` через createBot всё ещё |
-| `4narek-old.mjs` | `patchVanillaMove(bot)` input-only; `patchVanillaPhysics` закомментирован. RP/settings/tick остаются |
+| `4narek-old.mjs` / `4NAREK.mjs` | `patchWalking` input-only; `patchVanillaPhysics` выкл; floor-watchdog; RP/settings/tick. Локальный прогон: `scripts/run-4narek-local.mjs` |
 
 Stock mineflayer сам по себе этого не делает.
 

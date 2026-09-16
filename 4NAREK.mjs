@@ -31,11 +31,14 @@ import {
     pickAhBrowseAction,
     pickAhReloadSlot,
 } from './lib/ah-buy-tempo.mjs';
-import { lookAroundSpin as lookAroundSpinLib, nextWalkGapMs } from './lib/afk-look.mjs';
-import { patchWalking } from './lib/vanilla-move.mjs';
+import {
+    patchWalking,
+    runAntiAfkMotion as runVanillaMove,
+    nextWalkGapMs as nextVanillaWalkGapMs,
+} from './lib/vanilla-move.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
-import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
+import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
 
 process.on('uncaughtException', (err) => {
@@ -210,11 +213,14 @@ const CONFIG_BLOCKED_PACKETS = new Set([
     'window_click', 'close_window',
     'arm_animation', 'entity_action',
     'held_item_slot', 'set_creative_slot',
-    'settings',
+    'player_input', 'tick_end',
+    'settings', // setSettings на inject/config → FunTime socketClosed
 ]);
 
 /** Funtime/Bungee transfer: не слать gameplay-пакеты + ответы на configuration. */
 let configTransferStartedAt = 0;
+/** После configuration floor-watchdog молчит ещё пару секунд (как в 4narek-old). */
+let configTransferEndedAt = 0;
 
 function setupConfigurationTransferFix(bot) {
     const client = bot._client;
@@ -254,6 +260,7 @@ function setupConfigurationTransferFix(bot) {
 
     client.on('finish_configuration', () => {
         configTransferStartedAt = 0;
+        configTransferEndedAt = Date.now();
         blockSelectKnownPacksWrite = false;
         bot.physicsEnabled = true;
         applyVanillaClientSettings(bot);
@@ -1000,9 +1007,15 @@ function parseProxy(str) {
 }
 
 async function main() {
-    const raw = fs.readFileSync('./ip.json', 'utf-8');
-    const ipJSON = JSON.parse(raw);
-    const proxyString = ipJSON[config.ip];
+    const proxyString = workerData.proxyUrl
+        || (() => {
+            const raw = fs.readFileSync('./ip.json', 'utf-8');
+            const ipJSON = JSON.parse(raw);
+            return ipJSON[config.ip];
+        })();
+    if (!proxyString) {
+        throw new Error(`нет прокси: proxyUrl / ip.json[${config.ip}]`);
+    }
 
     const url = new URL(proxyString);
     const proxyHost = url.hostname;
@@ -1063,7 +1076,24 @@ async function main() {
     });
 
     patchWalking(bot);
-    patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
+    // physics OFF — вместе с full move сажал y≈70 и глушил /ah (см. 4narek-old A/B 16.09)
+    attachFloorWatchdog(bot, {
+        log: (msg) => logWarn(msg),
+        warpCmd: '/warp shop',
+        shouldIgnore: () => {
+            if (!config.timeJoinAnarchy) return true;
+            if (isInConfigurationTransfer()) return true;
+            if (configTransferEndedAt && Date.now() - configTransferEndedAt < 8_000) return true;
+            if (Date.now() - config.timeJoinAnarchy < 45_000) return true;
+            return false;
+        },
+        onVoidFall: () => {
+            if (!config.timeJoinAnarchy) return;
+            logWarn('floor-watchdog → void/limbo, сброс анки');
+            config.timeJoinAnarchy = 0;
+        },
+    });
+    logOk('anti-AFK → vanilla WASD input-only (physics patch off)');
     setupConfigurationTransferFix(bot);
 
     bot.once('inject_allowed', () => {
@@ -1752,20 +1782,20 @@ function hasBotItem() {
     }
 }
 
-/** Anti-AFK: микро мышь + одна WASD. */
+/** Anti-AFK: только WASD через input-only vanilla patch (без look). */
 async function lookAroundSpin() {
     if (!bot?.entity) return;
     ensurePhysicsOn(bot);
-    await lookAroundSpinLib(bot, (msg) => logOk(msg), null, { force: Boolean(config.afk) });
+    await runVanillaMove(bot, (msg) => logOk(msg), null);
     config.walkTime = Date.now();
-    config.walkGapMs = nextWalkGapMs();
+    config.walkGapMs = nextVanillaWalkGapMs();
 }
 
-/** Сход с AFK — крутим головой. */
+/** Сход с AFK — только WASD (look не крутим). */
 async function antiAfkIfNeeded() {
     if (!config.afk) return;
 
-    logAfk('сходу с AFK → осмотр');
+    logAfk('сходу с AFK → WASD');
 
     await safeCloseWindow();
 
