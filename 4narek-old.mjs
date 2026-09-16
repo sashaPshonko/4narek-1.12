@@ -1894,10 +1894,11 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    // TEMP A/B: vanilla move/physics off — FunTime глушит /ah,/balance при патчах.
-    // patchVanillaMove(bot);
+    // physics patch ронял entity на y≈70 → FunTime глушил /ah,/balance.
+    // walk-пакеты оставляем (маскировка без лома экономики).
+    patchVanillaMove(bot);
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
-    logWarn('TEMP → vanilla move/physics PATCH OFF (диагностика AH)');
+    logWarn('TEMP → vanilla physics OFF, move ON');
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
