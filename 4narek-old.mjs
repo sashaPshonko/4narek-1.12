@@ -46,6 +46,7 @@ import {
 } from './lib/vanilla-move.mjs';
 import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
+import { isStandingOnFloor } from './lib/wasd-pit-guard.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
@@ -1176,6 +1177,8 @@ const SELL_SLOT_MAX_ATTEMPTS = 5;
 const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 /** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
 const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
+/** Прогулка внутри sell не должна съедать весь бюджет — иначе AH/книга не стартуют. */
+const WALK_IN_SELL_BUDGET_MS = 45_000;
 
 let sellListAckResolve = null;
 
@@ -2564,10 +2567,12 @@ async function sellItems() {
                 await waitForEventLoopOk({ log: (m) => logWarn(m) });
                 const prevPhysics = bot.physicsEnabled;
                 ensurePhysicsOn(bot);
+                const walkDeadline = Date.now() + WALK_IN_SELL_BUDGET_MS;
+                const walkAbort = () => !isSellSessionAlive(gen) || Date.now() > walkDeadline;
                 // lookLock НЕ держим на всю прогулку: иначе wrapChat копит команды.
                 try {
                     const walk = await walkRandomRouteStop(bot, {
-                        shouldAbort: () => !isSellSessionAlive(gen),
+                        shouldAbort: walkAbort,
                         log: (msg) => logInfo(msg),
                         username: config.username,
                         anarchy: config.anarchy,
@@ -2582,7 +2587,25 @@ async function sellItems() {
                             + (walk.legs != null ? ` legs=${walk.legs}` : ''),
                         );
                     } else {
-                        logWarn(`прогулка → ${walk.reason}`);
+                        const why = Date.now() > walkDeadline && isSellSessionAlive(gen)
+                            ? 'walk_budget'
+                            : (walk.reason || 'fail');
+                        logWarn(`прогулка → ${why}`);
+                        // off_map / y_desync: один /warp shop и дальше sell→AH, не крутить 3мин
+                        if (why === 'off_map' || why === 'y_desync' || why === 'walk_budget') {
+                            try {
+                                bot.chat('/warp shop');
+                            } catch {
+                                /* ignore */
+                            }
+                            config.lastWarp = 'shop';
+                            config.lastWarpTime = Date.now();
+                            const until = Date.now() + 4500;
+                            while (Date.now() < until) {
+                                if (!isSellSessionAlive(gen)) break;
+                                await sleepMs(200);
+                            }
+                        }
                     }
                 } finally {
                     try {
@@ -2599,15 +2622,17 @@ async function sellItems() {
                         ensurePhysicsOn(bot);
                     }
                 }
-                // короткий anti-AFK на месте после стопа
-                lookLock = true;
-                try {
-                    await lookAroundSpin(() => !isSellSessionAlive(gen));
-                } finally {
-                    lookLock = false;
-                    lastLookAt = Date.now();
+                // anti-AFK только на полу — у края/в полёте awaitSettled бессмысленен
+                if (isStandingOnFloor(bot) && isSellSessionAlive(gen)) {
+                    lookLock = true;
+                    try {
+                        await lookAroundSpin(() => !isSellSessionAlive(gen));
+                    } finally {
+                        lookLock = false;
+                        lastLookAt = Date.now();
+                    }
                 }
-            } else {
+            } else if (isStandingOnFloor(bot)) {
                 await lookAroundSpin(() => !isSellSessionAlive(gen));
             }
             if (!isSellSessionAlive(gen)) return;
