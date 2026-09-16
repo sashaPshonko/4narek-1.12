@@ -687,8 +687,8 @@ const config = {
     item: workerData.item,
     goType: workerData.goType,
     timeJoinAnarchy: 0,
-    /** До этого ts не слать /warp (мир без команд / лимобо). */
-    noCommandsUntil: 0,
+    /** До этого ts — sell без walk, сразу listing/AH. */
+    preferAhUntil: 0,
     lastWarpTime: 0,
     lastWarp: null,
     enoughItems: false,
@@ -863,6 +863,8 @@ function scheduleFunauthVerify() {
 
 function markAnarchyJoined() {
     config.timeJoinAnarchy = Date.now();
+    // Сначала AH/balance, не shop_map walk — иначе ложный Y-desync и очередь chat.
+    config.preferAhUntil = Date.now() + 120_000;
     funauthBindRequired = false;
     ensurePhysicsOn(bot);
     scheduleFunauthVerify();
@@ -2669,6 +2671,7 @@ async function sellItems() {
             if (!isSellSessionAlive(gen)) return;
             if (
                 Date.now() >= (config.noCommandsUntil || 0)
+                && Date.now() >= (config.preferAhUntil || 0)
                 && shouldAttemptWalk(
                     config.username,
                     config.lastWarpTime || 0,
@@ -3141,6 +3144,7 @@ async function safeAH() {
             await rnd('AH_CMD');
             config.menu = analysisAH;
             bot.chat(`/ah search ${config.item}`);
+            await chatChain;
             await rnd('AH_CMD');
             if (searchCount >= 40) {
                 logWarn('safeAH → 40 search без окна, выход');
