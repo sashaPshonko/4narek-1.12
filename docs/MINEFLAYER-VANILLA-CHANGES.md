@@ -13,9 +13,9 @@
 
 | Файл | Что делает |
 |------|------------|
-| `lib/vanilla-move.mjs` | Walk-patch: полный `player_input`, `tick_end` после move (**не** на каждый physicsTick — FunTime иначе глушит /ah), `fround` move, `hasHorizontalCollision`, sprint off |
-| `lib/vanilla-physics.mjs` | LivingEntity / reconcile / ghost-fall |
-| `4narek-old.mjs` | **16.09.2026:** `patchVanillaMove` + `patchVanillaPhysics` **выключены** в проде. A/B: с патчами entity на y≈70, `/clan` жив, `/ah`/`/balance`/`/warp` молчат; без патчей y≈82, AH открывается. RP timing / client settings остаются. Включать обратно только после фикса. |
+| `lib/vanilla-move.mjs` | **input-only (prod):** полный `player_input` + `tick_end` после input, sprint off. **`rewriteMovePackets` выкл** — fround pos/collision сажали y≈70 и глушили /ah. Полный режим: `patchWalking(bot, { rewriteMovePackets: true })` |
+| `lib/vanilla-physics.mjs` | **выкл в 4narek-old** (16.09). Опция `maxCatchupTicks: 1` через createBot всё ещё |
+| `4narek-old.mjs` | `patchVanillaMove(bot)` input-only; `patchVanillaPhysics` закомментирован. RP/settings/tick остаются |
 
 Stock mineflayer сам по себе этого не делает.
 

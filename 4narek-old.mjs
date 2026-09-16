@@ -1896,10 +1896,9 @@ async function main() {
         },
     });
     setEnchantRegistry();
-    // vanilla move+physics: FunTime глушит /ah,/balance и сажает y≈70.
-    // A/B 16.09: оба OFF → balance+AH+y=82; move ON alone → снова мёртвая экономика.
-    // RP timing / client settings оставляем. Патчи движения — отдельно, когда починим.
-    // patchVanillaMove(bot);
+    // input-only: полный player_input + tick_end на WASD (AFK сходит).
+    // position fround/collision — нет (сажало y≈70, глушило /ah). physics patch — нет.
+    patchVanillaMove(bot);
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
