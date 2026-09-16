@@ -1828,7 +1828,7 @@ async function main() {
     });
     setEnchantRegistry();
     patchVanillaMove(bot);
-    patchVanillaPhysics(bot);
+    patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
         warpCmd: '/warp shop',
