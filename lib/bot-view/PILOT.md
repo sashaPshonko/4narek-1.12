@@ -48,3 +48,4 @@ VIEW_PILOT=1 VIEW_RECORD=1 VIEW_PORT=25501 \
 - Пока `pilot` активен, anti-AFK бота пропускается.
 - Sprint по умолчанию режется патчем ходьбы; `VIEW_PILOT_SPRINT=1` — разрешить в пилоте.
 - На проде (502 orch) pilot **выкл**, пока не поставишь `VIEW_PILOT=1` в env оркестратора.
+- Запись `motion-records/` — только эталон ритма мыши/W для тюнинга `afk-forward-look.mjs`, не реплей.
