@@ -4,7 +4,6 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "postinstall": "node scripts/apply-vanilla-engine-patches.mjs",
     "start:502": "node 502b.mjs",
     "start:503": "node 503b.mjs",
     "start:504": "node 504b.mjs",
