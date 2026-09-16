@@ -20,8 +20,10 @@ function resolvePkg(name) {
 function patchFile(filePath, replacements, label) {
     let src = fs.readFileSync(filePath, 'utf8');
     let n = 0;
-    for (const { from, to, id } of replacements) {
-        if (src.includes(to.trim().slice(0, 60))) {
+    for (const { from, to, id, already } of replacements) {
+        const marker = already || to;
+        // Уникальный маркер патча — не первые символы `to` (они часто совпадают со stock).
+        if (src.includes(marker) && !src.includes(from)) {
             console.log(`[skip] ${label}: ${id} (already)`);
             continue;
         }
@@ -205,14 +207,29 @@ const accelNew = `        // Calculate what the speed is (0.1 if no modification
 let total = 0;
 total += patchFile(
     mfPhysics,
-    [{ from: doPhysicsOld, to: doPhysicsNew, id: 'single-tick doPhysics' }],
+    [{
+        from: doPhysicsOld,
+        to: doPhysicsNew,
+        id: 'single-tick doPhysics',
+        already: 'ровно один клиентский тик на срабатывание таймера',
+    }],
     'mineflayer/physics.js',
 );
 total += patchFile(
     ppIndex,
     [
-        { from: headingOld, to: headingNew, id: 'fround applyHeading' },
-        { from: accelOld, to: accelNew, id: 'float ground accel+friction' },
+        {
+            from: headingOld,
+            to: headingNew,
+            id: 'fround applyHeading',
+            already: 'JVM float: LivingEntity.travel heading',
+        },
+        {
+            from: accelOld,
+            to: accelNew,
+            id: 'float ground accel+friction',
+            already: '0.16277136',
+        },
     ],
     'prismarine-physics',
 );
