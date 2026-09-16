@@ -2614,14 +2614,16 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
 }
 
 /**
- * Проверка, что мы реально на анке: /warp shop должен дать «Телепортация!».
- * Scoreboard+early-mark часто оставляют бота в хабе — /clan ещё жив, /ah нет.
+ * Проверка реальной анки: /balance или варп ≠ shop (shop часто no-op без «Телепортация!»).
+ * Scoreboard+early-mark иногда оставляют хаб — /clan жив, экономика нет.
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
     if (Date.now() < (config.noCommandsUntil || 0)) {
-        const wait = config.noCommandsUntil - Date.now();
-        const until = Date.now() + Math.min(wait + 50, 5_000);
+        const until = Date.now() + Math.min(
+            (config.noCommandsUntil - Date.now()) + 50,
+            5_000,
+        );
         while (Date.now() < until) {
             if (typeof shouldAbort === 'function' && shouldAbort()) return false;
             if (Date.now() >= (config.noCommandsUntil || 0)) break;
@@ -2630,33 +2632,59 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     }
     if (!config.timeJoinAnarchy) return false;
 
-    const warpAt = config.lastWarpTime || 0;
-    logInfo(`${label} → probe /warp shop`);
+    const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
+        || !config.timeJoinAnarchy;
+
+    // 1) /balance — надёжный маркер экономики на анке
+    config.balance = null;
+    logInfo(`${label} → probe /balance`);
     try {
-        bot.chat('/warp shop');
+        bot.chat('/balance');
     } catch {
         /* ignore */
     }
     await chatChain;
-    const deadline = Date.now() + 7_000;
+    let deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
-        if (typeof shouldAbort === 'function' && shouldAbort()) return false;
-        if ((config.lastWarpTime || 0) > warpAt) {
-            logOk(`${label} → телепорт ок, на анке`);
-            config.lastWarp = 'shop';
+        if (abort()) return false;
+        if (config.balance != null) {
+            logOk(`${label} → balance ok (${config.balance}), на анке`);
             return true;
-        }
-        if (Date.now() < (config.noCommandsUntil || 0) && !config.timeJoinAnarchy) {
-            return false;
         }
         await sleepMs(150);
     }
-    logWarn(`${label} → нет телепорта после /warp shop — сброс анки, rejoin`);
+
+    // 2) варп не shop — если уже на shop, /warp shop молчит без телепорта
+    const warpAt = config.lastWarpTime || 0;
+    const warpCmd = '/warp portal';
+    logInfo(`${label} → probe ${warpCmd}`);
+    try {
+        bot.chat(warpCmd);
+    } catch {
+        /* ignore */
+    }
+    await chatChain;
+    deadline = Date.now() + 7_000;
+    while (Date.now() < deadline) {
+        if (abort()) return false;
+        if ((config.lastWarpTime || 0) > warpAt) {
+            logOk(`${label} → телепорт ок, на анке`);
+            config.lastWarp = 'portal';
+            return true;
+        }
+        if (config.balance != null) {
+            logOk(`${label} → balance ok (late), на анке`);
+            return true;
+        }
+        await sleepMs(150);
+    }
+
+    logWarn(`${label} → нет balance/телепорта — сброс анки, rejoin`);
     cancelFunauthVerifyTimer();
     funauthBindRequired = false;
     config.timeJoinAnarchy = 0;
     anarchyBoardSeenAt = 0;
-    config.noCommandsUntil = Date.now() + 8_000;
+    config.noCommandsUntil = Date.now() + 3_000;
     return false;
 }
 
