@@ -1924,7 +1924,7 @@ async function main() {
         },
     });
     logOk(
-        Number(config.anarchy) === 502
+        [502, 504].includes(Number(config.anarchy))
             ? 'anti-AFK → forward+мышь (look-steer), portal если только назад'
             : 'anti-AFK → walk-route WASD (без look), portal если только назад',
     );
@@ -3187,7 +3187,7 @@ async function lookAroundSpin(shouldAbort = null) {
     try {
         await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort, {
             anarchy: config.anarchy,
-            lookSteer: Number(config.anarchy) === 502,
+            lookSteer: [502, 504].includes(Number(config.anarchy)),
         });
     } finally {
         try {
