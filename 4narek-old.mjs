@@ -2591,6 +2591,9 @@ async function waitWarpTeleport() {
 /**
  * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
  * После anti-AFK у края часто «полёт» → команды без ответа → AH мёртв.
+ *
+ * Важно: /warp shop на FunTime — отсчёт ~7с. Нельзя считать «на полу»
+ * по onGround на старой точке и сразу жать W — чанки пустые → «нет курса».
  */
 async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
     if (!bot?.entity) return false;
@@ -2611,13 +2614,22 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         /* ignore */
     }
     config.lastWarp = 'shop';
-    // чанки после warp грузятся дольше 8с — иначе «всё ещё не на полу» ложно
-    const until = Date.now() + 14_000;
+    // старт отсчёта; chat «Телепортация!» сдвинет lastWarpTime ещё раз — ок
+    config.lastWarpTime = Date.now();
+    await waitWarpTeleport();
+    if (abort()) return false;
+
+    const until = Date.now() + 8_000;
     while (Date.now() < until) {
         if (abort()) return false;
-        if (bot.entity?.onGround || (isStandingOnFloor(bot) && !isNearPitEdge(bot))) {
-            logOk(`${label} → на полу после warp`);
-            return true;
+        if (bot.entity?.onGround || isStandingOnFloor(bot)) {
+            // дать чанкам догрузиться после прилёта
+            await sleepMs(1_000);
+            if (abort()) return false;
+            if (bot.entity?.onGround || (isStandingOnFloor(bot) && !isNearPitEdge(bot))) {
+                logOk(`${label} → на полу после warp+settle`);
+                return true;
+            }
         }
         await sleepMs(200);
     }
