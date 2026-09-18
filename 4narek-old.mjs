@@ -2611,16 +2611,17 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         /* ignore */
     }
     config.lastWarp = 'shop';
-    const until = Date.now() + 8_000;
+    // чанки после warp грузятся дольше 8с — иначе «всё ещё не на полу» ложно
+    const until = Date.now() + 14_000;
     while (Date.now() < until) {
         if (abort()) return false;
-        if (isStandingOnFloor(bot) && !isNearPitEdge(bot)) {
+        if (bot.entity?.onGround || (isStandingOnFloor(bot) && !isNearPitEdge(bot))) {
             logOk(`${label} → на полу после warp`);
             return true;
         }
         await sleepMs(200);
     }
-    const ok = isStandingOnFloor(bot);
+    const ok = Boolean(bot.entity?.onGround || isStandingOnFloor(bot));
     if (!ok) logWarn(`${label} → всё ещё не на полу`);
     return ok;
 }
@@ -3171,24 +3172,25 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK: на 502 — forward+мышь; иначе WASD. */
+/** Anti-AFK: на 502 — forward+мышь; иначе WASD. @returns {Promise<number>} walked xz */
 async function lookAroundSpin(shouldAbort = null) {
-    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
-    if (typeof shouldAbort === 'function' && shouldAbort()) return;
+    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return 0;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return 0;
     if (bot?._viewPilotActive) {
         logInfo('anti-AFK → skip, pilot активен');
-        return;
+        return 0;
     }
 
     await waitForEventLoopOk({ log: (m) => logWarn(m) });
     const prevPhysics = bot.physicsEnabled;
     ensurePhysicsOn(bot);
     lookLock = true;
+    let walked = 0;
     try {
-        await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort, {
+        walked = await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort, {
             anarchy: config.anarchy,
             lookSteer: [502, 504].includes(Number(config.anarchy)),
-        });
+        }) || 0;
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -3214,9 +3216,10 @@ async function lookAroundSpin(shouldAbort = null) {
     }
     config.walkTime = Date.now();
     config.walkGapMs = nextVanillaWalkGapMs();
+    return Number(walked) || 0;
 }
 
-/** Сход с AFK — тот же motion (force через config.afk). */
+/** Сход с AFK — только если реально сдвинулись (иначе сервер остаётся в AFK). */
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
@@ -3224,10 +3227,24 @@ async function antiAfkIfNeeded(shouldAbort = null) {
     logAfk('сходу с AFK → motion');
 
     await closeCurrentWindowSafe();
+    await ensureGroundedForCommands('antiAFK', shouldAbort);
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
-    await lookAroundSpin(shouldAbort);
-    config.afk = false;
-    logOk('AFK снят');
+    let walked = await lookAroundSpin(shouldAbort);
+    if (walked < 1.0 && !(typeof shouldAbort === 'function' && shouldAbort())) {
+        logAfk(`мало walked=${walked.toFixed(1)} → retry после ground`);
+        await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
+        if (!(typeof shouldAbort === 'function' && shouldAbort())) {
+            walked = Math.max(walked, await lookAroundSpin(shouldAbort));
+        }
+    }
+
+    if (walked >= 1.0) {
+        config.afk = false;
+        logOk(`AFK снят (walked=${walked.toFixed(1)})`);
+    } else {
+        logWarn(`AFK не снят (walked=${walked.toFixed(1)}) — жду следующий цикл`);
+    }
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
