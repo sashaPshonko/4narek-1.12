@@ -38,7 +38,7 @@ import {
     pickAhBrowseAction,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
-import { pickWarp } from './lib/warp-pick.mjs';
+import { pickWarp, randomWarpName, randomWarpCmd } from './lib/warp-pick.mjs';
 import {
     runAntiAfkMotion as runVanillaMove,
     nextWalkGapMs as nextVanillaWalkGapMs,
@@ -1902,7 +1902,7 @@ async function main() {
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
-        warpCmd: '/warp shop',
+        warpCmd: () => randomWarpCmd(),
         shouldIgnore: () => {
             if (config.staffCheckIdle || config.ownerBanDrain) return true;
             if (Date.now() < (config.noCommandsUntil || 0)) return true;
@@ -2592,7 +2592,7 @@ async function waitWarpTeleport() {
  * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
  * После anti-AFK у края часто «полёт» → команды без ответа → AH мёртв.
  *
- * Важно: /warp shop на FunTime — отсчёт ~7с. Нельзя считать «на полу»
+ * Важно: /warp на FunTime — отсчёт ~7с. Нельзя считать «на полу»
  * по onGround на старой точке и сразу жать W — чанки пустые → «нет курса».
  */
 async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
@@ -2607,13 +2607,14 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         return true;
     }
 
-    logWarn(`${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), /warp shop`);
+    const rescue = randomWarpName();
+    logWarn(`${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), /warp ${rescue}`);
     try {
-        bot.chat('/warp shop');
+        bot.chat(`/warp ${rescue}`);
     } catch {
         /* ignore */
     }
-    config.lastWarp = 'shop';
+    config.lastWarp = rescue;
     // старт отсчёта; chat «Телепортация!» сдвинет lastWarpTime ещё раз — ок
     config.lastWarpTime = Date.now();
     await waitWarpTeleport();
@@ -2858,15 +2859,16 @@ async function sellItems() {
                             ? 'walk_budget'
                             : (walk.reason || 'fail');
                         logWarn(`прогулка → ${why}`);
-                        // off_map / y_desync: один /warp shop и дальше sell→AH, не крутить 3мин
+                        // off_map / y_desync: один рандомный /warp и дальше sell→AH, не крутить 3мин
                         if (why === 'off_map' || why === 'y_desync' || why === 'walk_budget') {
                             if (Date.now() >= (config.noCommandsUntil || 0) && config.timeJoinAnarchy > 0) {
+                                const rescue = randomWarpName();
                                 try {
-                                    bot.chat('/warp shop');
+                                    bot.chat(`/warp ${rescue}`);
                                 } catch {
                                     /* ignore */
                                 }
-                                config.lastWarp = 'shop';
+                                config.lastWarp = rescue;
                                 config.lastWarpTime = Date.now();
                                 const until = Date.now() + 4500;
                                 while (Date.now() < until) {

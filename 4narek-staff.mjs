@@ -1346,7 +1346,7 @@ async function walk(bot) {
     // Телепортируемся не чаще раза в минуту
     if (now - lastWarpTime > 60000) {
         lastWarpTime = now;
-        const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+        const warp = getRandomElement(['mine', 'casino', 'portal', 'palach']);
         bot.chat(`/warp ${warp}`);
         await delay(8000);
     }

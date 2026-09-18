@@ -700,7 +700,7 @@ async function sellItems(bot, itemPrices) {
     await delay(500);
     bot.autoEat.enableAuto();
 
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    const warp = getRandomElement(['mine', 'casino', 'portal', 'palach']);
     bot.chat(`/warp ${warp}`);
     const endSellTime = Date.now() + 8000
 
@@ -1273,7 +1273,7 @@ async function longWalk(bot) {
         if (Date.now() - timeTP > 10000) {
             await delay(500);
             timeTP = Date.now();
-            const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+            const warp = getRandomElement(['mine', 'casino', 'portal', 'palach']);
             bot.chat(`/warp ${warp}`);
             await delay(8000);
         }
@@ -1289,7 +1289,7 @@ async function walk(bot) {
     await delay(500);
     bot.autoEat.enableAuto();
 
-    const warp = getRandomElement(['mine', 'casino', 'case', 'shop']);
+    const warp = getRandomElement(['mine', 'casino', 'portal', 'palach']);
     bot.chat(`/warp ${warp}`);
     await delay(8000);
 

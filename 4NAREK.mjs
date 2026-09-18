@@ -342,7 +342,7 @@ const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
 const offhandSlot = 45;
-const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
+const warps = ['mine', 'casino', 'portal', 'palach', 'fisher', 'stash', 'wagon'];
 
 function isStorageSlot(slot) {
     return slot >= firstInventorySlot && slot <= lastInventorySlot;
@@ -1081,7 +1081,6 @@ async function main() {
     // physics OFF — вместе с full move сажал y≈70 и глушил /ah (см. 4narek-old A/B 16.09)
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
-        warpCmd: '/warp shop',
         shouldIgnore: () => {
             if (!config.timeJoinAnarchy) return true;
             if (isInConfigurationTransfer()) return true;

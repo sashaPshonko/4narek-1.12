@@ -298,7 +298,7 @@ const lastInventorySlot = 35;
 const firstHotbarSlot = 36;
 const lastHotbarSlot = 44;
 const offhandSlot = 45;
-const warps = ['mine', 'casino', 'case', 'shop', 'portal', 'palach', 'fisher', 'stash'];
+const warps = ['mine', 'casino', 'portal', 'palach', 'fisher', 'stash', 'wagon'];
 
 function isStorageSlot(slot) {
     return slot >= firstInventorySlot && slot <= lastInventorySlot;
