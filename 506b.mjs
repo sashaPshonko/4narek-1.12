@@ -45,9 +45,11 @@ import {
     handleWorkerWarpPick,
     notifyWorkersOwnerBanned,
     isStaffCheckHolding,
+    stopWorkerNoRestart,
 } from './orchestrator-shared.mjs';
 import { createClanOwnerBanWatch } from './lib/clan-owner-watch.mjs';
 import { runWorkersStaggered } from './lib/bot-tempo.mjs';
+import { createShiftRotator, isShiftRotationEnabled } from './lib/shift-rotator.mjs';
 import { attachBotViewTelegram } from './lib/bot-view/telegram.mjs';
 import { startGuiDeskClient } from './lib/gui-desk.mjs';
 import { startLogRotate } from './lib/log-rotate.mjs';
@@ -96,6 +98,7 @@ let tgBot;
 let isShuttingDown = false;
 let autoStartPending = false;
 let startBotsRunning = false;
+let shiftRotator = null;
 
 function workerStatusCtx() {
     return {
@@ -106,7 +109,26 @@ function workerStatusCtx() {
             return true;
         },
         runWorker,
+        shiftRotator,
     };
+}
+
+function getShiftRotator() {
+    if (!isShiftRotationEnabled()) return null;
+    if (!shiftRotator) {
+        shiftRotator = createShiftRotator({
+            bots,
+            workers,
+            pendingRestarts,
+            runWorker,
+            stopWorkerNoRestart: (username) => stopWorkerNoRestart(username, workerStatusCtx()),
+            safePostMessage,
+            sendAlert,
+            isShuttingDown: () => isShuttingDown,
+            log: console.log,
+        });
+    }
+    return shiftRotator;
 }
 
 // ========== ФУНКЦИЯ ОТПРАВКИ АЛЕРТОВ ==========
@@ -365,6 +387,11 @@ async function runWorker(bot) {
                     return;
                 }
 
+                const rotator = getShiftRotator();
+                if (rotator?.active && rotator.onWorkerExit(username, code)) {
+                    return;
+                }
+
                 if (!bot.isManualStop && !bot.authFault && !bot.banned && !isShuttingDown) {
                     const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason, bot);
                     bot.lastKickReason = '';
@@ -387,6 +414,11 @@ async function runWorker(bot) {
 }
 
 async function stopWorkers() {
+    if (shiftRotator) {
+        try {
+            await shiftRotator.stop();
+        } catch { /* ignore */ }
+    }
     for (const bot of bots.values()) {
         bot.isManualStop = true;
     }
@@ -472,13 +504,19 @@ async function startBots() {
 
         sendFleetToGo();
 
-        await runWorkersStaggered({
-            bots,
-            workers,
-            pendingRestarts,
-            runWorker,
-            log: console.log,
-        });
+        if (isShiftRotationEnabled()) {
+            const rot = getShiftRotator();
+            rot?.ensureRunning();
+            console.log('[shift] startBots → ротация (один бот)');
+        } else {
+            await runWorkersStaggered({
+                bots,
+                workers,
+                pendingRestarts,
+                runWorker,
+                log: console.log,
+            });
+        }
 
     } catch (error) {
         await sendAlert(`❌ Ошибка запуска ботов: ${error.message}`);

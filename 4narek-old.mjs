@@ -55,6 +55,7 @@ import { waitForEventLoopOk } from './lib/event-loop-guard.mjs';
 import { extractBanReason } from './lib/clan-owner-ping.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
 import { isStaffCheckText, EXIT_STAFF_CHECK } from './lib/staff-check.mjs';
+import { EXIT_SHIFT_DONE } from './lib/shift-exit.mjs';
 
 /** sync process.exit после жирного console.* зависает, если stdout/stderr pipe забит (walk spam) → зомби без 'exit' у parent */
 function forceWorkerExit(code = 1) {
@@ -1759,6 +1760,24 @@ parentPort.on('message', (data) => {
         }
         return;
     }
+    if (data.type === 'shift_stop') {
+        if (config.shiftStopBusy) return;
+        config.shiftStopBusy = true;
+        generateKey();
+        logWarn('shift_stop → весь баланс в казну и выход');
+        void (async () => {
+            try {
+                await dumpBalanceToClanTreasury();
+            } catch (e) {
+                logWarn(`shift_stop invest: ${e?.message || e}`);
+            }
+            try {
+                bot?.quit?.();
+            } catch { /* ignore */ }
+            forceWorkerExit(EXIT_SHIFT_DONE);
+        })();
+        return;
+    }
     if (data.type === 'staff_check_stay') {
         enterStaffCheckIdle(data.from || 'orch');
         return;
@@ -2457,6 +2476,43 @@ async function refreshPersonalBalance(waitMs = 12_000) {
         await rnd('BASE_DELAY');
     }
     return config.balance;
+}
+
+/** Конец смены: весь личный баланс → /clan invest (без cooldown), потом орк ждёт EXIT_SHIFT_DONE. */
+async function dumpBalanceToClanTreasury() {
+    if (!bot?.chat) return;
+    try {
+        await joinAnarchy();
+    } catch (e) {
+        logWarn(`shift invest: joinAnarchy ${e?.message || e}`);
+    }
+    // закрыть GUI если висит
+    try {
+        if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+    } catch { /* ignore */ }
+    await sleepMs(800);
+    let bal = await refreshPersonalBalance(15_000);
+    if (bal == null || !Number.isFinite(bal)) {
+        logWarn('shift invest: баланс не прочитан');
+        return;
+    }
+    const investSum = Math.floor(bal);
+    if (investSum < 1_000) {
+        logInfo(`shift invest: на руках ${investSum} — skip`);
+        return;
+    }
+    logOk(`shift invest → /clan invest ${investSum}`);
+    bot.chat(`/clan invest ${investSum}`);
+    config.lastClanInvestAt = Date.now();
+    await sleepMs(4_000);
+    // второй проход если что-то осталось
+    bal = await refreshPersonalBalance(10_000);
+    if (bal != null && Number.isFinite(bal) && bal >= 1_000) {
+        const again = Math.floor(bal);
+        logInfo(`shift invest → остаток ${again}, ещё раз`);
+        bot.chat(`/clan invest ${again}`);
+        await sleepMs(3_000);
+    }
 }
 
 async function refreshClanTreasury(waitMs = 12_000) {

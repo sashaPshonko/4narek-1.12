@@ -1056,10 +1056,17 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (message?.name === 'funauth_bind') {
         requestFunauthBind(message.username || username, ctx);
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'funauth');
+        }
         return true;
     }
     if (message?.name === 'funauth_2fa') {
         requestFunauthTwoFa(message.username || username, ctx);
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'funauth_2fa');
+            return true;
+        }
         await killWorkerAndRestartIn(username, ctx, 5000, 'funauth 2fa');
         return true;
     }
@@ -1074,14 +1081,23 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (message?.name === 'banned') {
         await markBotBanned(username, ctx, message.reason || '');
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'ban');
+        }
         return true;
     }
     if (message?.name === 'bad_password') {
         await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, message.reason || '');
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'auth');
+        }
         return true;
     }
     if (message?.name === 'proxy_error') {
         await markBotAuthFault(username, ctx, AUTH_FAULT_PROXY, message.reason || '');
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'auth');
+        }
         return true;
     }
     if (message?.name === 'staff_check') {
@@ -1090,11 +1106,32 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
     }
     if (typeof message === 'string' && message.toLowerCase().includes('забанен')) {
         await markBotBanned(username, ctx);
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'ban');
+        }
         return true;
     }
     if (typeof message === 'string' && isWrongPasswordText(message)) {
         await markBotAuthFault(username, ctx, AUTH_FAULT_BAD_PASSWORD, message);
+        if (ctx.shiftRotator?.active) {
+            await ctx.shiftRotator.skipBot(username, 'auth');
+        }
         return true;
+    }
+    if (typeof message === 'string' && ctx.shiftRotator?.active) {
+        const kind = classifyWorkerAlert(message);
+        if (
+            kind === ALERT_KIND.CAPTCHA
+            || kind === ALERT_KIND.VPN
+            || kind === ALERT_KIND.UNKNOWN
+        ) {
+            await ctx.sendAlert?.(message, username);
+            await ctx.shiftRotator.skipBot(
+                username,
+                kind === ALERT_KIND.CAPTCHA ? 'captcha' : kind === ALERT_KIND.VPN ? 'vpn' : 'funauth',
+            );
+            return true;
+        }
     }
     if (typeof message === 'string' && classifyWorkerAlert(message) === ALERT_KIND.UNKNOWN) {
         requestFunauthBind(username, ctx);
@@ -1275,6 +1312,10 @@ export function resumeAfterDeskSession(ctx) {
             continue;
         }
         if (bot.banned || bot.authFault) continue;
+        if (ctx.shiftRotator?.active) {
+            // в режиме смен не поднимаем весь флот после staff-check
+            if (nick !== ctx.shiftRotator.activeNick) continue;
+        }
         const pending = ctx.pendingRestarts?.get(nick);
         if (pending) {
             clearTimeout(pending);
