@@ -1406,7 +1406,8 @@ async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
         config.needReset = false;
-        config.enoughItems = false;
+        // enoughItems НЕ сбрасываем: АХ всё ещё полный, иначе снова купим в инвентарь.
+        logOk('перевыставлены → АХ по-прежнему full (enoughItems держим)');
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
@@ -2324,8 +2325,20 @@ async function main() {
             case myItems:
                 config.needReset = false;
                 await syncListingIdsFromStorageWindow();
-                if (!bot.currentWindow?.slots[0]) {
-                    config.enoughItems = false;
+                // Свободный слот 0..4 в хранилище АХ → можно снова покупать/выставлять.
+                // Пустой slots[0] сам по себе НЕ сбрасывает enoughItems (GUI дыры).
+                {
+                    let freeAh = false;
+                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
+                        if (!bot.currentWindow?.slots[i]) {
+                            freeAh = true;
+                            break;
+                        }
+                    }
+                    if (freeAh && config.enoughItems) {
+                        config.enoughItems = false;
+                        logInfo('хранилище → есть свободный слот АХ, enoughItems off');
+                    }
                 }
                 if (config.needSendAH) {
                     const botAh = [];
@@ -2375,9 +2388,9 @@ async function main() {
                             if (!dueEnough && config.lastResetTime >= Date.now() - 60000) break;
                             await rnd('POLL');
                         }
-                    } else {
+                    } else if (!config.enoughItems) {
+                        // пустое хранилище без enoughItems — просто обновить таймер
                         config.lastResetTime = Date.now();
-                        config.enoughItems = false;
                     }
                 }
 
