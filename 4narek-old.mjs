@@ -1406,6 +1406,7 @@ async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
         config.needReset = false;
+        config.enoughItems = false;
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
@@ -2153,19 +2154,21 @@ async function main() {
 
                     flushAhBookLots();
 
-                    // Сброс / инвентарь≥27 раньше sellItems — иначе осмотр съедает минуту или не даёт цикл снять→продать.
-                    // enoughItems сюда НЕ входит: это «АХ забит при выставлении» — стоп sellItems, не повод лезть в хранилище.
+                    // Сброс / enoughItems (АХ забит) / инвентарь≥27 раньше sellItems.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
+                        config.enoughItems ||
                         config.needReset ||
                         isBotInventoryFull()
                     ) {
                         logInfo(
                             isBotInventoryFull()
                                 ? 'АХ → хранилище (инвентарь ≥27)'
-                                : config.needReset
-                                  ? 'АХ → хранилище (needReset)'
-                                  : 'АХ → хранилище (timer60)',
+                                : config.enoughItems
+                                  ? 'АХ → хранилище (enoughItems — перевыставить)'
+                                  : config.needReset
+                                    ? 'АХ → хранилище (needReset)'
+                                    : 'АХ → хранилище (timer60)',
                         );
                         config.menu = myItems;
                         await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
@@ -2355,15 +2358,26 @@ async function main() {
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
-                // Клик 52 только если прошло ≥60с — needReset сам по себе не форсит сброс
-                if (config.lastResetTime < Date.now() - 60000) {
+                // Клик 52: таймер 60с или АХ забит (enoughItems) — перевыставить
+                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
                     if (bot.currentWindow?.slots[0]) {
-                        logInfo('хранилище → сброс (клик 52)');
+                        const dueEnough = config.enoughItems;
+                        logInfo(
+                            dueEnough
+                                ? 'хранилище → сброс (клик 52, enoughItems)'
+                                : 'хранилище → сброс (клик 52)',
+                        );
                         config.menu = myItems;
                         await safeClickBuy(bot, 52, delayMs({ min: 1500, max: 4500 }), key);
-                        while (config.lastResetTime < Date.now() - 60000) await rnd('POLL');
+                        const deadline = Date.now() + 20_000;
+                        while (Date.now() < deadline && bot.currentWindow) {
+                            if (dueEnough && !config.enoughItems) break;
+                            if (!dueEnough && config.lastResetTime >= Date.now() - 60000) break;
+                            await rnd('POLL');
+                        }
                     } else {
                         config.lastResetTime = Date.now();
+                        config.enoughItems = false;
                     }
                 }
 
