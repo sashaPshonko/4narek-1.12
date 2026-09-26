@@ -1175,13 +1175,15 @@ function flushAhBookLots(extraItem) {
 
 /**
  * Слот 0–4 в «Хранилище»: снять мусор / несовпадение цены.
- * Если инвентарь ≥27 своих — снимаем любой свой лот (цикл: снять всё → продать всё).
+ * Инвентарь ≥27 или enoughItems (АХ забит) — снимаем любой свой лот
+ * (снять всё → слот 0 пуст → флаг off → продать всё).
  * @returns {{ slot: number, reason: string } | null}
  */
 function findStorageSlotToUnlist() {
     let priceOrFullSlot = null;
     let priceOrFullReason = '';
     const invFull = isBotInventoryFull();
+    const clearAll = invFull || config.enoughItems;
 
     for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
         const currentSlot = bot.currentWindow?.slots[i];
@@ -1212,9 +1214,11 @@ function findStorageSlotToUnlist() {
             continue;
         }
 
-        if (invFull && priceOrFullSlot === null) {
+        if (clearAll && priceOrFullSlot === null) {
             priceOrFullSlot = i;
-            priceOrFullReason = 'инвентарь ≥27 — снять для перевыставления';
+            priceOrFullReason = config.enoughItems
+                ? 'enoughItems — снять всё, потом продать'
+                : 'инвентарь ≥27 — снять для перевыставления';
         }
     }
 
@@ -1406,8 +1410,7 @@ async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
         config.needReset = false;
-        // enoughItems НЕ сбрасываем: АХ всё ещё полный, иначе снова купим в инвентарь.
-        logOk('перевыставлены → АХ по-прежнему full (enoughItems держим)');
+        // enoughItems не трогаем — сброс только когда слот 0 хранилища пуст.
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
@@ -1432,7 +1435,8 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('[☃] У Вас купили')) {
-        config.enoughItems = false;
+        // enoughItems не сбрасываем здесь — только пустой слот 0 в хранилище
+        // (сначала снять все лоты, потом sellItems).
         const price = parseChatPrice(text);
         let meta = null;
         try {
@@ -2155,7 +2159,7 @@ async function main() {
 
                     flushAhBookLots();
 
-                    // Сброс / enoughItems (АХ забит) / инвентарь≥27 раньше sellItems.
+                    // Сброс / enoughItems (АХ забит → снять всё → продать) / инвентарь≥27 раньше buy.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
                         config.enoughItems ||
@@ -2166,7 +2170,7 @@ async function main() {
                             isBotInventoryFull()
                                 ? 'АХ → хранилище (инвентарь ≥27)'
                                 : config.enoughItems
-                                  ? 'АХ → хранилище (enoughItems — перевыставить)'
+                                  ? 'АХ → хранилище (enoughItems — снять всё, потом продать)'
                                   : config.needReset
                                     ? 'АХ → хранилище (needReset)'
                                     : 'АХ → хранилище (timer60)',
@@ -2325,20 +2329,11 @@ async function main() {
             case myItems:
                 config.needReset = false;
                 await syncListingIdsFromStorageWindow();
-                // Свободный слот 0..4 в хранилище АХ → можно снова покупать/выставлять.
-                // Пустой slots[0] сам по себе НЕ сбрасывает enoughItems (GUI дыры).
-                {
-                    let freeAh = false;
-                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
-                        if (!bot.currentWindow?.slots[i]) {
-                            freeAh = true;
-                            break;
-                        }
-                    }
-                    if (freeAh && config.enoughItems) {
-                        config.enoughItems = false;
-                        logInfo('хранилище → есть свободный слот АХ, enoughItems off');
-                    }
+                // enoughItems off только когда слот 0 пуст (= лоты сняты / хранилище пусто слева).
+                if (!bot.currentWindow?.slots[0] && config.enoughItems) {
+                    config.enoughItems = false;
+                    config.needSell = true;
+                    logInfo('хранилище → слот 0 пуст, enoughItems off → дальше sellItems');
                 }
                 if (config.needSendAH) {
                     const botAh = [];
@@ -2371,7 +2366,8 @@ async function main() {
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
-                // Клик 52: таймер 60с или АХ забит (enoughItems) — перевыставить
+                // Клик 52: таймер 60с или enoughItems (АХ забит) — перевыставить.
+                // enoughItems при этом всё равно снимаем лоты → слот 0 пуст → sellItems.
                 if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
                     if (bot.currentWindow?.slots[0]) {
                         const dueEnough = config.enoughItems;
@@ -2384,12 +2380,10 @@ async function main() {
                         await safeClickBuy(bot, 52, delayMs({ min: 1500, max: 4500 }), key);
                         const deadline = Date.now() + 20_000;
                         while (Date.now() < deadline && bot.currentWindow) {
-                            if (dueEnough && !config.enoughItems) break;
-                            if (!dueEnough && config.lastResetTime >= Date.now() - 60000) break;
+                            if (config.lastResetTime >= Date.now() - 60000) break;
                             await rnd('POLL');
                         }
                     } else if (!config.enoughItems) {
-                        // пустое хранилище без enoughItems — просто обновить таймер
                         config.lastResetTime = Date.now();
                     }
                 }
@@ -2405,8 +2399,8 @@ async function main() {
                     break;
                 }
 
-                // Инвентарь ≥27: после «снять всё» — продать всё; на АХ снова зайдём в хранилище, если ещё ≥27.
-                if ((config.needSell || isBotInventoryFull()) && hasBotItem()) {
+                // После «снять всё» (слот 0 пуст → enoughItems уже off) / inv≥27 — продать.
+                if ((config.needSell || isBotInventoryFull()) && hasBotItem() && !config.enoughItems) {
                     logInfo(
                         isBotInventoryFull()
                             ? 'хранилище → sellItems (инвентарь ≥27, продать всё)'
