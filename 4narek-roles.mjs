@@ -1497,8 +1497,7 @@ async function safeAH() {
         logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
         await antiAfkIfNeeded();
         if (config.afk) {
-            await rnd('AH_CMD');
-            continue;
+            logWarn('safeAH → AFK ещё висит, всё равно шлём /ah search');
         }
         await rnd('AH_CMD');
         config.menu = analysisAH;

@@ -2671,6 +2671,9 @@ async function waitWarpTeleport() {
  *
  * Важно: /warp на FunTime — отсчёт ~7с. Нельзя считать «на полу»
  * по onGround на старой точке и сразу жать W — чанки пустые → «нет курса».
+ *
+ * Для команд (/ah,/balance) достаточно стоять на полу — край ямы не повод
+ * варпать по кругу (иначе hub → pit-edge → warp → mid-air → книга мертва).
  */
 async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
     if (!bot?.entity) return false;
@@ -2680,7 +2683,8 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
 
     if (abort()) return false;
 
-    if (isStandingOnFloor(bot) && !isNearPitEdge(bot)) {
+    // Командам достаточно пола; isNearPitEdge — только для WASD, не для /ah.
+    if (isStandingOnFloor(bot) || bot.entity?.onGround) {
         return true;
     }
 
@@ -2704,7 +2708,7 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
             // дать чанкам догрузиться после прилёта
             await sleepMs(1_000);
             if (abort()) return false;
-            if (bot.entity?.onGround || (isStandingOnFloor(bot) && !isNearPitEdge(bot))) {
+            if (bot.entity?.onGround || isStandingOnFloor(bot)) {
                 logOk(`${label} → на полу после warp+settle`);
                 return true;
             }
@@ -3317,7 +3321,10 @@ async function antiAfkIfNeeded(shouldAbort = null) {
 
     logAfk('сходу с AFK → motion');
 
-    await closeCurrentWindowSafe();
+    // Не рвём AH GUI, если уже browse идёт — иначе книга никогда не копится.
+    if (!config.ahInFlight || !bot?.currentWindow) {
+        await closeCurrentWindowSafe();
+    }
     await ensureGroundedForCommands('antiAFK', shouldAbort);
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
@@ -3327,6 +3334,21 @@ async function antiAfkIfNeeded(shouldAbort = null) {
         await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
         if (!(typeof shouldAbort === 'function' && shouldAbort())) {
             walked = Math.max(walked, await lookAroundSpin(shouldAbort));
+        }
+    }
+
+    // FunTime иногда снимает AFK от jump на месте, когда WASD режет pit/чанки.
+    if (walked < 1.0 && bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot))) {
+        try {
+            ensurePhysicsOn(bot);
+            bot.setControlState('jump', true);
+            await sleepMs(350);
+            bot.setControlState('jump', false);
+            await sleepMs(400);
+            walked = Math.max(walked, 1.0);
+            logAfk('jump на месте как soft un-AFK');
+        } catch {
+            /* ignore */
         }
     }
 
@@ -3399,9 +3421,10 @@ async function safeAH() {
             searchCount++;
             logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
             await antiAfkIfNeeded();
+            // Раньше: if (afk) continue — /ah search никогда не уходил, книга пустая.
+            // Теперь пробуем search даже если un-AFK не вышел (сервер часто отвечает на /ah).
             if (config.afk) {
-                await rnd('AH_CMD');
-                continue;
+                logWarn('safeAH → AFK ещё висит, всё равно шлём /ah search');
             }
             await rnd('AH_CMD');
             config.menu = analysisAH;
