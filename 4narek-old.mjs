@@ -2671,8 +2671,9 @@ function isCommandGrounded() {
 }
 
 /**
- * Пол с прогруженным чанком. onGround после /warp часто «призрак» mid-air —
- * isStandingOnFloor ему верит → ложный «на полу» → look «стоп, нет пола».
+ * Пол с прогруженным чанком — предпочтительно.
+ * После /warp чанки часто null ещё 5–15с при живом onGround —
+ * тогда isSolid=false и старый isStuckFloating ложно жал warp по кругу.
  */
 function isSolidGrounded() {
     const ent = bot?.entity;
@@ -2691,18 +2692,24 @@ function isSolidGrounded() {
     } catch {
         return false;
     }
-    if (sample == null) return false; // чанк пустой — ещё не сели
+    if (sample == null) return false;
     return Boolean(ent.onGround || isStandingOnFloor(bot));
 }
 
-/** Висим в воздухе без падения (y≈const, |vy|≈0) — ждать посадку бессмысленно. */
+/** onGround стабилен, чанки могут ещё грузиться. */
+function isOnGroundFlag() {
+    return Boolean(bot?.entity?.onGround || bot?.entity?.isInWater);
+}
+
+/** Висим в воздухе без падения. onGround=true + пустой чанк — НЕ float. */
 function isStuckFloating() {
-    if (!bot?.entity || isSolidGrounded()) return false;
+    if (!bot?.entity) return false;
+    if (isSolidGrounded() || isOnGroundFlag()) return false;
     const vy = bot.entity.velocity?.y ?? 0;
     return Math.abs(vy) < 0.15;
 }
 
-/** Ждём реальный пол (чанк+onGround). Float stuck → false сразу. */
+/** Ждём пол: solid предпочтителен; стабильный onGround — ок (чанки догонят). */
 async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
     const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
         || Date.now() < (config.noCommandsUntil || 0)
@@ -2711,8 +2718,8 @@ async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
     let floatSince = 0;
     while (Date.now() < until) {
         if (abort()) return false;
+
         if (isSolidGrounded()) {
-            // стабильность: 6 тиков подряд + чанки
             let ok = true;
             for (let i = 0; i < 6; i++) {
                 await sleepMs(80);
@@ -2728,6 +2735,31 @@ async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
             floatSince = 0;
             continue;
         }
+
+        // чанки пустые, но сервер уже onGround — не варпать, дождаться/принять
+        if (isOnGroundFlag()) {
+            let ok = true;
+            for (let i = 0; i < 10; i++) {
+                await sleepMs(100);
+                if (abort()) return false;
+                if (isSolidGrounded()) {
+                    logOk(`${label} → на полу (solid после onGround)`);
+                    return true;
+                }
+                if (!isOnGroundFlag()) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok && isOnGroundFlag()) {
+                await sleepMs(1_500); // дать чанкам шанс
+                logOk(`${label} → на полу (onGround, chunks later)`);
+                return true;
+            }
+            floatSince = 0;
+            continue;
+        }
+
         if (isStuckFloating()) {
             if (!floatSince) floatSince = Date.now();
             if (Date.now() - floatSince >= 1_500) {
@@ -2741,7 +2773,7 @@ async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
         }
         await sleepMs(150);
     }
-    return isSolidGrounded();
+    return isSolidGrounded() || isOnGroundFlag();
 }
 
 /**
@@ -2755,7 +2787,7 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         || !config.timeJoinAnarchy;
 
     if (abort()) return false;
-    if (isSolidGrounded()) return true;
+    if (isSolidGrounded() || isOnGroundFlag()) return true;
 
     config.groundingBusy = true;
     try {
@@ -2766,8 +2798,8 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         if (await waitLandOnFloor(label, firstWait, shouldAbort)) return true;
         if (abort()) return false;
 
-        // до 2 rescue-warp подряд с solid settle
-        for (let attempt = 0; attempt < 2 && !isSolidGrounded(); attempt++) {
+        // до 2 rescue-warp подряд с settle (solid или стабильный onGround)
+        for (let attempt = 0; attempt < 2 && !isSolidGrounded() && !isOnGroundFlag(); attempt++) {
             if (abort()) return false;
             const sinceWarp = Date.now() - (config.lastWarpTime || 0);
             if (sinceWarp < 8_000) {
@@ -2775,7 +2807,7 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
                 logWarn(`${label} → warp cd ${Math.ceil(waitMore / 1000)}с`);
                 if (await waitLandOnFloor(label, waitMore + 4_000, shouldAbort)) return true;
                 if (abort()) return false;
-                if (isSolidGrounded()) return true;
+                if (isSolidGrounded() || isOnGroundFlag()) return true;
             }
             const rescue = randomWarpName();
             logWarn(`${label} → воздух → /warp ${rescue} (#${attempt + 1})`);
@@ -2791,7 +2823,7 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
             if (await waitLandOnFloor(`${label}/warp`, 16_000, shouldAbort)) return true;
         }
 
-        const ok = isSolidGrounded();
+        const ok = isSolidGrounded() || isOnGroundFlag();
         if (!ok) logWarn(`${label} → всё ещё не на полу`);
         return ok;
     } finally {
@@ -3475,10 +3507,9 @@ async function antiAfkIfNeeded(shouldAbort = null) {
 
     const grounded = await ensureGroundedForCommands('antiAFK', shouldAbort);
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
-    if (!grounded || !isSolidGrounded()) {
-        // последний шанс: даже на «призрачном» onGround пробуем balance
+    if (!grounded || (!isSolidGrounded() && !isOnGroundFlag())) {
         if (isCommandGrounded() && await probeClearAfkByBalance(shouldAbort)) return;
-        logWarn('AFK не снят — нет solid-пола');
+        logWarn('AFK не снят — нет пола');
         return;
     }
 
@@ -3487,7 +3518,7 @@ async function antiAfkIfNeeded(shouldAbort = null) {
         logAfk(`мало walked=${walked.toFixed(1)} → burst+probe`);
         await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
         if (typeof shouldAbort === 'function' && shouldAbort()) return;
-        if (isSolidGrounded() || isCommandGrounded()) {
+        if (isSolidGrounded() || isOnGroundFlag() || isCommandGrounded()) {
             const burst = await forceUnAfkBurst(shouldAbort);
             walked = Math.max(walked, burst);
             logAfk(`burst walked=${burst.toFixed(1)}`);
