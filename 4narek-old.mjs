@@ -1930,6 +1930,7 @@ async function main() {
         warpCmd: () => randomWarpCmd(),
         shouldIgnore: () => {
             if (config.staffCheckIdle || config.ownerBanDrain) return true;
+            if (config.groundingBusy) return true; // settle после warp — не спамить ещё /warp
             if (Date.now() < (config.noCommandsUntil || 0)) return true;
             if (!config.timeJoinAnarchy) return true; // хаб/лимобо — /warp бесполезен
             if (isInConfigurationTransfer()) return true;
@@ -2665,15 +2666,37 @@ async function waitWarpTeleport() {
     while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
+function isCommandGrounded() {
+    return Boolean(bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot)));
+}
+
+/** Ждём посадки без /warp (после телепорта часто ещё падаем 5–15с). */
+async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
+    const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
+        || Date.now() < (config.noCommandsUntil || 0)
+        || !config.timeJoinAnarchy;
+    const until = Date.now() + maxMs;
+    while (Date.now() < until) {
+        if (abort()) return false;
+        if (isCommandGrounded()) {
+            await sleepMs(1_200); // чанки после прилёта
+            if (abort()) return false;
+            if (isCommandGrounded()) {
+                logOk(`${label} → на полу (wait ${maxMs}ms budget)`);
+                return true;
+            }
+        }
+        await sleepMs(200);
+    }
+    return isCommandGrounded();
+}
+
 /**
  * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
- * После anti-AFK у края часто «полёт» → команды без ответа → AH мёртв.
  *
- * Важно: /warp на FunTime — отсчёт ~7с. Нельзя считать «на полу»
- * по onGround на старой точке и сразу жать W — чанки пустые → «нет курса».
- *
- * Для команд (/ah,/balance) достаточно стоять на полу — край ямы не повод
- * варпать по кругу (иначе hub → pit-edge → warp → mid-air → книга мертва).
+ * Сначала ждём посадку (warp сам кидает mid-air). Warp — только если
+ * долго не приземлились; иначе casino→stash→mine спам и AFK вечный.
+ * Край ямы не повод варпать (командам достаточно пола).
  */
 async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
     if (!bot?.entity) return false;
@@ -2682,42 +2705,47 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         || !config.timeJoinAnarchy;
 
     if (abort()) return false;
+    if (isCommandGrounded()) return true;
 
-    // Командам достаточно пола; isNearPitEdge — только для WASD, не для /ah.
-    if (isStandingOnFloor(bot) || bot.entity?.onGround) {
-        return true;
-    }
-
-    const rescue = randomWarpName();
-    logWarn(`${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), /warp ${rescue}`);
+    config.groundingBusy = true;
     try {
-        bot.chat(`/warp ${rescue}`);
-    } catch {
-        /* ignore */
-    }
-    config.lastWarp = rescue;
-    // старт отсчёта; chat «Телепортация!» сдвинет lastWarpTime ещё раз — ок
-    config.lastWarpTime = Date.now();
-    await waitWarpTeleport();
-    if (abort()) return false;
-
-    const until = Date.now() + 8_000;
-    while (Date.now() < until) {
+        // 1) уже летим после прошлого warp — просто ждём пол, не спамим ещё
+        logWarn(
+            `${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), жду посадку`,
+        );
+        if (await waitLandOnFloor(label, 14_000, shouldAbort)) return true;
         if (abort()) return false;
-        if (bot.entity?.onGround || isStandingOnFloor(bot)) {
-            // дать чанкам догрузиться после прилёта
-            await sleepMs(1_000);
+
+        // 2) один rescue-warp (не чаще раза в 12с)
+        const sinceWarp = Date.now() - (config.lastWarpTime || 0);
+        if (sinceWarp < 12_000) {
+            const waitMore = 12_000 - sinceWarp;
+            logWarn(`${label} → warp cd ${Math.ceil(waitMore / 1000)}с, ещё жду пол`);
+            if (await waitLandOnFloor(label, waitMore + 8_000, shouldAbort)) return true;
             if (abort()) return false;
-            if (bot.entity?.onGround || isStandingOnFloor(bot)) {
-                logOk(`${label} → на полу после warp+settle`);
-                return true;
-            }
         }
-        await sleepMs(200);
+
+        if (!isCommandGrounded()) {
+            const rescue = randomWarpName();
+            logWarn(`${label} → всё ещё в воздухе → /warp ${rescue}`);
+            try {
+                bot.chat(`/warp ${rescue}`);
+            } catch {
+                /* ignore */
+            }
+            config.lastWarp = rescue;
+            config.lastWarpTime = Date.now();
+            await waitWarpTeleport();
+            if (abort()) return false;
+            if (await waitLandOnFloor(`${label}/warp`, 18_000, shouldAbort)) return true;
+        }
+
+        const ok = isCommandGrounded();
+        if (!ok) logWarn(`${label} → всё ещё не на полу`);
+        return ok;
+    } finally {
+        config.groundingBusy = false;
     }
-    const ok = Boolean(bot.entity?.onGround || isStandingOnFloor(bot));
-    if (!ok) logWarn(`${label} → всё ещё не на полу`);
-    return ok;
 }
 
 /**
@@ -3325,28 +3353,41 @@ async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.ahInFlight || !bot?.currentWindow) {
         await closeCurrentWindowSafe();
     }
-    await ensureGroundedForCommands('antiAFK', shouldAbort);
+
+    const grounded = await ensureGroundedForCommands('antiAFK', shouldAbort);
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
+    if (!grounded || !isCommandGrounded()) {
+        logWarn('AFK не снят — нет пола, motion skip');
+        return;
+    }
 
     let walked = await lookAroundSpin(shouldAbort);
     if (walked < 1.0 && !(typeof shouldAbort === 'function' && shouldAbort())) {
         logAfk(`мало walked=${walked.toFixed(1)} → retry после ground`);
         await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
-        if (!(typeof shouldAbort === 'function' && shouldAbort())) {
+        if (!(typeof shouldAbort === 'function' && shouldAbort()) && isCommandGrounded()) {
             walked = Math.max(walked, await lookAroundSpin(shouldAbort));
         }
     }
 
-    // FunTime иногда снимает AFK от jump на месте, когда WASD режет pit/чанки.
-    if (walked < 1.0 && bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot))) {
+    // Jump + короткий forward — только на полу; НЕ фейкаем walked:
+    // иначе config.afk=false, а сервер всё ещё в AFK → /ah мёртв.
+    if (walked < 1.0 && isCommandGrounded()) {
         try {
             ensurePhysicsOn(bot);
+            logAfk('jump+W soft un-AFK (без fake walked)');
             bot.setControlState('jump', true);
-            await sleepMs(350);
+            await sleepMs(280);
             bot.setControlState('jump', false);
-            await sleepMs(400);
-            walked = Math.max(walked, 1.0);
-            logAfk('jump на месте как soft un-AFK');
+            bot.setControlState('forward', true);
+            await sleepMs(550);
+            bot.setControlState('forward', false);
+            await sleepMs(200);
+            if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
+            // ещё одна короткая прогулка, если пол есть
+            if (isCommandGrounded()) {
+                walked = Math.max(walked, await lookAroundSpin(shouldAbort));
+            }
         } catch {
             /* ignore */
         }
@@ -3421,10 +3462,16 @@ async function safeAH() {
             searchCount++;
             logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
             await antiAfkIfNeeded();
-            // Раньше: if (afk) continue — /ah search никогда не уходил, книга пустая.
-            // Теперь пробуем search даже если un-AFK не вышел (сервер часто отвечает на /ah).
+            // FunTime: /ah в AFK → «команда недоступна». Не шлём впустую —
+            // antiAfkIfNeeded должен реально снять (пол + walked≥1).
             if (config.afk) {
-                logWarn('safeAH → AFK ещё висит, всё равно шлём /ah search');
+                logWarn('safeAH → AFK ещё висит, /ah search skip (retry)');
+                await sleepMs(800);
+                if (searchCount >= 40) {
+                    logWarn('safeAH → 40 попыток без окна, выход');
+                    return;
+                }
+                continue;
             }
             await rnd('AH_CMD');
             config.menu = analysisAH;
