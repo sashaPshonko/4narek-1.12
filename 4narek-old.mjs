@@ -716,6 +716,13 @@ const config = {
     lastWarpTime: 0,
     lastWarp: null,
     enoughItems: false,
+    /** После цикла enoughItems (снять→продать) — не лезть в АХ до ts. */
+    ahBreakUntil: 0,
+    /** Нужен break после текущего enoughItems-цикла. */
+    enoughItemsBreakPending: false,
+    /** Подряд reload без покупки — триггер break. */
+    emptyReloadStreak: 0,
+    lastAhReloadAt: 0,
     items: workerData.itemPrices ?? [],
     catalogAll: workerData.catalogAll ?? workerData.itemPrices ?? [],
     needSell: false,
@@ -1486,6 +1493,7 @@ async function handleChatMessage(text) {
 
     if (text.includes('[☃] Не удалось выставить')) {
         config.enoughItems = true;
+        config.enoughItemsBreakPending = true;
         finishSellListAck('full');
         return;
     }
@@ -2102,6 +2110,10 @@ async function main() {
                 config.timeActive = Date.now();
                 return;
             }
+            if (ahBreakRemainingMs() > 0) {
+                config.timeActive = Date.now();
+                return;
+            }
             config.timeActive = Date.now();
             await sellItems();
             if (!config.sellInFlight) await safeAH();
@@ -2160,6 +2172,15 @@ async function main() {
 
                     flushAhBookLots();
 
+                    // Break: после enoughItems / spam-reload не сидим в АХ.
+                    if (ahBreakRemainingMs() > 0) {
+                        logInfo(
+                            `АХ → break ещё ${Math.ceil(ahBreakRemainingMs() / 1000)}с, выхожу`,
+                        );
+                        await closeCurrentWindowSafe();
+                        return;
+                    }
+
                     // Сброс / enoughItems (АХ забит → снять всё → продать) / инвентарь≥27 раньше buy.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
@@ -2194,6 +2215,7 @@ async function main() {
                     if (config.key !== key) return;
 
                     if (slotToBuy !== null && slotToBuy <= lastBuyableAHSlot) {
+                        config.emptyReloadStreak = 0;
                         const fakeSlot = Boolean(config.ahBuyFakeSlot);
                         config.ahBuyFakeSlot = false;
                         const buyWait = fakeSlot
@@ -2239,18 +2261,33 @@ async function main() {
                         continue;
                     }
 
+                    // Нет лота → не spam reload: 2–3 пустых подряд → break+walk.
+                    config.emptyReloadStreak = (config.emptyReloadStreak || 0) + 1;
+                    const sinceReload = Date.now() - (config.lastAhReloadAt || 0);
+                    if (
+                        config.emptyReloadStreak >= 3
+                        || (config.emptyReloadStreak >= 2 && sinceReload < 25_000)
+                    ) {
+                        logInfo(
+                            `АХ → нет лота, reload streak=${config.emptyReloadStreak} → break`,
+                        );
+                        await takeAhBreak('no-lot-reload');
+                        return;
+                    }
+
                     if (slotToBuy === null || config.needReloadAH) {
                         if (config.needReloadAH) config.needReloadAH = false;
-                        logInfo(`АХ → browse (лот=${slotToBuy}, needReload=${config.needReloadAH})`);
+                        logInfo(`АХ → browse (лот=${slotToBuy}, needReload=${config.needReloadAH}, streak=${config.emptyReloadStreak})`);
                     } else {
-                        logInfo(`АХ → browse (слот ${slotToBuy} вне диапазона)`);
+                        logInfo(`АХ → browse (слот ${slotToBuy} вне диапазона, streak=${config.emptyReloadStreak})`);
                     }
 
                     const browse = pickAhBrowseAction();
                     logInfo(`АХ → reload ${browse.slot}`);
+                    config.lastAhReloadAt = Date.now();
 
                     const contentBefore = ahWindowContentKey(bot.currentWindow);
-                    await safeClickBuy(bot, browse.slot, delayMs({ min: 1500, max: 4500 }), key);
+                    await safeClickBuy(bot, browse.slot, delayMs({ min: 2500, max: 5500 }), key);
                     if (config.key !== key) return;
 
                     const settleReload = await waitAhGuiSettle(bot, { key, contentBefore });
@@ -2402,12 +2439,20 @@ async function main() {
 
                 // После «снять всё» (слот 0 пуст → enoughItems уже off) / inv≥27 — продать.
                 if ((config.needSell || isBotInventoryFull()) && hasBotItem() && !config.enoughItems) {
+                    const wantBreak = config.enoughItemsBreakPending;
                     logInfo(
                         isBotInventoryFull()
                             ? 'хранилище → sellItems (инвентарь ≥27, продать всё)'
-                            : 'хранилище → sellItems',
+                            : wantBreak
+                              ? 'хранилище → sellItems (после enoughItems → потом break+walk)'
+                              : 'хранилище → sellItems',
                     );
                     await sellItems();
+                    if (wantBreak) {
+                        config.enoughItemsBreakPending = false;
+                        await takeAhBreak('enoughItems');
+                        return;
+                    }
                     await safeAH();
                 } else {
                     logInfo('хранилище → назад в АХ');
@@ -3272,6 +3317,7 @@ async function sellItems() {
                         if (listingId == null || !Number.isFinite(listPrice)) {
                             logWarn(`sellItems slot=${currentSlot} → нет свободного listing id 0–4`);
                             config.enoughItems = true;
+                            config.enoughItemsBreakPending = true;
                             break;
                         }
                         await waitForEventLoopOk({ log: (m) => logWarn(m) });
@@ -3494,7 +3540,34 @@ async function lookAroundSpin(shouldAbort = null) {
     return Number(walked) || 0;
 }
 
-/** Сход с AFK: solid-пол → motion → /balance probe (серверный факт). */
+/**
+ * Пауза вне АХ: walk + КД. Ломает паттерн «вечный reload/buy».
+ * enoughItems-запрет на покупки не трогаем — только ритм.
+ */
+async function takeAhBreak(reason = 'break') {
+    const idleMs = 75_000 + Math.floor(Math.random() * 105_000); // 75–180с
+    config.ahBreakUntil = Date.now() + idleMs;
+    config.emptyReloadStreak = 0;
+    logWarn(`АХ → break ~${Math.round(idleMs / 1000)}с (${reason}): закрываю + walk`);
+    try {
+        await closeCurrentWindowSafe();
+    } catch {
+        /* ignore */
+    }
+    try {
+        if (config.afk) await antiAfkIfNeeded();
+        else await lookAroundSpin();
+    } catch {
+        /* ignore */
+    }
+    const pad = 6_000 + Math.floor(Math.random() * 10_000);
+    await sleepMs(pad);
+}
+
+function ahBreakRemainingMs() {
+    const left = (config.ahBreakUntil || 0) - Date.now();
+    return left > 0 ? left : 0;
+}
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
@@ -3542,6 +3615,11 @@ async function safeAH() {
     if (config.staffCheckIdle) return;
     if (config.ownerBanDrain) {
         await drainTreasuryAndLeaveClan();
+        return;
+    }
+    const breakLeft = ahBreakRemainingMs();
+    if (breakLeft > 0) {
+        logInfo(`safeAH → break ещё ${Math.ceil(breakLeft / 1000)}с, skip`);
         return;
     }
     if (config.ahInFlight) {
