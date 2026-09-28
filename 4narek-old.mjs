@@ -1533,15 +1533,12 @@ async function handleChatMessage(text) {
         return;
     }
 
-    if (text.includes('[☃] Не удалось выставить')) {
+    // Как в июне: оба = АХ/хранилище забито → снять всё, потом продать.
+    // КД-снятие по таймеру (unlistCycleDue) — отдельно, не через этот флаг.
+    if (text.includes('[☃] Не удалось выставить') ||
+        text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
         config.enoughItems = true;
         finishSellListAck('full');
-        return;
-    }
-
-    if (text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
-        config.enoughItems = false;
-        config.needSell = true;
         return;
     }
     if (text.includes('Данная команда недоступна в режиме AFK')) {
