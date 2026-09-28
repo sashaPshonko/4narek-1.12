@@ -15,7 +15,6 @@ import {
     getSlotInfo,
     getItemUUID,
     getPriceFromAhItem,
-    AH_FAKE_SLOT_PRICE_MAX,
     findMatchingConfigItem,
     getDurabilityPercent,
     getAllEnchants,
@@ -35,7 +34,6 @@ import { handleCaptchaLogin, attachMapCache } from './lib/captcha/solve-flow.mjs
 import {
     ahBuyDelayMs,
     ahGlassDelayMs,
-    ahFakeSlotBuyDelayMs,
     pickAhBrowseAction,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
@@ -2264,16 +2262,8 @@ async function main() {
                     if (config.key !== key) return;
 
                     if (slotToBuy !== null && slotToBuy <= lastBuyableAHSlot) {
-                        const fakeSlot = Boolean(config.ahBuyFakeSlot);
-                        config.ahBuyFakeSlot = false;
-                        const buyWait = fakeSlot
-                            ? ahFakeSlotBuyDelayMs()
-                            : ahBuyDelayMs(slotToBuy);
-                        logInfo(
-                            fakeSlot
-                                ? `АХ → купить слот ${slotToBuy} (низкая цена, ${buyWait}мс)`
-                                : `АХ → купить слот ${slotToBuy}`,
-                        );
+                        const buyWait = ahBuyDelayMs(slotToBuy);
+                        logInfo(`АХ → купить слот ${slotToBuy}`);
                         const contentBeforeBuy = ahWindowContentKey(bot.currentWindow);
                         await safeClickBuy(
                             bot,
@@ -3602,8 +3592,6 @@ async function getBestAHSlot() {
                 continue;
             }
 
-            const fakeSlot = ahPrice <= AH_FAKE_SLOT_PRICE_MAX;
-
             config.BuyingItem.id = info.id;
             config.BuyingItem.price = ahPrice;
             config.BuyingItem.buyPrice = info.buyPrice;
@@ -3614,18 +3602,15 @@ async function getBestAHSlot() {
 
             if (currentUUID) claimAhLotUuid(currentUUID);
 
-            config.ahBuyFakeSlot = fakeSlot;
             buyItem = slotData;
             return slot;
             }
 
-            config.ahBuyFakeSlot = false;
             return null;
         } finally {
             flushAhBookLots(buyItem);
         }
     } catch (err) {
-        config.ahBuyFakeSlot = false;
         reportError('getBestAHSlot', err);
         return null;
     }
