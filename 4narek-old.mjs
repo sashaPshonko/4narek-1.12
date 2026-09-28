@@ -1264,9 +1264,9 @@ function findStorageSlotToUnlist() {
 
 const TRY_SELL_MARKER = 'выставлен на продажу за';
 const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
-/** Ждём ответ чата дольше — «слишком дорого» приходит не за 300мс. */
-const SELL_LIST_ACK_TIMEOUT_MS = 2500;
-const SELL_SLOT_MAX_ATTEMPTS = 5;
+/** Быстрый ack: один /ah sell, ждём чат (~июньский темп, без двойной команды). */
+const SELL_LIST_ACK_TIMEOUT_MS = 1000;
+const SELL_SLOT_MAX_ATTEMPTS = 3;
 /** FunTime: /clan invest не чаще раза в 15 минут */
 const CLAN_INVEST_COOLDOWN_MS = 3 * 60 * 1000;
 /** Минимальный остаток → казна (чтобы делиться сокланам). */
@@ -3058,6 +3058,9 @@ async function sellItems() {
         }
 
         if (canSell) {
+            // AFK один раз на цикл, не перед каждым слотом
+            await antiAfkIfNeeded(() => !isSellSessionAlive(gen));
+            if (!isSellSessionAlive(gen)) return;
             await moveToHotBar();
             if (!isSellSessionAlive(gen)) return;
 
@@ -3106,37 +3109,20 @@ async function sellItems() {
                     const quick = hotbarSlotToQuick(currentSlot);
                     const slotGone = () => sellSlotIsEmpty(currentSlot);
                     if (bot.quickBarSlot !== quick) {
-                        if (!await rndPoll('HOTBAR_DELAY', 100, slotGone)) {
+                        if (!await rndPoll('SELL_HOTBAR', 50, slotGone)) {
                             logInfo(`sellItems slot=${currentSlot} → слот пуст до hotbar`);
                             currentSlot++;
                             continue;
                         }
                         await bot.setQuickBarSlot(quick);
                     }
-                    // hotbar → пауза → осмотр (если AFK) → sell; без наложений
-                    if (bot.quickBarSlot === quick) {
-                        await sleepMs(180 + Math.floor(Math.random() * 320));
-                    }
-                    await antiAfkIfNeeded(() => !isSellSessionAlive(gen));
-                    if (!isSellSessionAlive(gen)) return;
                     if (slotGone()) {
-                        logInfo(`sellItems slot=${currentSlot} → слот пуст после AFK`);
-                        currentSlot++;
-                        continue;
-                    }
-                    if (!await rndPoll('BASE_DELAY', 100, slotGone)) {
-                        logInfo(`sellItems slot=${currentSlot} → слот пуст до sell`);
-                        currentSlot++;
-                        continue;
-                    }
-                    if (slotGone()) {
-                        logInfo(`sellItems slot=${currentSlot} → слот пуст, sell пропущен`);
                         currentSlot++;
                         continue;
                     }
                     let sellPrice = config.needPrice || info.sellPrice;
                     if (config.needPrice) config.needPrice = 0;
-                    // Слот на месте → повторяем /ah sell (confirm «слишком дорого», мин/макс, глюк чата)
+                    // Один /ah sell + быстрый ack (без двойной команды и без BASE_DELAY 1–3с)
                     for (let attempt = 1; attempt <= SELL_SLOT_MAX_ATTEMPTS; attempt++) {
                         if (!isSellSessionAlive(gen)) return;
                         if (slotGone() || config.enoughItems || config.hasDangerousTrash) break;
@@ -3165,7 +3151,6 @@ async function sellItems() {
                             config.enoughItems = true;
                             break;
                         }
-                        await waitForEventLoopOk({ log: (m) => logWarn(m) });
                         await waitActionsSettled(() => !isSellSessionAlive(gen));
                         if (!isSellSessionAlive(gen)) return;
                         bot.chat(`/ah sell ${listPrice}`);
@@ -3175,7 +3160,8 @@ async function sellItems() {
                         if (ack === 'timeout') {
                             if (config.needPrice) ack = 'retry';
                             else if (config.enoughItems) ack = 'full';
-                            else if (!slotGone()) ack = 'confirm';
+                            else if (slotGone()) ack = 'ok';
+                            else ack = 'confirm';
                         }
                         if (ack !== 'ok') {
                             try {
@@ -3203,7 +3189,7 @@ async function sellItems() {
                                 `sellItems slot=${currentSlot} → повтор ${attempt}/${SELL_SLOT_MAX_ATTEMPTS} (${ack})`,
                             );
                             if (attempt < SELL_SLOT_MAX_ATTEMPTS && !slotGone()) {
-                                await rnd('BASE_DELAY');
+                                await rnd('SELL_CONFIRM');
                                 continue;
                             }
                             break;
@@ -3287,9 +3273,8 @@ async function moveToHotBar() {
                         break;
                     }
                     try {
-                        await waitForEventLoopOk({ log: (m) => logWarn(m) });
                         await waitActionsSettled();
-                        await rnd('BASE_DELAY');
+                        await rnd('SELL_INV_MOVE');
                         await bot.moveSlotItem(src, slot);
                     } catch (err) {
                         reportError(`moveToHotBar move ${src}->${slot}`, err);
