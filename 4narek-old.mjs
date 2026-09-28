@@ -573,7 +573,7 @@ const STORAGE_AH_SLOTS = 5;
 const firstAHSlot = 0;
 /** Книга: все 5 строк лотов АХ (0–44). Кнопки/reload — с 45. */
 const lastAHSlot = 44;
-/** Покупка только верхние 2 строки (0–17) — самые дешёвые при сортировке АХ. */
+/** Покупка только верхние 2 строки (0–17). АХ по времени, не по цене. */
 const lastBuyableAHSlot = 17;
 const slotToStorage = 46;
 const leftMouseButton = 0;
