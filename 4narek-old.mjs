@@ -227,6 +227,9 @@ let clanTreasuryBal = null;
 let selfWithdrawSeen = false;
 let notInClanHint = false;
 let foreignClanLeaveBusy = false;
+/** sellItems withdraw: не уходить в рекурсию sellItems на CLAN_TREASURY_LOW */
+let clanWithdrawBusy = false;
+let clanWithdrawDenied = false;
 
 function nickInChat(text, nick) {
     const esc = String(nick || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1704,7 +1707,8 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.includes(CLAN_TREASURY_LOW)) {
-        if (foreignClanLeaveBusy || config.ownerBanDrain) {
+        if (foreignClanLeaveBusy || config.ownerBanDrain || clanWithdrawBusy) {
+            clanWithdrawDenied = true;
             logWarn('казна: сумма больше баланса / пусто — глянем казну ещё раз');
             return;
         }
@@ -2580,6 +2584,78 @@ async function refreshClanTreasury(waitMs = 12_000) {
     return clanTreasuryBal;
 }
 
+function reportTreasuryEmptyOnce() {
+    if (treasuryEmptyReported) return;
+    treasuryEmptyReported = true;
+    logWarn('казна пуста → presence inactive для Go');
+    parentPort.postMessage({ name: 'treasury_empty' });
+}
+
+/**
+ * Довести баланс до saveSum/2: снять want, но не больше казны.
+ * Если в казне меньше — забираем всё.
+ */
+async function withdrawTowardSaveSum() {
+    const saveSum = getSaveSum();
+    if (saveSum == null || config.balance == null || !Number.isFinite(config.balance)) return;
+    if (config.balance >= saveSum / 2) return;
+    const want = Math.floor(saveSum / 2 - config.balance);
+    if (want <= 0) return;
+    if (!bot?.chat) return;
+
+    clanWithdrawBusy = true;
+    clanWithdrawDenied = false;
+    try {
+        let treasury = await refreshClanTreasury();
+        if (treasury == null) {
+            logWarn('withdraw: казна не прочитана — skip');
+            return;
+        }
+        if (treasury <= 0) {
+            logInfo('withdraw: казна пуста');
+            reportTreasuryEmptyOnce();
+            return;
+        }
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const take = Math.min(want, Math.floor(treasury));
+            if (take <= 0) {
+                reportTreasuryEmptyOnce();
+                return;
+            }
+            selfWithdrawSeen = false;
+            clanWithdrawDenied = false;
+            logInfo(
+                `/clan withdraw ${take} (want ${want}, казна ${treasury}` +
+                    (attempt > 1 ? `, retry ${attempt}` : '') +
+                    ')',
+            );
+            bot.chat(`/clan withdraw ${take}`);
+            const ok = await waitChatFlag(() => selfWithdrawSeen || clanWithdrawDenied, 10_000);
+            if (selfWithdrawSeen) {
+                if (Number.isFinite(config.balance)) config.balance += take;
+                config.needAdd = false;
+                return;
+            }
+            treasury = await refreshClanTreasury();
+            if (treasury == null) {
+                logWarn('withdraw: казна не прочитана после отказа — skip');
+                return;
+            }
+            if (treasury <= 0) {
+                logInfo('withdraw: казна пуста после отказа');
+                reportTreasuryEmptyOnce();
+                return;
+            }
+            if (!ok) {
+                logWarn('withdraw: нет ответа сервера — ещё раз по казне');
+            }
+        }
+    } finally {
+        clanWithdrawBusy = false;
+    }
+}
+
 /** Казна (лимит 2.5 млрд) и /clan leave true. skipIfOurClan — старт: свой овнер не трогаем. */
 async function drainTreasuryAndLeaveClan({ skipIfOurClan = false } = {}) {
     if (!bot?.chat) return;
@@ -3114,11 +3190,7 @@ async function sellItems() {
                     }
                 }
                 if (saveSum != null && config.balance != null && config.balance < saveSum / 2) {
-                    const withdrawSum = Math.floor(saveSum / 2 - config.balance);
-                    if (withdrawSum > 0) {
-                        bot.chat(`/clan withdraw ${withdrawSum}`);
-                        config.needAdd = false;
-                    }
+                    await withdrawTowardSaveSum();
                 }
             }
         }
