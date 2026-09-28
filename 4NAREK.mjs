@@ -438,6 +438,8 @@ const config = {
     item: workerData.item,
     goType: workerData.goType,
     clanMates: Math.max(1, Number(workerData.clanMates) || 1),
+    capitalKeepSum: null,
+    maxBuyPrice: null,
     timeJoinAnarchy: 0,
     lastWarpTime: 0,
     enoughItems: false,
@@ -784,8 +786,12 @@ function getIdBySellPrice(price) {
     return found?.id ?? '';
 }
 
-/** На руках: 1×top + доля пула 5×top на clanMates. */
+/** На руках: orch capitalKeepSum, иначе 1×top + доля пула на clanMates. */
 function getSaveSum() {
+    const orchKeep = Number(config.capitalKeepSum);
+    if (Number.isFinite(orchKeep) && orchKeep > 0) {
+        return Math.floor(orchKeep);
+    }
     if (!Array.isArray(config.items) || !config.items.length) return null;
 
     let bestPrice = 0;
@@ -962,6 +968,10 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        const bal = Number(config.balance);
+        if (Number.isFinite(bal) && bal >= 0) {
+            parentPort.postMessage({ name: 'balance', balance: bal });
+        }
         maybeRestoreGoPresenceFromBalance();
         return;
     }
@@ -993,6 +1003,18 @@ parentPort.on('message', (data) => {
             config.catalogAll = data.catalogAll;
         }
         maybeRestoreGoPresenceFromBalance();
+    }
+    if (data.type === 'capital_plan') {
+        const keep = Number(data.keepSum);
+        const maxBuy = Number(data.maxBuyPrice);
+        config.capitalKeepSum = Number.isFinite(keep) && keep > 0 ? keep : null;
+        config.maxBuyPrice = Number.isFinite(maxBuy) && maxBuy > 0 ? maxBuy : null;
+        logInfo(
+            `capital plan → keep=${config.capitalKeepSum ?? '?'} maxBuy=${config.maxBuyPrice ?? '?'}` +
+                ` mates=${data.mates ?? '?'} src=${data.source ?? '?'}`,
+        );
+        maybeRestoreGoPresenceFromBalance();
+        return;
     }
     if (data.type === 'items_buying') itemsBuying = data.data ?? [];
 });
@@ -2002,6 +2024,11 @@ async function getBestAHSlot() {
             }
 
             if (ahPrice >= info.buyPrice) continue;
+
+            const maxBuy = Number(config.maxBuyPrice);
+            if (Number.isFinite(maxBuy) && maxBuy > 0 && ahPrice > maxBuy) {
+                continue;
+            }
 
             candidates.push({ slot, info, ahPrice, currentUUID });
         }

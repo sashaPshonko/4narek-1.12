@@ -749,6 +749,9 @@ const config = {
     needRTP: false,
     hasDangerousTrash: false,
     needReloadAH: false,
+    /** Orch capital plan (равная доля кэша). */
+    capitalKeepSum: null,
+    maxBuyPrice: null,
     balance: null,
     needSendAH: true,
     needAdd: false,
@@ -1351,10 +1354,13 @@ function hasBotCategoryPriceChanged(prevItems, nextItems) {
 }
 
 /**
- * На руках: 1× top-лот + доля остатка пула 5×top на соклановцев (clanMates).
- * Solo (mates=1) = как раньше 5×top.
+ * На руках: orch capitalKeepSum, иначе 1×top + доля пула 5×top на соклановцев.
  */
 function getSaveSum() {
+    const orchKeep = Number(config.capitalKeepSum);
+    if (Number.isFinite(orchKeep) && orchKeep > 0) {
+        return Math.floor(orchKeep);
+    }
     if (!Array.isArray(config.items) || !config.items.length) return null;
 
     let bestPrice = 0;
@@ -1369,6 +1375,18 @@ function getSaveSum() {
     }
 
     return clanKeepSum(bestPrice, config.clanMates);
+}
+
+function reportBalanceToOrch(balance) {
+    const bal = Number(balance);
+    if (!Number.isFinite(bal) || bal < 0) return;
+    parentPort.postMessage({ name: 'balance', balance: bal });
+}
+
+function reportTreasuryToOrch(treasury) {
+    const n = Number(treasury);
+    if (!Number.isFinite(n) || n < 0) return;
+    parentPort.postMessage({ name: 'treasury', balance: n });
 }
 
 function getHeldItemInfo() {
@@ -1710,6 +1728,7 @@ async function handleChatMessage(text) {
     }
     if (text.includes('[$] Ваш баланс:')) {
         config.balance = parseChatPrice(text);
+        reportBalanceToOrch(config.balance);
         maybeRestoreGoPresenceFromBalance();
         return;
     }
@@ -1787,6 +1806,18 @@ parentPort.on('message', (data) => {
             config.catalogAll = data.catalogAll;
         }
         maybeRestoreGoPresenceFromBalance();
+    }
+    if (data.type === 'capital_plan') {
+        const keep = Number(data.keepSum);
+        const maxBuy = Number(data.maxBuyPrice);
+        config.capitalKeepSum = Number.isFinite(keep) && keep > 0 ? keep : null;
+        config.maxBuyPrice = Number.isFinite(maxBuy) && maxBuy > 0 ? maxBuy : null;
+        logInfo(
+            `capital plan → keep=${config.capitalKeepSum ?? '?'} maxBuy=${config.maxBuyPrice ?? '?'}` +
+                ` mates=${data.mates ?? '?'} src=${data.source ?? '?'}`,
+        );
+        maybeRestoreGoPresenceFromBalance();
+        return;
     }
     if (data.type === 'owner_banned') {
         if (!config.ownerBanDrain) {
@@ -2588,6 +2619,7 @@ async function refreshClanTreasury(waitMs = 12_000) {
             await rnd('BASE_DELAY');
         }
     }
+    if (clanTreasuryBal != null) reportTreasuryToOrch(clanTreasuryBal);
     return clanTreasuryBal;
 }
 
@@ -3496,6 +3528,11 @@ async function getBestAHSlot() {
             }
 
             if (ahPrice >= info.buyPrice) continue;
+
+            const maxBuy = Number(config.maxBuyPrice);
+            if (Number.isFinite(maxBuy) && maxBuy > 0 && ahPrice > maxBuy) {
+                continue;
+            }
 
             const fakeSlot = ahPrice <= AH_FAKE_SLOT_PRICE_MAX;
 

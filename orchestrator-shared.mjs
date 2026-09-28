@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { mergeBuyingClaim, mergeGoJsonUpdate, uuidForGoBroadcast } from './items-buying-coord.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
+import { computeCapitalPlan } from './lib/capital-plan.mjs';
 import { proxyHostFromString } from './lib/proxy-host.mjs';
 import {
     AUTH_FAULT_BAD_PASSWORD,
@@ -315,6 +316,88 @@ export function attachClanMates(bots) {
     for (const bot of bots.values()) {
         const n = counts.get(String(bot?.anarchy ?? '')) || 1;
         bot.clanMates = Math.max(1, n);
+    }
+}
+
+const CAPITAL_PLAN_DEBOUNCE_MS = 7_000;
+const BALANCE_FRESH_MS = 10 * 60 * 1000;
+let clanTreasuryBal = null;
+let clanTreasuryAt = 0;
+let capitalPlanTimer = null;
+let lastCapitalPlanLog = '';
+
+export function noteClanTreasury(balance) {
+    const n = Number(balance);
+    if (!Number.isFinite(n) || n < 0) return;
+    clanTreasuryBal = n;
+    clanTreasuryAt = Date.now();
+}
+
+/** Debounced push of keepSum / maxBuyPrice to all workers. */
+export function scheduleCapitalPlan(ctx) {
+    if (!ctx) return;
+    if (capitalPlanTimer) clearTimeout(capitalPlanTimer);
+    capitalPlanTimer = setTimeout(() => {
+        capitalPlanTimer = null;
+        pushCapitalPlanToBots(ctx);
+    }, CAPITAL_PLAN_DEBOUNCE_MS);
+}
+
+export function pushCapitalPlanToBots(ctx) {
+    const { bots, workers, safePostMessage } = ctx || {};
+    if (!bots || typeof safePostMessage !== 'function') return;
+
+    const now = Date.now();
+    const balances = [];
+    for (const [username, bot] of bots) {
+        if (!bot || bot.banned || bot.authFault) continue;
+        const wd = workers?.get(username);
+        if (!wd?.worker || wd.worker.terminated) continue;
+        const bal = Number(bot.balance);
+        const at = Number(bot.balanceAt) || 0;
+        if (!Number.isFinite(bal) || bal < 0) continue;
+        if (now - at > BALANCE_FRESH_MS) continue;
+        balances.push({ username, balance: bal });
+    }
+
+    let catalog = [];
+    let clanMates = 1;
+    for (const bot of bots.values()) {
+        if (Array.isArray(bot.itemPrices) && bot.itemPrices.length) {
+            catalog = bot.itemPrices;
+            clanMates = bot.clanMates || 1;
+            break;
+        }
+        if (bot.clanMates) clanMates = bot.clanMates;
+    }
+
+    const treasuryFresh =
+        clanTreasuryAt && now - clanTreasuryAt < BALANCE_FRESH_MS ? clanTreasuryBal : null;
+    const plan = computeCapitalPlan({
+        balances,
+        treasury: treasuryFresh,
+        catalog,
+        clanMates,
+    });
+
+    const line =
+        `fair=${Math.round(plan.fair || 0)} keep=${plan.keepSum} maxBuy=${plan.maxBuyPrice}` +
+        ` treasury=${treasuryFresh ?? '?'} mates=${plan.mates} src=${plan.source}`;
+    if (line !== lastCapitalPlanLog) {
+        console.log(`[capital] ${line}`);
+        lastCapitalPlanLog = line;
+    }
+
+    if (!workers) return;
+    for (const [username] of workers) {
+        safePostMessage(username, {
+            type: 'capital_plan',
+            keepSum: plan.keepSum,
+            maxBuyPrice: plan.maxBuyPrice,
+            fair: plan.fair,
+            mates: plan.mates,
+            source: plan.source,
+        });
     }
 }
 
@@ -1060,6 +1143,21 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
                 username,
             );
         }
+        return true;
+    }
+    if (message?.name === 'balance') {
+        const bot = ctx.bots?.get(username);
+        const bal = Number(message.balance);
+        if (bot && Number.isFinite(bal) && bal >= 0) {
+            bot.balance = bal;
+            bot.balanceAt = Date.now();
+            scheduleCapitalPlan(ctx);
+        }
+        return true;
+    }
+    if (message?.name === 'treasury') {
+        noteClanTreasury(message.balance);
+        scheduleCapitalPlan(ctx);
         return true;
     }
     if (message?.name === 'treasury_ok') {

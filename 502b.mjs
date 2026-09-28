@@ -104,6 +104,7 @@ let shiftRotator = null;
 function workerStatusCtx() {
     return {
         bots, workers, pendingRestarts, botItems, botInventory, terminateWorkerEntry, pushPresenceToGo, sendAlert,
+        safePostMessage,
         sendToGo: (payload) => {
             if (!socket || !isSocketOpen) return false;
             socket.send(JSON.stringify(payload));
