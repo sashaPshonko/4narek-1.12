@@ -1970,7 +1970,7 @@ async function main() {
             config.noCommandsUntil = Date.now() + 15_000;
         },
     });
-    logOk('anti-AFK → только antiAfkIfNeeded: WASD или один look (GCD), без jump/прогулок');
+    logOk('anti-AFK → как месяц назад: WASD или look(force=false), без jump/warp/прогулок');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -3213,7 +3213,10 @@ function isBotInventoryFull() {
     }
 }
 
-/** Сход с AFK: только WASD или одиночный look (эталон записи). Jump/прогулок нет. */
+/**
+ * Сход с AFK — как ~месяц назад: короткий WASD или look, сразу afk=false.
+ * Без jump, без прогулок, без warp/solid-floor внутри antiAFK (это ломало АХ).
+ */
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
@@ -3224,22 +3227,20 @@ async function antiAfkIfNeeded(shouldAbort = null) {
 
     logAfk('сходу с AFK → motion');
 
-    // Не рвём AH GUI, если уже browse идёт — иначе книга никогда не копится.
-    if (!config.ahInFlight || !bot?.currentWindow) {
+    // Не рвём AH GUI, если browse уже идёт — иначе книга не копится.
+    const keepAhGui = Boolean(config.ahInFlight && bot?.currentWindow);
+    if (!keepAhGui) {
         await closeCurrentWindowSafe();
     }
-    await ensureGroundedForCommands('antiAFK', shouldAbort);
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
-    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
-    if (typeof shouldAbort === 'function' && shouldAbort()) return;
-
-    await waitForEventLoopOk({ log: (m) => logWarn(m) });
     ensurePhysicsOn(bot);
     lookLock = true;
     let result = { ok: false, mode: 'none' };
     try {
-        result = await clientLikeUnAfk(bot, (msg) => logOk(msg), shouldAbort);
+        result = await clientLikeUnAfk(bot, (msg) => logOk(msg), shouldAbort, {
+            keepWindow: keepAhGui,
+        });
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -3250,15 +3251,11 @@ async function antiAfkIfNeeded(shouldAbort = null) {
         }
         lookLock = false;
         lastLookAt = Date.now();
-        ensurePhysicsOn(bot);
     }
 
-    if (result?.ok) {
-        config.afk = false;
-        logOk(`AFK снят (${result.mode})`);
-    } else {
-        logWarn(`AFK не снят (${result?.mode || '?'}) — жду следующий цикл`);
-    }
+    // Как Aug28/Sep9: после motion считаем AFK снятым — иначе safeAH вечно крутится.
+    config.afk = false;
+    logOk(`AFK снят (${result?.mode || 'ok'})`);
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
