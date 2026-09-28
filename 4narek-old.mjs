@@ -1970,7 +1970,7 @@ async function main() {
             config.noCommandsUntil = Date.now() + 15_000;
         },
     });
-    logOk('anti-AFK → как месяц назад: WASD или look(force=false), без jump/warp/прогулок');
+    logOk('anti-AFK → WASD или look как запись (GCD+force=true); без jump/warp/прогулок');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
