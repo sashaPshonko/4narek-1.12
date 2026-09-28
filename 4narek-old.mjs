@@ -2699,119 +2699,10 @@ async function waitWarpTeleport() {
     while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
-function isCommandGrounded() {
-    return Boolean(bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot)));
-}
-
 /**
- * Пол с прогруженным чанком — предпочтительно.
- * После /warp чанки часто null ещё 5–15с при живом onGround —
- * тогда isSolid=false и старый isStuckFloating ложно жал warp по кругу.
- */
-function isSolidGrounded() {
-    const ent = bot?.entity;
-    const pos = ent?.position;
-    if (!pos || !bot?.blockAt) return false;
-    if (ent.isInWater) return true;
-    let sample = null;
-    try {
-        sample = bot.blockAt(pos, false);
-        if (sample == null) {
-            sample = bot.blockAt(
-                { x: pos.x, y: pos.y - 1, z: pos.z },
-                false,
-            );
-        }
-    } catch {
-        return false;
-    }
-    if (sample == null) return false;
-    return Boolean(ent.onGround || isStandingOnFloor(bot));
-}
-
-/** onGround стабилен, чанки могут ещё грузиться. */
-function isOnGroundFlag() {
-    return Boolean(bot?.entity?.onGround || bot?.entity?.isInWater);
-}
-
-/** Висим в воздухе без падения. onGround=true + пустой чанк — НЕ float. */
-function isStuckFloating() {
-    if (!bot?.entity) return false;
-    if (isSolidGrounded() || isOnGroundFlag()) return false;
-    const vy = bot.entity.velocity?.y ?? 0;
-    return Math.abs(vy) < 0.15;
-}
-
-/** Ждём пол: solid предпочтителен; стабильный onGround — ок (чанки догонят). */
-async function waitLandOnFloor(label, maxMs, shouldAbort = null) {
-    const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
-        || Date.now() < (config.noCommandsUntil || 0)
-        || !config.timeJoinAnarchy;
-    const until = Date.now() + maxMs;
-    let floatSince = 0;
-    while (Date.now() < until) {
-        if (abort()) return false;
-
-        if (isSolidGrounded()) {
-            let ok = true;
-            for (let i = 0; i < 6; i++) {
-                await sleepMs(80);
-                if (abort() || !isSolidGrounded()) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (ok) {
-                logOk(`${label} → на полу (solid, wait≤${maxMs}ms)`);
-                return true;
-            }
-            floatSince = 0;
-            continue;
-        }
-
-        // чанки пустые, но сервер уже onGround — не варпать, дождаться/принять
-        if (isOnGroundFlag()) {
-            let ok = true;
-            for (let i = 0; i < 10; i++) {
-                await sleepMs(100);
-                if (abort()) return false;
-                if (isSolidGrounded()) {
-                    logOk(`${label} → на полу (solid после onGround)`);
-                    return true;
-                }
-                if (!isOnGroundFlag()) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (ok && isOnGroundFlag()) {
-                await sleepMs(1_500); // дать чанкам шанс
-                logOk(`${label} → на полу (onGround, chunks later)`);
-                return true;
-            }
-            floatSince = 0;
-            continue;
-        }
-
-        if (isStuckFloating()) {
-            if (!floatSince) floatSince = Date.now();
-            if (Date.now() - floatSince >= 1_500) {
-                logWarn(
-                    `${label} → зависли в воздухе y=${bot.entity.position.y.toFixed(1)} — warp`,
-                );
-                return false;
-            }
-        } else {
-            floatSince = 0;
-        }
-        await sleepMs(150);
-    }
-    return isSolidGrounded() || isOnGroundFlag();
-}
-
-/**
- * FunTime глухо игнорит /ah /balance, пока entity в полёте/яме.
- * Сначала ждём solid-пол; float-stuck → сразу /warp (не жечь 14с).
+ * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
+ * Для команд достаточно onGround / standingOnFloor — без solid-chunk магии
+ * и без warp-шторма (тот цикл убил книгу на 502).
  */
 async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
     if (!bot?.entity) return false;
@@ -2820,117 +2711,44 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
         || !config.timeJoinAnarchy;
 
     if (abort()) return false;
-    if (isSolidGrounded() || isOnGroundFlag()) return true;
+
+    if (isStandingOnFloor(bot) || bot.entity?.onGround) {
+        return true;
+    }
 
     config.groundingBusy = true;
     try {
-        const y0 = bot.entity.position.y;
-        logWarn(`${label} → не на полу (y=${y0.toFixed(1)}), жду solid-пол`);
-        // float: короткий wait; падение: чуть дольше
-        const firstWait = isStuckFloating() ? 2_000 : 7_000;
-        if (await waitLandOnFloor(label, firstWait, shouldAbort)) return true;
+        const rescue = randomWarpName();
+        logWarn(`${label} → не на полу (y=${bot.entity.position.y.toFixed(1)}), /warp ${rescue}`);
+        try {
+            bot.chat(`/warp ${rescue}`);
+        } catch {
+            /* ignore */
+        }
+        config.lastWarp = rescue;
+        config.lastWarpTime = Date.now();
+        await waitWarpTeleport();
         if (abort()) return false;
 
-        // до 2 rescue-warp подряд с settle (solid или стабильный onGround)
-        for (let attempt = 0; attempt < 2 && !isSolidGrounded() && !isOnGroundFlag(); attempt++) {
+        const until = Date.now() + 8_000;
+        while (Date.now() < until) {
             if (abort()) return false;
-            const sinceWarp = Date.now() - (config.lastWarpTime || 0);
-            if (sinceWarp < 8_000) {
-                const waitMore = 8_000 - sinceWarp;
-                logWarn(`${label} → warp cd ${Math.ceil(waitMore / 1000)}с`);
-                if (await waitLandOnFloor(label, waitMore + 4_000, shouldAbort)) return true;
+            if (bot.entity?.onGround || isStandingOnFloor(bot)) {
+                await sleepMs(1_000);
                 if (abort()) return false;
-                if (isSolidGrounded() || isOnGroundFlag()) return true;
+                if (bot.entity?.onGround || isStandingOnFloor(bot)) {
+                    logOk(`${label} → на полу после warp+settle`);
+                    return true;
+                }
             }
-            const rescue = randomWarpName();
-            logWarn(`${label} → воздух → /warp ${rescue} (#${attempt + 1})`);
-            try {
-                bot.chat(`/warp ${rescue}`);
-            } catch {
-                /* ignore */
-            }
-            config.lastWarp = rescue;
-            config.lastWarpTime = Date.now();
-            await waitWarpTeleport();
-            if (abort()) return false;
-            if (await waitLandOnFloor(`${label}/warp`, 16_000, shouldAbort)) return true;
+            await sleepMs(200);
         }
-
-        const ok = isSolidGrounded() || isOnGroundFlag();
+        const ok = Boolean(bot.entity?.onGround || isStandingOnFloor(bot));
         if (!ok) logWarn(`${label} → всё ещё не на полу`);
         return ok;
     } finally {
         config.groundingBusy = false;
     }
-}
-
-/** Короткий jump+WASD без pit-course (когда look «нет курса»). */
-async function forceUnAfkBurst(shouldAbort = null) {
-    if (!bot?.entity || !bot.setControlState) return 0;
-    const origin = bot.entity.position.clone();
-    try {
-        ensurePhysicsOn(bot);
-        if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
-        bot.setControlState('jump', true);
-        await sleepMs(250);
-        bot.setControlState('jump', false);
-        const keys = ['forward', 'left', 'back', 'right'];
-        for (const key of keys) {
-            if (typeof shouldAbort === 'function' && shouldAbort()) break;
-            if (!isSolidGrounded() && !isCommandGrounded()) break;
-            bot.setControlState(key, true);
-            await sleepMs(280);
-            bot.setControlState(key, false);
-            await sleepMs(60);
-        }
-        if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
-        await sleepMs(150);
-    } catch {
-        /* ignore */
-    } finally {
-        try {
-            for (const k of ['forward', 'back', 'left', 'right', 'jump']) {
-                bot.setControlState(k, false);
-            }
-        } catch {
-            /* ignore */
-        }
-    }
-    const pos = bot.entity?.position;
-    if (!pos) return 0;
-    const dx = pos.x - origin.x;
-    const dz = pos.z - origin.z;
-    return Math.hypot(dx, dz);
-}
-
-/**
- * Серверный критерий: /balance ответил → не в AFK.
- * Надёжнее walked: FunTime часто режет WASD у края/без курса.
- */
-async function probeClearAfkByBalance(shouldAbort = null) {
-    if (!bot?.chat) return false;
-    if (!isSolidGrounded() && !isCommandGrounded()) return false;
-    config.balance = null;
-    const markedAfk = config.afk;
-    try {
-        bot.chat('/balance');
-    } catch {
-        return false;
-    }
-    await chatChain;
-    const deadline = Date.now() + 4_000;
-    while (Date.now() < deadline) {
-        if (typeof shouldAbort === 'function' && shouldAbort()) return false;
-        if (config.balance != null) {
-            config.afk = false;
-            logOk(`AFK снят (balance probe=${config.balance})`);
-            return true;
-        }
-        // чат снова выставил AFK — команда отвергнута
-        if (config.afk && !markedAfk) return false;
-        await sleepMs(100);
-    }
-    return false;
 }
 
 /**
@@ -3527,46 +3345,50 @@ async function lookAroundSpin(shouldAbort = null) {
     return Number(walked) || 0;
 }
 
+/** Сход с AFK — только если реально сдвинулись (иначе сервер остаётся в AFK). */
 async function antiAfkIfNeeded(shouldAbort = null) {
     if (!config.afk) return;
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
     logAfk('сходу с AFK → motion');
 
+    // Не рвём AH GUI, если уже browse идёт — иначе книга никогда не копится.
     if (!config.ahInFlight || !bot?.currentWindow) {
         await closeCurrentWindowSafe();
     }
-
-    const grounded = await ensureGroundedForCommands('antiAFK', shouldAbort);
+    await ensureGroundedForCommands('antiAFK', shouldAbort);
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
-    if (!grounded || (!isSolidGrounded() && !isOnGroundFlag())) {
-        if (isCommandGrounded() && await probeClearAfkByBalance(shouldAbort)) return;
-        logWarn('AFK не снят — нет пола');
-        return;
-    }
 
     let walked = await lookAroundSpin(shouldAbort);
     if (walked < 1.0 && !(typeof shouldAbort === 'function' && shouldAbort())) {
-        logAfk(`мало walked=${walked.toFixed(1)} → burst+probe`);
+        logAfk(`мало walked=${walked.toFixed(1)} → retry после ground`);
         await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
-        if (typeof shouldAbort === 'function' && shouldAbort()) return;
-        if (isSolidGrounded() || isOnGroundFlag() || isCommandGrounded()) {
-            const burst = await forceUnAfkBurst(shouldAbort);
-            walked = Math.max(walked, burst);
-            logAfk(`burst walked=${burst.toFixed(1)}`);
+        if (!(typeof shouldAbort === 'function' && shouldAbort())) {
+            walked = Math.max(walked, await lookAroundSpin(shouldAbort));
+        }
+    }
+
+    // FunTime иногда снимает AFK от jump на месте, когда WASD режет pit/чанки.
+    if (walked < 1.0 && bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot))) {
+        try {
+            ensurePhysicsOn(bot);
+            bot.setControlState('jump', true);
+            await sleepMs(350);
+            bot.setControlState('jump', false);
+            await sleepMs(400);
+            walked = Math.max(walked, 1.0);
+            logAfk('jump на месте как soft un-AFK');
+        } catch {
+            /* ignore */
         }
     }
 
     if (walked >= 1.0) {
         config.afk = false;
         logOk(`AFK снят (walked=${walked.toFixed(1)})`);
-        return;
+    } else {
+        logWarn(`AFK не снят (walked=${walked.toFixed(1)}) — жду следующий цикл`);
     }
-
-    // Главный путь на FunTime: сервер принял /balance → AFK снят
-    if (await probeClearAfkByBalance(shouldAbort)) return;
-
-    logWarn(`AFK не снят (walked=${walked.toFixed(1)}, balance fail)`);
 }
 
 /** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
@@ -3630,16 +3452,10 @@ async function safeAH() {
             searchCount++;
             logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
             await antiAfkIfNeeded();
-            // FunTime: /ah в AFK → «команда недоступна». Не шлём впустую —
-            // antiAfkIfNeeded должен реально снять (пол + walked≥1).
+            // Раньше: if (afk) continue — /ah search никогда не уходил, книга пустая.
+            // Пробуем search даже если un-AFK не вышел (сервер часто отвечает на /ah).
             if (config.afk) {
-                logWarn('safeAH → AFK ещё висит, /ah search skip (retry)');
-                await sleepMs(800);
-                if (searchCount >= 40) {
-                    logWarn('safeAH → 40 попыток без окна, выход');
-                    return;
-                }
-                continue;
+                logWarn('safeAH → AFK ещё висит, всё равно шлём /ah search');
             }
             await rnd('AH_CMD');
             config.menu = analysisAH;
