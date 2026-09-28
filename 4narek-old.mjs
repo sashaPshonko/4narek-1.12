@@ -39,7 +39,7 @@ import {
     pickAhBrowseAction,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
-import { pickWarp, randomWarpName, randomWarpCmd } from './lib/warp-pick.mjs';
+import { pickWarp, randomWarpName, randomWarpCmd, shouldAttemptWarp } from './lib/warp-pick.mjs';
 import {
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
@@ -721,6 +721,8 @@ const config = {
     preferAhUntil: 0,
     lastWarpTime: 0,
     lastWarp: null,
+    /** Старт воркера — для первого warp-gap 25–30 мин. */
+    workerStartedAt: Date.now(),
     enoughItems: false,
     /** До этого ts не кликаем снятие лотов (сервер: переставлять раз в минуту). */
     storageUnlistUntil: 0,
@@ -2817,6 +2819,69 @@ async function waitWarpTeleport() {
     while (Date.now() - config.lastWarpTime < 7500) await rnd('POLL');
 }
 
+const PROMENADE_MOVE_KEYS = ['forward', 'back', 'left', 'right'];
+
+/**
+ * Как в июне: /warp + короткий WASD, но редко — раз в 25–30 мин (иногда skip).
+ * Только в sellItems, не ломает AH browse.
+ */
+async function maybePromenadeWarp(shouldAbort = null) {
+    if (!bot?.chat || !config.timeJoinAnarchy) return false;
+    if (config.groundingBusy || config.staffCheckIdle || config.ownerBanDrain) return false;
+    if (Date.now() < (config.noCommandsUntil || 0)) return false;
+    if (!shouldAttemptWarp(
+        config.username,
+        config.lastWarpTime || 0,
+        config.workerStartedAt || 0,
+    )) {
+        return false;
+    }
+
+    const abort = () => typeof shouldAbort === 'function' && shouldAbort();
+    if (abort()) return false;
+
+    let warp;
+    try {
+        warp = await pickWarpForSession();
+    } catch {
+        warp = randomWarpName();
+    }
+    if (!warp) warp = randomWarpName();
+
+    logOk(`прогулка → /warp ${warp} (25–30м)`);
+    try {
+        bot.chat(`/warp ${warp}`);
+    } catch {
+        /* ignore */
+    }
+    config.lastWarp = warp;
+    config.lastWarpTime = Date.now();
+    await waitWarpTeleport();
+    if (abort()) return true;
+
+    ensurePhysicsOn(bot);
+    const end = Date.now() + 3500 + Math.floor(Math.random() * 1500);
+    while (Date.now() < end) {
+        if (abort()) break;
+        const key = PROMENADE_MOVE_KEYS[Math.floor(Math.random() * PROMENADE_MOVE_KEYS.length)];
+        try {
+            bot.setControlState(key, true);
+            await sleepMs(400 + Math.floor(Math.random() * 500));
+            bot.setControlState(key, false);
+            await sleepMs(80 + Math.floor(Math.random() * 120));
+        } catch {
+            break;
+        }
+    }
+    try {
+        for (const k of PROMENADE_MOVE_KEYS) bot.setControlState(k, false);
+    } catch {
+        /* ignore */
+    }
+    logOk(`прогулка → конец (${warp})`);
+    return true;
+}
+
 /**
  * FunTime глухо игнорит /ah /balance /warp, пока entity в полёте/яме.
  * Для команд достаточно onGround / standingOnFloor — без solid-chunk магии
@@ -3051,7 +3116,11 @@ async function sellItems() {
         if (bot) {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
-            // прогулок нет — только sell / AH; motion только в antiAfkIfNeeded
+            await ensureGroundedForCommands('sell', () => !isSellSessionAlive(gen));
+            if (!isSellSessionAlive(gen)) return;
+            // раз в 25–30 мин (иногда skip): /warp + короткий WASD как в июне
+            await maybePromenadeWarp(() => !isSellSessionAlive(gen));
+            if (!isSellSessionAlive(gen)) return;
             await ensureGroundedForCommands('sell', () => !isSellSessionAlive(gen));
             if (!isSellSessionAlive(gen)) return;
             await dropTrash();
