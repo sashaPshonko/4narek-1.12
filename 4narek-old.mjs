@@ -40,11 +40,13 @@ import {
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, randomWarpName, randomWarpCmd } from './lib/warp-pick.mjs';
 import {
-    runAntiAfkMotion as runVanillaMove,
-    nextWalkGapMs as nextVanillaWalkGapMs,
     patchWalking as patchVanillaMove,
 } from './lib/vanilla-move.mjs';
-import { shouldAttemptWalk, walkRandomRouteStop } from './lib/walk-route.mjs';
+import {
+    clientLikeUnAfk,
+    nextSimpleWalkGapMs as nextVanillaWalkGapMs,
+} from './lib/afk-simple.mjs';
+import { shouldAttemptWalk } from './lib/walk-route.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isStandingOnFloor, isNearPitEdge } from './lib/wasd-pit-guard.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
@@ -1261,7 +1263,7 @@ const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 /** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
 const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
 /** Прогулка внутри sell не должна съедать весь бюджет — иначе AH/книга не стартуют. */
-const WALK_IN_SELL_BUDGET_MS = 45_000;
+const WALK_IN_SELL_BUDGET_MS = 20_000;
 
 let sellListAckResolve = null;
 
@@ -1972,11 +1974,7 @@ async function main() {
             config.noCommandsUntil = Date.now() + 15_000;
         },
     });
-    logOk(
-        [502, 504].includes(Number(config.anarchy))
-            ? 'anti-AFK → forward+мышь (look-steer), portal если только назад'
-            : 'anti-AFK → walk-route WASD (без look), portal если только назад',
-    );
+    logOk('anti-AFK → client-like: warp + короткий look/WASD (GCD мышь, без маршрута)');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2942,72 +2940,35 @@ async function sellItems() {
                     botWorkerStartTime,
                 )
             ) {
+                // Без длинной ходьбы по карте — только /warp + короткий client-like тычок.
                 await rnd('BASE_DELAY');
                 if (!isSellSessionAlive(gen)) return;
-                await waitForEventLoopOk({ log: (m) => logWarn(m) });
-                const prevPhysics = bot.physicsEnabled;
-                ensurePhysicsOn(bot);
-                const walkDeadline = Date.now() + WALK_IN_SELL_BUDGET_MS;
-                const walkAbort = () => !isSellSessionAlive(gen) || Date.now() > walkDeadline;
-                // lookLock НЕ держим на всю прогулку: иначе wrapChat копит команды.
+                const rescue = randomWarpName();
+                logInfo(`прогулка → /warp ${rescue} (simple, без маршрута)`);
                 try {
-                    const walk = await walkRandomRouteStop(bot, {
-                        shouldAbort: walkAbort,
-                        log: (msg) => logInfo(msg),
-                        username: config.username,
-                        anarchy: config.anarchy,
-                        onWarp: (name) => {
-                            config.lastWarp = name;
-                        },
-                    });
-                    config.lastWarpTime = Date.now();
-                    if (walk.ok) {
-                        logOk(
-                            `прогулка → стоп (${walk.stop.x.toFixed(0)}, ${walk.stop.z.toFixed(0)})`
-                            + (walk.legs != null ? ` legs=${walk.legs}` : ''),
-                        );
-                    } else {
-                        const why = Date.now() > walkDeadline && isSellSessionAlive(gen)
-                            ? 'walk_budget'
-                            : (walk.reason || 'fail');
-                        logWarn(`прогулка → ${why}`);
-                        // off_map / y_desync: один рандомный /warp и дальше sell→AH, не крутить 3мин
-                        if (why === 'off_map' || why === 'y_desync' || why === 'walk_budget') {
-                            if (Date.now() >= (config.noCommandsUntil || 0) && config.timeJoinAnarchy > 0) {
-                                const rescue = randomWarpName();
-                                try {
-                                    bot.chat(`/warp ${rescue}`);
-                                } catch {
-                                    /* ignore */
-                                }
-                                config.lastWarp = rescue;
-                                config.lastWarpTime = Date.now();
-                                const until = Date.now() + 4500;
-                                while (Date.now() < until) {
-                                    if (!isSellSessionAlive(gen)) break;
-                                    await sleepMs(200);
-                                }
-                            } else {
-                                logWarn(`прогулка → ${why}, warp skip (лимобо/no-cmd)`);
-                            }
-                        }
-                    }
-                } finally {
-                    try {
-                        for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
-                            bot.setControlState(key, false);
-                        }
-                    } catch {
-                        /* ignore */
-                    }
-                    lastLookAt = Date.now();
-                    if (prevPhysics === false && isInConfigurationTransfer()) {
-                        bot.physicsEnabled = false;
-                    } else {
-                        ensurePhysicsOn(bot);
-                    }
+                    bot.chat(`/warp ${rescue}`);
+                } catch {
+                    /* ignore */
                 }
-                // anti-AFK/look — ПОСЛЕ listing/AH: иначе полёт у ямы → FunTime глушит /ah,/balance
+                config.lastWarp = rescue;
+                config.lastWarpTime = Date.now();
+                await waitWarpTeleport();
+                if (!isSellSessionAlive(gen)) return;
+                ensurePhysicsOn(bot);
+                lookLock = true;
+                try {
+                    const walked = await clientLikeUnAfk(
+                        bot,
+                        (msg) => logOk(msg),
+                        () => !isSellSessionAlive(gen),
+                    );
+                    logOk(`прогулка → client nudge walked=${Number(walked).toFixed(1)}`);
+                } finally {
+                    lookLock = false;
+                    lastLookAt = Date.now();
+                    config.walkTime = Date.now();
+                    config.walkGapMs = nextVanillaWalkGapMs();
+                }
             } else {
                 // без прогулки не крутим WASD до команд
             }
@@ -3298,7 +3259,7 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK: на 502 — forward+мышь; иначе WASD. @returns {Promise<number>} walked xz */
+/** Anti-AFK / осмотр: короткий client-like look+клавиши (эталон motion-records). */
 async function lookAroundSpin(shouldAbort = null) {
     if (!(await pauseAfterChatBeforeLook(shouldAbort))) return 0;
     if (typeof shouldAbort === 'function' && shouldAbort()) return 0;
@@ -3308,15 +3269,11 @@ async function lookAroundSpin(shouldAbort = null) {
     }
 
     await waitForEventLoopOk({ log: (m) => logWarn(m) });
-    const prevPhysics = bot.physicsEnabled;
     ensurePhysicsOn(bot);
     lookLock = true;
     let walked = 0;
     try {
-        walked = await runVanillaMove(bot, (msg) => logOk(msg), shouldAbort, {
-            anarchy: config.anarchy,
-            lookSteer: [502, 504].includes(Number(config.anarchy)),
-        }) || 0;
+        walked = await clientLikeUnAfk(bot, (msg) => logOk(msg), shouldAbort) || 0;
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -3327,14 +3284,9 @@ async function lookAroundSpin(shouldAbort = null) {
         }
         lookLock = false;
         lastLookAt = Date.now();
-        // не возвращаем false — physics держим как у живого клиента
-        if (prevPhysics === false && isInConfigurationTransfer()) {
-            bot.physicsEnabled = false;
-        } else {
-            ensurePhysicsOn(bot);
-        }
+        ensurePhysicsOn(bot);
     }
-    const after = 220 + Math.floor(Math.random() * 380);
+    const after = 180 + Math.floor(Math.random() * 320);
     const deadline = Date.now() + after;
     while (Date.now() < deadline) {
         if (typeof shouldAbort === 'function' && shouldAbort()) break;
@@ -3360,7 +3312,7 @@ async function antiAfkIfNeeded(shouldAbort = null) {
     if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
     let walked = await lookAroundSpin(shouldAbort);
-    if (walked < 1.0 && !(typeof shouldAbort === 'function' && shouldAbort())) {
+    if (walked < 0.5 && !(typeof shouldAbort === 'function' && shouldAbort())) {
         logAfk(`мало walked=${walked.toFixed(1)} → retry после ground`);
         await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
         if (!(typeof shouldAbort === 'function' && shouldAbort())) {
@@ -3368,22 +3320,8 @@ async function antiAfkIfNeeded(shouldAbort = null) {
         }
     }
 
-    // FunTime иногда снимает AFK от jump на месте, когда WASD режет pit/чанки.
-    if (walked < 1.0 && bot?.entity && (bot.entity.onGround || isStandingOnFloor(bot))) {
-        try {
-            ensurePhysicsOn(bot);
-            bot.setControlState('jump', true);
-            await sleepMs(350);
-            bot.setControlState('jump', false);
-            await sleepMs(400);
-            walked = Math.max(walked, 1.0);
-            logAfk('jump на месте как soft un-AFK');
-        } catch {
-            /* ignore */
-        }
-    }
-
-    if (walked >= 1.0) {
+    // FunTime иногда снимает AFK от jump на месте (уже внутри clientLikeUnAfk).
+    if (walked >= 0.5) {
         config.afk = false;
         logOk(`AFK снят (walked=${walked.toFixed(1)})`);
     } else {
