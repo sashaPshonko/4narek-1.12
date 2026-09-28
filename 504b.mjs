@@ -10,6 +10,7 @@ import { buildTelegramBotOptions, attachTelegramDiagnostics, ensureTelegramProxy
 import {
     resolveGoType,
     applyPricesToBots,
+    attachClanMates,
     clearBotPresence,
     collectFleetTypes,
     collectOrchRoster,
@@ -208,6 +209,7 @@ async function loadBotsConfig() {
             });
         }
         
+        attachClanMates(bots);
         console.log(`✅ bots.json загружен (${bots.size} ботов)`);
     } catch (error) {
         await sendAlert(`❌ Ошибка загрузки ${botsPath}: ${error.message}`);

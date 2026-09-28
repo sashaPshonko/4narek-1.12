@@ -301,6 +301,23 @@ export function itemPricesForBot(catalog, prices, goType) {
     return mergeCatalogWithPrices(catalog, prices).filter((item) => catalogTypeMatchesGoType(item.type, goType, item.name));
 }
 
+/**
+ * Сколько ботов на той же анке (общий клан) — для деления saveSum.
+ * Считаем всех из bots.json, не только онлайн: доля в казне должна ждать рестарт соклана.
+ */
+export function attachClanMates(bots) {
+    if (!bots || typeof bots.values !== 'function') return;
+    const counts = new Map();
+    for (const bot of bots.values()) {
+        const an = String(bot?.anarchy ?? '');
+        counts.set(an, (counts.get(an) || 0) + 1);
+    }
+    for (const bot of bots.values()) {
+        const n = counts.get(String(bot?.anarchy ?? '')) || 1;
+        bot.clanMates = Math.max(1, n);
+    }
+}
+
 /** Успешные воркеры → типы для Go (без id предметов) */
 /** Все go-типы из bots.json (чем этот оркестратор может торговать) */
 export function collectFleetTypes(bots) {

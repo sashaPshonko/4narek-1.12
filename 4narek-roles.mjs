@@ -18,6 +18,7 @@ import {
     isBotTradeItem,
     collectAhBookLots,
 } from './items/slotInfo.mjs';
+import { clanKeepSum } from './lib/clan-save-sum.mjs';
 import {
     isUuidBlockedByOther,
     mergeBuyingClaim,
@@ -334,7 +335,8 @@ const accept = 'подтверждение покупки';
 
 const LOBBY_IGNORE_MS = 60_000;
 /** FunTime: /clan invest не чаще раза в 15 минут */
-const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
+const CLAN_INVEST_COOLDOWN_MS = 3 * 60 * 1000;
+const CLAN_INVEST_MIN = 1_000_000;
 const LOBBY_BROADCAST_MARKERS = [
     '⚡ Наша группа ВК vk.com/funtime',
     '⚡ Наш Телеграм t.me/funtime',
@@ -393,6 +395,7 @@ const config = {
     type: workerData.type,
     item: workerData.item,
     goType: workerData.goType,
+    clanMates: Math.max(1, Number(workerData.clanMates) || 1),
     timeJoinAnarchy: 0,
     lastWarpTime: 0,
     enoughItems: false,
@@ -638,7 +641,7 @@ function getIdBySellPrice(price) {
     return found?.id ?? '';
 }
 
-/** Сумма 5× самого дорогого предмета из каталога бота (priceSell, goType). */
+/** На руках: 1×top + доля пула 5×top на clanMates. */
 function getSaveSum() {
     if (!Array.isArray(config.items) || !config.items.length) return null;
 
@@ -653,8 +656,7 @@ function getSaveSum() {
         if (unitPrice > bestPrice) bestPrice = unitPrice;
     }
 
-    if (!bestPrice) return null;
-    return bestPrice * 5;
+    return clanKeepSum(bestPrice, config.clanMates);
 }
 
 /** Баланс «в норме» для Go: ≥ половины saveSum. */
@@ -1372,7 +1374,7 @@ async function sellItems() {
                 const saveSum = getSaveSum();
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
                     const investSum = config.balance - saveSum;
-                    if (investSum > 5_000_000) {
+                    if (investSum > CLAN_INVEST_MIN) {
                         const since = Date.now() - (config.lastClanInvestAt || 0);
                         if (since < CLAN_INVEST_COOLDOWN_MS) {
                             logInfo(
@@ -1380,6 +1382,9 @@ async function sellItems() {
                             );
                         } else {
                             await rnd('AH_CMD');
+                            logInfo(
+                                `/clan invest ${investSum} (keep ${saveSum}, mates ${config.clanMates})`,
+                            );
                             bot.chat(`/clan invest ${investSum}`);
                             config.lastClanInvestAt = Date.now();
                         }

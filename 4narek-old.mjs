@@ -25,6 +25,7 @@ import {
 } from './items/slotInfo.mjs';
 import { pricesMatch } from './items/listing-memory.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
+import { clanKeepSum } from './lib/clan-save-sum.mjs';
 
 import {
     isUuidBlockedByOther,
@@ -713,6 +714,8 @@ const config = {
     type: workerData.type,
     item: workerData.item,
     goType: workerData.goType,
+    /** Ботов на этой анке (доля saveSum). */
+    clanMates: Math.max(1, Number(workerData.clanMates) || 1),
     timeJoinAnarchy: 0,
     /** До этого ts — sell без walk, сразу listing/AH. */
     preferAhUntil: 0,
@@ -1260,7 +1263,9 @@ const SELL_EMPTY_MARKER = 'Вы не можете продать Воздух';
 const SELL_LIST_ACK_TIMEOUT_MS = 2500;
 const SELL_SLOT_MAX_ATTEMPTS = 5;
 /** FunTime: /clan invest не чаще раза в 15 минут */
-const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
+const CLAN_INVEST_COOLDOWN_MS = 3 * 60 * 1000;
+/** Минимальный остаток → казна (чтобы делиться сокланам). */
+const CLAN_INVEST_MIN = 1_000_000;
 /** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
 const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
 
@@ -1345,7 +1350,10 @@ function hasBotCategoryPriceChanged(prevItems, nextItems) {
     return false;
 }
 
-/** Сумма 5× самого дорогого предмета из каталога бота (priceSell, goType). */
+/**
+ * На руках: 1× top-лот + доля остатка пула 5×top на соклановцев (clanMates).
+ * Solo (mates=1) = как раньше 5×top.
+ */
 function getSaveSum() {
     if (!Array.isArray(config.items) || !config.items.length) return null;
 
@@ -1360,8 +1368,7 @@ function getSaveSum() {
         if (unitPrice > bestPrice) bestPrice = unitPrice;
     }
 
-    if (!bestPrice) return null;
-    return bestPrice * 5;
+    return clanKeepSum(bestPrice, config.clanMates);
 }
 
 function getHeldItemInfo() {
@@ -3176,7 +3183,7 @@ async function sellItems() {
                 const saveSum = getSaveSum();
                 if (saveSum != null && config.balance != null && config.balance > saveSum) {
                     const investSum = config.balance - saveSum;
-                    if (investSum > 5_000_000) {
+                    if (investSum > CLAN_INVEST_MIN) {
                         const since = Date.now() - (config.lastClanInvestAt || 0);
                         if (since < CLAN_INVEST_COOLDOWN_MS) {
                             logInfo(
@@ -3184,6 +3191,9 @@ async function sellItems() {
                             );
                         } else {
                             await rnd('AH_CMD');
+                            logInfo(
+                                `/clan invest ${investSum} (keep ${saveSum}, mates ${config.clanMates})`,
+                            );
                             bot.chat(`/clan invest ${investSum}`);
                             config.lastClanInvestAt = Date.now();
                         }
