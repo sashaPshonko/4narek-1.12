@@ -256,6 +256,15 @@ function itemMatchesConfigEntry(item, configItem, allEnchants) {
     if (exceedsMaxEffectLevels(allEnchants, getMaxEffectLevels(configItem))) {
         return false;
     }
+    // exact_effects: никаких лишних чар (effects:[] + exact → полностью голый предмет)
+    if (configItem.exact_effects || configItem.exactEffects) {
+        const requiredNames = new Set(
+            requiredEffects.map((e) => normalizeEnchantName(e?.name)).filter(Boolean),
+        );
+        if (allEnchants.some((e) => !requiredNames.has(normalizeEnchantName(e?.name)))) {
+            return false;
+        }
+    }
     return true;
 }
 
