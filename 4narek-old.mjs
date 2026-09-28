@@ -35,6 +35,7 @@ import {
     ahBuyDelayMs,
     ahGlassDelayMs,
     pickAhBrowseAction,
+    pickAhReloadSlot,
     initAhTempo,
 } from './lib/ah-buy-tempo.mjs';
 import { pickWarp, randomWarpName, randomWarpCmd, shouldAttemptWarp } from './lib/warp-pick.mjs';
@@ -752,6 +753,10 @@ const config = {
     needRTP: false,
     hasDangerousTrash: false,
     needReloadAH: false,
+    /** Сколько раз подряд кликнули снятие в хранилище без смены GUI (призрак «уже купили»). */
+    storageStaleUnlistStreak: 0,
+    storageStaleUnlistSlot: -1,
+    storageStaleUnlistKey: '',
     /** Orch capital plan (равная доля кэша). */
     capitalKeepSum: null,
     maxBuyPrice: null,
@@ -994,6 +999,36 @@ function ahWindowContentKey(win) {
  * @returns {'changed'|'other_menu'|'no_window'|'newkey'|'timeout'}
  */
 async function waitAhGuiSettle(bot, { key, contentBefore, minSettleMs = 250, pollMs = 100 } = {}) {
+    return waitGuiSettle(bot, {
+        key,
+        contentBefore,
+        expectMenu: analysisAH,
+        minSettleMs,
+        pollMs,
+    });
+}
+
+/** То же для «Хранилище» — FunTime часто обновляет слоты in-place после покупки чужим. */
+async function waitStorageGuiSettle(bot, { key, contentBefore, minSettleMs = 250, pollMs = 100 } = {}) {
+    return waitGuiSettle(bot, {
+        key,
+        contentBefore,
+        expectMenu: myItems,
+        minSettleMs,
+        pollMs,
+    });
+}
+
+/**
+ * @returns {'changed'|'other_menu'|'no_window'|'newkey'|'timeout'}
+ */
+async function waitGuiSettle(bot, {
+    key,
+    contentBefore,
+    expectMenu,
+    minSettleMs = 250,
+    pollMs = 100,
+} = {}) {
     const maxMs = getDelayMs('WINDOW_DELAY');
     const t0 = Date.now();
     while (true) {
@@ -1008,12 +1043,36 @@ async function waitAhGuiSettle(bot, { key, contentBefore, minSettleMs = 250, pol
         if (!bot.currentWindow) return 'no_window';
 
         const menu = resolveWindowMenu(bot.currentWindow);
-        if (menu !== analysisAH) return 'other_menu';
+        if (expectMenu && menu !== expectMenu) return 'other_menu';
 
         if (Date.now() - t0 >= minSettleMs && contentBefore != null) {
             if (ahWindowContentKey(bot.currentWindow) !== contentBefore) return 'changed';
         }
     }
+}
+
+/** Кнопка «обновить» в хранилище = тот же слот 50, что reload на АХ. */
+async function reloadStorageWindow(bot, key, reason) {
+    const slot = pickAhReloadSlot();
+    const contentBefore = ahWindowContentKey(bot.currentWindow);
+    logInfo(`хранилище → reload слот ${slot} (${reason})`);
+    config.menu = myItems;
+    await safeClickBuy(bot, slot, delayMs({ min: 800, max: 1800 }), key);
+    if (config.key !== key) return 'newkey';
+    const settle = await waitStorageGuiSettle(bot, { key, contentBefore });
+    config.storageStaleUnlistStreak = 0;
+    config.storageStaleUnlistSlot = -1;
+    config.storageStaleUnlistKey = '';
+    config.needReloadAH = false;
+    if (settle === 'changed') {
+        logInfo('хранилище → reload in-place (слоты сменились)');
+    } else if (settle === 'other_menu' && bot.currentWindow) {
+        config.menu = resolveWindowMenu(bot.currentWindow);
+        logInfo(`хранилище → после reload окно «${config.menu}»`);
+    } else if (settle === 'no_window') {
+        logWarn('хранилище → после reload GUI нет → safeAH');
+    }
+    return settle;
 }
 
 /** Новый ключ: этот windowOpen. Клик не бросаем — дожимаем остаток задержки уже с новым ключом. */
@@ -1730,6 +1789,7 @@ async function handleChatMessage(text) {
         return;
     }
     if (text.includes('Не так быстро..') || text.includes('[✘] Ошибка! Этот товар уже Купили!')) {
+        // АХ browse И хранилище: GUI часто остаётся со старым слотом → reload слот 50.
         config.needReloadAH = true;
         return;
     }
@@ -2390,6 +2450,18 @@ async function main() {
             case myItems:
                 config.needReset = false;
                 await syncListingIdsFromStorageWindow();
+
+                // «Уже купили» / залипший слот — обновить GUI (слот 50), не долбить призрак.
+                if (config.needReloadAH) {
+                    const settle = await reloadStorageWindow(bot, key, 'needReload (чат/призрак)');
+                    if (settle === 'newkey') return;
+                    if (settle === 'no_window') {
+                        await safeAH();
+                        return;
+                    }
+                    break;
+                }
+
                 // enoughItems off только когда слот 0 пуст (= лоты сняты / хранилище пусто слева).
                 if (!bot.currentWindow?.slots[0] && config.enoughItems) {
                     config.enoughItems = false;
@@ -2448,16 +2520,70 @@ async function main() {
                 }
 
                 const unlist = findStorageSlotToUnlist();
+                const storageKeyNow = ahWindowContentKey(bot.currentWindow);
+
+                // Тот же слот + тот же GUI ≥2 раза подряд → reload 50 (окно не обновилось).
+                if (
+                    unlist !== null
+                    && unlist.slot === config.storageStaleUnlistSlot
+                    && storageKeyNow
+                    && storageKeyNow === config.storageStaleUnlistKey
+                    && config.storageStaleUnlistStreak >= 2
+                ) {
+                    const settle = await reloadStorageWindow(
+                        bot,
+                        key,
+                        `залип слот ${unlist.slot} ×${config.storageStaleUnlistStreak}`,
+                    );
+                    if (settle === 'newkey') return;
+                    if (settle === 'no_window') {
+                        await safeAH();
+                        return;
+                    }
+                    break;
+                }
 
                 if (unlist !== null) {
                     logInfo(`хранилище → снять слот ${unlist.slot} (${unlist.reason})`);
                     const unlistSlot = unlist.slot;
+                    const contentBeforeUnlist = storageKeyNow;
                     config.needSell = true;
                     config.menu = myItems;
-                    // быстрее: один клик, короткий UNLIST (CD «раз в минуту» ловим в чате)
                     await safeClickBuy(bot, unlistSlot, delayMs({ min: 450, max: 900 }), key);
+                    if (config.key !== key) return;
+                    const settleUnlist = await waitStorageGuiSettle(bot, {
+                        key,
+                        contentBefore: contentBeforeUnlist,
+                        minSettleMs: 200,
+                    });
+                    if (settleUnlist === 'newkey') return;
+                    if (settleUnlist === 'changed') {
+                        config.storageStaleUnlistStreak = 0;
+                        config.storageStaleUnlistSlot = -1;
+                        config.storageStaleUnlistKey = '';
+                    } else if (settleUnlist !== 'other_menu' && settleUnlist !== 'no_window') {
+                        // GUI не сменился — считаем застой (купили / призрак).
+                        if (
+                            unlistSlot === config.storageStaleUnlistSlot
+                            && contentBeforeUnlist === config.storageStaleUnlistKey
+                        ) {
+                            config.storageStaleUnlistStreak += 1;
+                        } else {
+                            config.storageStaleUnlistStreak = 1;
+                            config.storageStaleUnlistSlot = unlistSlot;
+                            config.storageStaleUnlistKey = contentBeforeUnlist;
+                        }
+                        // Чат «уже купили» мог выставить флаг асинхронно — подхватим на след. цикле.
+                        if (config.storageStaleUnlistStreak >= 2) {
+                            config.needReloadAH = true;
+                        }
+                    }
                     break;
                 }
+
+                config.storageStaleUnlistStreak = 0;
+                config.storageStaleUnlistSlot = -1;
+                config.storageStaleUnlistKey = '';
 
                 // После «снять» / inv≥27 — продать (+ walk внутри sell). КД-снятие тоже сюда.
                 if ((config.needSell || isBotInventoryFull()) && hasBotItem() && !config.enoughItems) {
