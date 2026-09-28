@@ -573,8 +573,9 @@ function configurationTransferAgeMs() {
 const STORAGE_AH_SLOTS = 5;
 
 const firstAHSlot = 0;
-/** Две строки лотов АХ: 0–8 и 9–17. */
-const lastAHSlot = 17;
+/** Книга: все 5 строк лотов АХ (0–44). Кнопки/reload — с 45. */
+const lastAHSlot = 44;
+/** Покупка только верхние 2 строки (0–17) — самые дешёвые при сортировке АХ. */
 const lastBuyableAHSlot = 17;
 const slotToStorage = 46;
 const leftMouseButton = 0;
@@ -3553,14 +3554,15 @@ async function safeBalance() {
 
 
 /**
- * Первый выгодный слот слева направо (0–17).
+ * Первый выгодный слот слева направо в buy-зоне (0–17).
+ * Книга в finally — весь диапазон lastAHSlot (0–44).
  */
 async function getBestAHSlot() {
     try {
         if (!bot?.currentWindow?.slots) return null;
         let buyItem = null;
         try {
-            for (let slot = firstAHSlot; slot <= lastAHSlot; slot++) {
+            for (let slot = firstAHSlot; slot <= lastBuyableAHSlot; slot++) {
             const slotData = bot.currentWindow.slots[slot];
             if (!slotData) continue;
 
