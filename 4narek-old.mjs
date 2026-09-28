@@ -44,9 +44,7 @@ import {
 } from './lib/vanilla-move.mjs';
 import {
     clientLikeUnAfk,
-    nextSimpleWalkGapMs as nextVanillaWalkGapMs,
 } from './lib/afk-simple.mjs';
-import { shouldAttemptWalk } from './lib/walk-route.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isStandingOnFloor, isNearPitEdge } from './lib/wasd-pit-guard.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
@@ -1262,8 +1260,6 @@ const SELL_SLOT_MAX_ATTEMPTS = 5;
 const CLAN_INVEST_COOLDOWN_MS = 15 * 60 * 1000;
 /** Макс. длительность одной продажи — иначе залипает sellInFlight и лобби не может перезайти. */
 const SELL_ITEMS_MAX_MS = 3 * 60 * 1000;
-/** Прогулка внутри sell не должна съедать весь бюджет — иначе AH/книга не стартуют. */
-const WALK_IN_SELL_BUDGET_MS = 20_000;
 
 let sellListAckResolve = null;
 
@@ -1974,7 +1970,7 @@ async function main() {
             config.noCommandsUntil = Date.now() + 15_000;
         },
     });
-    logOk('anti-AFK → client-like: warp + короткий look/WASD (GCD мышь, без маршрута)');
+    logOk('anti-AFK → только antiAfkIfNeeded: WASD или один look (GCD), без jump/прогулок');
     installPlayerActionGate(bot);
     // карты капчи копятся сразу — к моменту строки BotFilter PNG уже почти готов
     attachMapCache(bot);
@@ -2205,9 +2201,8 @@ async function main() {
                         return;
                     }
 
-                    if (config.walkTime < Date.now() - (config.walkGapMs || 55_000) ||
-                        (config.needSell && !config.enoughItems && hasBotItem())) {
-                        logInfo('АХ → sellItems (осмотр/needSell)');
+                    if (config.needSell && !config.enoughItems && hasBotItem()) {
+                        logInfo('АХ → sellItems (needSell)');
                         await sellItems();
                         if (config.key !== key) return;
                         if (!config.hasDangerousTrash) await safeAH();
@@ -2931,48 +2926,7 @@ async function sellItems() {
         if (bot) {
             await closeCurrentWindowSafe();
             if (!isSellSessionAlive(gen)) return;
-            if (
-                Date.now() >= (config.noCommandsUntil || 0)
-                && Date.now() >= (config.preferAhUntil || 0)
-                && shouldAttemptWalk(
-                    config.username,
-                    config.lastWarpTime || 0,
-                    botWorkerStartTime,
-                )
-            ) {
-                // Без длинной ходьбы по карте — только /warp + короткий client-like тычок.
-                await rnd('BASE_DELAY');
-                if (!isSellSessionAlive(gen)) return;
-                const rescue = randomWarpName();
-                logInfo(`прогулка → /warp ${rescue} (simple, без маршрута)`);
-                try {
-                    bot.chat(`/warp ${rescue}`);
-                } catch {
-                    /* ignore */
-                }
-                config.lastWarp = rescue;
-                config.lastWarpTime = Date.now();
-                await waitWarpTeleport();
-                if (!isSellSessionAlive(gen)) return;
-                ensurePhysicsOn(bot);
-                lookLock = true;
-                try {
-                    const walked = await clientLikeUnAfk(
-                        bot,
-                        (msg) => logOk(msg),
-                        () => !isSellSessionAlive(gen),
-                    );
-                    logOk(`прогулка → client nudge walked=${Number(walked).toFixed(1)}`);
-                } finally {
-                    lookLock = false;
-                    lastLookAt = Date.now();
-                    config.walkTime = Date.now();
-                    config.walkGapMs = nextVanillaWalkGapMs();
-                }
-            } else {
-                // без прогулки не крутим WASD до команд
-            }
-            if (!isSellSessionAlive(gen)) return;
+            // прогулок нет — только sell / AH; motion только в antiAfkIfNeeded
             await ensureGroundedForCommands('sell', () => !isSellSessionAlive(gen));
             if (!isSellSessionAlive(gen)) return;
             await dropTrash();
@@ -3259,21 +3213,33 @@ function isBotInventoryFull() {
     }
 }
 
-/** Anti-AFK / осмотр: короткий client-like look+клавиши (эталон motion-records). */
-async function lookAroundSpin(shouldAbort = null) {
-    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return 0;
-    if (typeof shouldAbort === 'function' && shouldAbort()) return 0;
+/** Сход с AFK: только WASD или одиночный look (эталон записи). Jump/прогулок нет. */
+async function antiAfkIfNeeded(shouldAbort = null) {
+    if (!config.afk) return;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
     if (bot?._viewPilotActive) {
         logInfo('anti-AFK → skip, pilot активен');
-        return 0;
+        return;
     }
+
+    logAfk('сходу с AFK → motion');
+
+    // Не рвём AH GUI, если уже browse идёт — иначе книга никогда не копится.
+    if (!config.ahInFlight || !bot?.currentWindow) {
+        await closeCurrentWindowSafe();
+    }
+    await ensureGroundedForCommands('antiAFK', shouldAbort);
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
+
+    if (!(await pauseAfterChatBeforeLook(shouldAbort))) return;
+    if (typeof shouldAbort === 'function' && shouldAbort()) return;
 
     await waitForEventLoopOk({ log: (m) => logWarn(m) });
     ensurePhysicsOn(bot);
     lookLock = true;
-    let walked = 0;
+    let result = { ok: false, mode: 'none' };
     try {
-        walked = await clientLikeUnAfk(bot, (msg) => logOk(msg), shouldAbort) || 0;
+        result = await clientLikeUnAfk(bot, (msg) => logOk(msg), shouldAbort);
     } finally {
         try {
             for (const key of ['forward', 'back', 'left', 'right', 'jump', 'sprint', 'sneak']) {
@@ -3286,46 +3252,12 @@ async function lookAroundSpin(shouldAbort = null) {
         lastLookAt = Date.now();
         ensurePhysicsOn(bot);
     }
-    const after = 180 + Math.floor(Math.random() * 320);
-    const deadline = Date.now() + after;
-    while (Date.now() < deadline) {
-        if (typeof shouldAbort === 'function' && shouldAbort()) break;
-        await sleepMs(Math.min(50, deadline - Date.now()));
-    }
-    config.walkTime = Date.now();
-    config.walkGapMs = nextVanillaWalkGapMs();
-    return Number(walked) || 0;
-}
 
-/** Сход с AFK — только если реально сдвинулись (иначе сервер остаётся в AFK). */
-async function antiAfkIfNeeded(shouldAbort = null) {
-    if (!config.afk) return;
-    if (typeof shouldAbort === 'function' && shouldAbort()) return;
-
-    logAfk('сходу с AFK → motion');
-
-    // Не рвём AH GUI, если уже browse идёт — иначе книга никогда не копится.
-    if (!config.ahInFlight || !bot?.currentWindow) {
-        await closeCurrentWindowSafe();
-    }
-    await ensureGroundedForCommands('antiAFK', shouldAbort);
-    if (typeof shouldAbort === 'function' && shouldAbort()) return;
-
-    let walked = await lookAroundSpin(shouldAbort);
-    if (walked < 0.5 && !(typeof shouldAbort === 'function' && shouldAbort())) {
-        logAfk(`мало walked=${walked.toFixed(1)} → retry после ground`);
-        await ensureGroundedForCommands('antiAFK-retry', shouldAbort);
-        if (!(typeof shouldAbort === 'function' && shouldAbort())) {
-            walked = Math.max(walked, await lookAroundSpin(shouldAbort));
-        }
-    }
-
-    // FunTime иногда снимает AFK от jump на месте (уже внутри clientLikeUnAfk).
-    if (walked >= 0.5) {
+    if (result?.ok) {
         config.afk = false;
-        logOk(`AFK снят (walked=${walked.toFixed(1)})`);
+        logOk(`AFK снят (${result.mode})`);
     } else {
-        logWarn(`AFK не снят (walked=${walked.toFixed(1)}) — жду следующий цикл`);
+        logWarn(`AFK не снят (${result?.mode || '?'}) — жду следующий цикл`);
     }
 }
 
