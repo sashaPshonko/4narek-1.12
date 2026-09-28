@@ -722,6 +722,8 @@ const config = {
     lastWarpTime: 0,
     lastWarp: null,
     enoughItems: false,
+    /** До этого ts не кликаем снятие лотов (сервер: переставлять раз в минуту). */
+    storageUnlistUntil: 0,
     /** Последний цикл «снять→продать» по КД (даже без enoughItems). */
     lastUnlistCycleAt: Date.now(),
     /** Следующий зазор КД на снятие, мс. */
@@ -1460,6 +1462,13 @@ async function handleChatMessage(text) {
         config.lastResetTime = Date.now();
         config.needReset = false;
         // enoughItems не трогаем — сброс только когда слот 0 хранилища пуст.
+        return;
+    }
+    if (text.includes('переставлять предметы раз в минуту')) {
+        const m = text.match(/Подождите\s+(\d+)\s*сек/i);
+        const sec = Number.isFinite(Number(m?.[1])) ? Number(m[1]) : 60;
+        config.storageUnlistUntil = Date.now() + (sec + 1) * 1000;
+        logWarn(`хранилище → CD перестановки ${sec}с — пауза снятия`);
         return;
     }
     if (text.includes('[☃] Вы успешно купили')) {
@@ -2425,26 +2434,24 @@ async function main() {
                     }
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
-                // Клик 52: таймер 60с или enoughItems (АХ забит) — перевыставить.
-                // enoughItems при этом всё равно снимаем лоты → слот 0 пуст → sellItems.
-                if (config.lastResetTime < Date.now() - 60000 || config.enoughItems) {
+                // Как в июне: клик 52 только раз в ≥60с (таймер сразу), потом break.
+                // enoughItems снимает лоты ниже — не форсит сброс каждый цикл (иначе шторм
+                // поверх серверного «переставлять раз в минуту»).
+                if (config.lastResetTime < Date.now() - 60000) {
+                    config.lastResetTime = Date.now();
                     if (bot.currentWindow?.slots[0]) {
-                        const dueEnough = config.enoughItems;
-                        logInfo(
-                            dueEnough
-                                ? 'хранилище → сброс (клик 52, enoughItems)'
-                                : 'хранилище → сброс (клик 52)',
-                        );
+                        logInfo('хранилище → сброс (клик 52)');
                         config.menu = myItems;
                         await safeClickBuy(bot, 52, delayMs({ min: 1500, max: 4500 }), key);
-                        const deadline = Date.now() + 20_000;
-                        while (Date.now() < deadline && bot.currentWindow) {
-                            if (config.lastResetTime >= Date.now() - 60000) break;
-                            await rnd('POLL');
-                        }
-                    } else if (!config.enoughItems) {
-                        config.lastResetTime = Date.now();
+                        break;
                     }
+                }
+
+                if (Date.now() < (config.storageUnlistUntil || 0)) {
+                    const left = Math.ceil((config.storageUnlistUntil - Date.now()) / 1000);
+                    logInfo(`хранилище → ждут CD перестановки ещё ${left}с`);
+                    await sleepMs(Math.min(2000, Math.max(200, config.storageUnlistUntil - Date.now())));
+                    break;
                 }
 
                 const unlist = findStorageSlotToUnlist();
@@ -2454,7 +2461,13 @@ async function main() {
                     const unlistSlot = unlist.slot;
                     config.needSell = true;
                     config.menu = myItems;
-                    await safeClickBuy(bot, unlistSlot, delayMs({ min: 1500, max: 3500 }), key);
+                    // июнь: UNLIST * (slot + 1) — слот 3 не кликать каждые 2с
+                    await safeClickBuy(
+                        bot,
+                        unlistSlot,
+                        delayMs({ min: 1500, max: 3500 }) * (unlistSlot + 1),
+                        key,
+                    );
                     break;
                 }
 
