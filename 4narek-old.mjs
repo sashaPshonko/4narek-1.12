@@ -2463,13 +2463,8 @@ async function main() {
                     const unlistSlot = unlist.slot;
                     config.needSell = true;
                     config.menu = myItems;
-                    // июнь: UNLIST * (slot + 1) — слот 3 не кликать каждые 2с
-                    await safeClickBuy(
-                        bot,
-                        unlistSlot,
-                        delayMs({ min: 1500, max: 3500 }) * (unlistSlot + 1),
-                        key,
-                    );
+                    // быстрее: один клик, короткий UNLIST (CD «раз в минуту» ловим в чате)
+                    await safeClickBuy(bot, unlistSlot, delayMs({ min: 450, max: 900 }), key);
                     break;
                 }
 
@@ -3593,6 +3588,12 @@ async function getBestAHSlot() {
             }
 
             if (ahPrice >= info.buyPrice) continue;
+
+            // доп. пол маржи: не брать у ≥90% нашей sell (иначе mega/яд3 stale buy≈sell)
+            const sellCap = Math.floor(Number(info.sellPrice) * 0.90);
+            if (Number.isFinite(sellCap) && sellCap > 0 && ahPrice >= sellCap) {
+                continue;
+            }
 
             const maxBuy = Number(config.maxBuyPrice);
             if (Number.isFinite(maxBuy) && maxBuy > 0 && ahPrice > maxBuy) {

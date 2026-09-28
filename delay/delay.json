@@ -12,7 +12,7 @@
   "WINDOW_DELAY": { "min": 1500, "max": 4500 },
   "GLASS": { "min": 400, "max": 1000 },
   "BUY_SLOT": { "min": 700, "max": 1100 },
-  "UNLIST": { "min": 1500, "max": 3500 },
+  "UNLIST": { "min": 450, "max": 900 },
   "AH_CMD": { "min": 2000, "max": 3500 },
   "RTP": { "min": 7100, "max": 7300 },
   "CHECK_WINDOW": 5000
