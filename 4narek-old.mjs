@@ -3273,8 +3273,9 @@ async function moveToHotBar() {
                         break;
                     }
                     try {
+                        await waitForEventLoopOk({ log: (m) => logWarn(m) });
                         await waitActionsSettled();
-                        await rnd('SELL_INV_MOVE');
+                        await rnd('BASE_DELAY');
                         await bot.moveSlotItem(src, slot);
                     } catch (err) {
                         reportError(`moveToHotBar move ${src}->${slot}`, err);
