@@ -109,6 +109,8 @@ function isIgnorableProtocolNoise(err) {
     if (msg.includes('array size is abnormally large')) return true;
     if (msg.includes('client timed out')) return true;
     if (msg.includes("reading 'translate'")) return true;
+    // smart-buffer / protodef: обрезанный пакет FunTime — PartialRead без имени класса
+    if (msg.includes('beyond the bounds of the managed data')) return true;
     return false;
 }
 
