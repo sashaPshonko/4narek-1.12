@@ -21,7 +21,11 @@ import {
     clearStaffCheckRestartFlags,
     handleWorkerKicked,
     authFaultKindFromExitCode,
+    authFaultBlocksRestart,
+    AUTH_FAULT_BAD_PASSWORD,
+    AUTH_FAULT_PROXY,
     markBotAuthFault,
+    reportProxyFault,
     terminateWorkerEntry,
     createMarketFloorTracker,
     sendMarketFloorsToGo,
@@ -211,8 +215,8 @@ async function loadBotsConfig() {
                 itemPrices: [],
                 msgID: 0,
                 msgTime: null,
-                isManualStop: !!(prev.banned || prev.authFault),
-                success: (prev.banned || prev.authFault) ? false : (prev.success ?? false),
+                isManualStop: !!(prev.banned || prev.authFault === 'bad_password'),
+                success: (prev.banned || prev.authFault === 'bad_password') ? false : (prev.success ?? false),
                 banned: !!prev.banned,
                 bannedAt: prev.bannedAt || null,
                 banReason: prev.banReason || '',
@@ -253,9 +257,9 @@ function safePostMessage(username, message) {
 async function runWorker(bot) {
     const username = bot.username;
 
-    if (bot.banned || bot.authFault) {
+    if (bot.banned || authFaultBlocksRestart(bot)) {
         bot.isManualStop = true;
-        console.warn(`⏭ ${username} не стартуем: ${bot.banned ? 'бан' : (bot.authFault === 'proxy_error' ? 'прокси' : 'пароль')}`);
+        console.warn(`⏭ ${username} не стартуем: ${bot.banned ? 'бан' : 'пароль'}`);
         return null;
     }
 
@@ -310,7 +314,7 @@ async function runWorker(bot) {
             worker.on('message', async (message) => {
                 try {
                     if (message.name === 'success') {
-                        if (ackWorkerReady(bots, workers, username)) {
+                        if (ackWorkerReady(bots, workers, username, workerStatusCtx())) {
                             console.log(`✅ ${username} запущен`);
                             pushPresenceToGo();
                         }
@@ -402,9 +406,12 @@ async function runWorker(bot) {
                 workers.delete(username);
 
                 const faultKind = authFaultKindFromExitCode(code);
-                if (faultKind) {
+                if (faultKind === AUTH_FAULT_BAD_PASSWORD) {
                     void markBotAuthFault(username, workerStatusCtx(), faultKind, bot.lastKickReason || `exit ${code}`);
                     return;
+                }
+                if (faultKind === AUTH_FAULT_PROXY) {
+                    void reportProxyFault(username, workerStatusCtx(), bot.lastKickReason || `exit ${code}`);
                 }
 
                 const rotator = getShiftRotator();
@@ -412,12 +419,12 @@ async function runWorker(bot) {
                     return;
                 }
 
-                if (!bot.isManualStop && !bot.authFault && !bot.banned && !isShuttingDown) {
+                if (!bot.isManualStop && !authFaultBlocksRestart(bot) && !bot.banned && !isShuttingDown) {
                     const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason, bot);
                     bot.lastKickReason = '';
                     const restartTimerId = setTimeout(() => {
                         pendingRestarts.delete(username);
-                        if (bot.isManualStop || bot.authFault || bot.banned || isShuttingDown) return;
+                        if (bot.isManualStop || authFaultBlocksRestart(bot) || bot.banned || isShuttingDown) return;
                         console.log(`🔁 Перезапуск ${username} (через ${delayMs / 1000}с)`);
                         runWorker(bot);
                     }, delayMs);

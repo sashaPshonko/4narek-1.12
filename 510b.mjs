@@ -19,6 +19,12 @@ import {
     getWorkerRestartDelayMs,
     clearStaffCheckRestartFlags,
     handleWorkerKicked,
+    authFaultKindFromExitCode,
+    authFaultBlocksRestart,
+    AUTH_FAULT_BAD_PASSWORD,
+    AUTH_FAULT_PROXY,
+    markBotAuthFault,
+    reportProxyFault,
     terminateWorkerEntry,
     createMarketFloorTracker,
     sendMarketFloorsToGo,
@@ -243,7 +249,7 @@ async function runWorker(bot) {
             worker.on('message', async (message) => {
                 try {
                     if (message.name === 'success') {
-                        if (ackWorkerReady(bots, workers, username)) {
+                        if (ackWorkerReady(bots, workers, username, workerStatusCtx())) {
                             console.log(`✅ ${username} запущен`);
                             pushPresenceToGo();
                         }
@@ -330,11 +336,21 @@ async function runWorker(bot) {
                 if (workerData?.timeoutId) clearTimeout(workerData.timeoutId);
                 workers.delete(username);
 
-                if (!bot.isManualStop && !isShuttingDown) {
+                const faultKind = authFaultKindFromExitCode(code);
+                if (faultKind === AUTH_FAULT_BAD_PASSWORD) {
+                    void markBotAuthFault(username, workerStatusCtx(), faultKind, bot.lastKickReason || `exit ${code}`);
+                    return;
+                }
+                if (faultKind === AUTH_FAULT_PROXY) {
+                    void reportProxyFault(username, workerStatusCtx(), bot.lastKickReason || `exit ${code}`);
+                }
+
+                if (!bot.isManualStop && !authFaultBlocksRestart(bot) && !bot.banned && !isShuttingDown) {
                     const delayMs = getWorkerRestartDelayMs(code, bot.lastKickReason, bot);
                     bot.lastKickReason = '';
                     const restartTimerId = setTimeout(() => {
                         pendingRestarts.delete(username);
+                        if (bot.isManualStop || authFaultBlocksRestart(bot) || bot.banned || isShuttingDown) return;
                         console.log(`🔁 Перезапуск ${username} (через ${delayMs / 1000}с)`);
                         runWorker(bot);
                     }, delayMs);

@@ -10,8 +10,10 @@ import { proxyHostFromString } from './lib/proxy-host.mjs';
 import {
     AUTH_FAULT_BAD_PASSWORD,
     AUTH_FAULT_PROXY,
+    EXIT_PROXY_ERROR,
     authFaultKindFromExitCode,
     authFaultLabel,
+    authFaultBlocksRestart,
     isWrongPasswordText,
 } from './lib/auth-fault.mjs';
 import {
@@ -30,6 +32,7 @@ export {
     EXIT_PROXY_ERROR,
     authFaultKindFromExitCode,
     authFaultLabel,
+    authFaultBlocksRestart,
     isWrongPasswordText,
 } from './lib/auth-fault.mjs';
 
@@ -350,7 +353,7 @@ export function pushCapitalPlanToBots(ctx) {
     const now = Date.now();
     const balances = [];
     for (const [username, bot] of bots) {
-        if (!bot || bot.banned || bot.authFault) continue;
+        if (!bot || bot.banned || authFaultBlocksRestart(bot)) continue;
         const wd = workers?.get(username);
         if (!wd?.worker || wd.worker.terminated) continue;
         const bal = Number(bot.balance);
@@ -813,8 +816,11 @@ export function formatOrchestratorPing(stats, bots = null) {
     if (authFaults.length) {
         const lines = authFaults.map((u) => {
             const b = bots?.get(u);
-            const kind = authFaultLabel(b?.authFault);
-            return `${label(u)} (${kind})`;
+            const kind = b?.authFault;
+            if (kind === AUTH_FAULT_PROXY) {
+                return `${label(u)} (прокси, рестартим)`;
+            }
+            return `${label(u)} (${authFaultLabel(kind)})`;
         });
         text += `\n🔧 Сломаны: ${lines.join(', ')}`;
     }
@@ -857,9 +863,14 @@ export async function markBotBanned(username, ctx, reason = '', opts = {}) {
     await ctx.sendAlert(`🚫 ${username}${anarchy} забанен${tag}`, username);
 }
 
-/** Неверный пароль / мёртвая прокси — стоп рестартов, в /fleet как «сломанные». */
+/** Неверный пароль — стоп рестартов, в /fleet как «сломанные». */
 export async function markBotAuthFault(username, ctx, kind, reason = '') {
     const fault = kind === AUTH_FAULT_PROXY ? AUTH_FAULT_PROXY : AUTH_FAULT_BAD_PASSWORD;
+    // proxy_error: только панель + рестарт (см. reportProxyFault)
+    if (fault === AUTH_FAULT_PROXY) {
+        await reportProxyFault(username, ctx, reason);
+        return;
+    }
     const bot = ctx.bots?.get(username);
     if (bot) {
         bot.authFault = fault;
@@ -868,7 +879,6 @@ export async function markBotAuthFault(username, ctx, kind, reason = '') {
         if (!bot.authFaultAt) bot.authFaultAt = new Date().toISOString();
         if (reason) bot.authFaultReason = String(reason).slice(0, 2000);
     }
-    // сразу отменить уже запланированный рестарт (гонка с worker exit)
     const pending = ctx.pendingRestarts?.get(username);
     if (pending) {
         clearTimeout(pending);
@@ -879,6 +889,45 @@ export async function markBotAuthFault(username, ctx, kind, reason = '') {
     const label = authFaultLabel(fault);
     console.warn(`🔧 ${username}${anarchy} — ${label} (без рестартов)`);
     await ctx.sendAlert(`🔧 ${username}${anarchy} — ${label}`, username);
+}
+
+/**
+ * Ошибка прокси: висит на /fleet, пока бот снова не зайдёт (success),
+ * но рестарты НЕ стопаем.
+ */
+export async function reportProxyFault(username, ctx, reason = '') {
+    const bot = ctx.bots?.get(username);
+    const first = bot && bot.authFault !== AUTH_FAULT_PROXY;
+    if (bot) {
+        bot.authFault = AUTH_FAULT_PROXY;
+        bot.success = false;
+        // не isManualStop — иначе exit-handler не рестартнет
+        if (!bot.authFaultAt) bot.authFaultAt = new Date().toISOString();
+        if (reason) bot.authFaultReason = String(reason).slice(0, 2000);
+    }
+    ctx.pushPresenceToGo?.();
+    const anarchy = bot?.anarchy != null ? ` [${bot.anarchy}]` : '';
+    const label = authFaultLabel(AUTH_FAULT_PROXY);
+    if (first) {
+        console.warn(`🔧 ${username}${anarchy} — ${label} (рестарт продолжается)`);
+        await ctx.sendAlert?.(`🔧 ${username}${anarchy} — ${label} (рестартим)`, username);
+    } else {
+        console.warn(`🔧 ${username}${anarchy} — ${label} ещё (ждём рестарт)`);
+    }
+}
+
+/** Снять authFault после успешного входа на анку. */
+export function clearBotAuthFault(bot, ctx = null) {
+    if (!bot?.authFault) return false;
+    const was = bot.authFault;
+    delete bot.authFault;
+    delete bot.authFaultAt;
+    delete bot.authFaultReason;
+    ctx?.pushPresenceToGo?.();
+    if (was === AUTH_FAULT_PROXY) {
+        console.log(`✅ ${bot.username} прокси ок — снят с /fleet`);
+    }
+    return true;
 }
 
 function goHttpBase() {
@@ -1021,7 +1070,7 @@ export function requestFunauthTwoFa(username, ctx) {
  */
 export async function killWorkerAndRestartIn(username, ctx, delayMs = 5000, reason = 'restart') {
     const bot = ctx.bots?.get(username);
-    if (!bot || bot.banned || bot.authFault) return false;
+    if (!bot || bot.banned || authFaultBlocksRestart(bot)) return false;
 
     bot.isManualStop = false;
 
@@ -1045,7 +1094,7 @@ export async function killWorkerAndRestartIn(username, ctx, delayMs = 5000, reas
     const tid = setTimeout(() => {
         void (async () => {
             ctx.pendingRestarts?.delete(username);
-            if (bot.isManualStop || bot.authFault || bot.banned) return;
+            if (bot.isManualStop || authFaultBlocksRestart(bot) || bot.banned) return;
             if (ctx.workers?.get(username)) return;
             try {
                 const { awaitFleetLaunchGrant } = await import('./lib/fleet-launch-gate.mjs');
@@ -1060,7 +1109,7 @@ export async function killWorkerAndRestartIn(username, ctx, delayMs = 5000, reas
                 console.warn(`[launch-gate] restart ${username}: ${e.message}`);
                 return;
             }
-            if (bot.isManualStop || bot.authFault || bot.banned) return;
+            if (bot.isManualStop || authFaultBlocksRestart(bot) || bot.banned) return;
             if (ctx.workers?.get(username)) return;
             console.log(`🔁 Перезапуск ${username} (${reason})`);
             ctx.runWorker?.(bot);
@@ -1209,10 +1258,8 @@ export async function handleWorkerStatusMessage(message, username, ctx) {
         return true;
     }
     if (message?.name === 'proxy_error') {
-        await markBotAuthFault(username, ctx, AUTH_FAULT_PROXY, message.reason || '');
-        if (ctx.shiftRotator?.active) {
-            await ctx.shiftRotator.skipBot(username, 'auth');
-        }
+        await reportProxyFault(username, ctx, message.reason || '');
+        // не skipBot в shift — прокси временная, рестартим
         return true;
     }
     if (message?.name === 'staff_check') {
@@ -1420,13 +1467,13 @@ export function resumeAfterDeskSession(ctx) {
             const entry = ctx.workers?.get(nick);
             const alive = entry?.worker && !entry.worker.terminated;
             if (alive) postWorker(ctx, nick, { type: 'staff_check_resume' });
-            else if (!bot.banned && !bot.authFault && typeof ctx.runWorker === 'function') {
+            else if (!bot.banned && !authFaultBlocksRestart(bot) && typeof ctx.runWorker === 'function') {
                 console.log(`[staff-check] session_end → stay ${nick} упал, старт`);
                 void ctx.runWorker(bot);
             }
             continue;
         }
-        if (bot.banned || bot.authFault) continue;
+        if (bot.banned || authFaultBlocksRestart(bot)) continue;
         if (ctx.shiftRotator?.active) {
             // в режиме смен не поднимаем весь флот после staff-check
             if (nick !== ctx.shiftRotator.activeNick) continue;
@@ -1537,6 +1584,9 @@ export function getWorkerRestartDelayMs(code, kickReason = '', bot = null) {
     if (code === EXIT_STAFF_CHECK || (until > Date.now())) {
         if (until > Date.now()) return Math.max(1000, until - Date.now());
         return STAFF_CHECK_EVACUATE_MS;
+    }
+    if (code === EXIT_PROXY_ERROR || bot?.authFault === AUTH_FAULT_PROXY) {
+        return 20_000;
     }
     const s = String(kickReason);
     if (s.includes('ником уже онлайн') || s.includes('таким-же ником')) {
@@ -1756,11 +1806,14 @@ export function isWorkerReady(bots, username) {
     return !!bots.get(username)?.success;
 }
 
-/** Воркер вошёл на анархию — снимаем startup-таймаут */
-export function ackWorkerReady(bots, workers, username) {
+/** Воркер вошёл на анархию — снимаем startup-таймаут и proxy-fault с /fleet */
+export function ackWorkerReady(bots, workers, username, ctx = null) {
     const bot = bots.get(username);
     if (!bot) return false;
     bot.success = true;
+    if (bot.authFault === AUTH_FAULT_PROXY) {
+        clearBotAuthFault(bot, ctx);
+    }
     // presenceInactive снимается только когда баланс снова ≥ saveSum/2 (treasury_ok)
     const w = workers.get(username);
     if (w?.timeoutId) {
