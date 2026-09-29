@@ -3233,7 +3233,10 @@ async function sellItems() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('sell', () => !isSellSessionAlive(gen)))) {
-            logWarn('продажа → confirm fail, всё равно идём в sell/AH');
+            logWarn('продажа → confirm fail (нет ответа balance/ah) — выход, рестарт воркера');
+            try { bot?.quit?.('dead_session'); } catch { /* ignore */ }
+            forceWorkerExit(1);
+            return;
         }
         if (!isSellSessionAlive(gen)) return;
         config.timeActive = Date.now();
@@ -3598,7 +3601,12 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            logWarn('safeAH → confirm fail, пробуем /ah search');
+            // Зомби-сессия (SOCKS/Mac): команды не доходят, /ah search только шумит → keepAliveError.
+            // Рвём воркер — орк поднимет заново чистым сокетом.
+            logWarn('safeAH → confirm fail (нет ответа balance/ah) — выход, рестарт воркера');
+            try { bot?.quit?.('dead_session'); } catch { /* ignore */ }
+            forceWorkerExit(1);
+            return;
         }
         await ensureGroundedForCommands('safeAH');
         if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
