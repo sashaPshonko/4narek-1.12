@@ -654,7 +654,22 @@ function logTag() {
     return `${ANSI.cyan}[${config.username}]${ANSI.reset}`;
 }
 
+function isNoisyChatLine(raw) {
+    const t = String(raw || '');
+    if (!t.trim()) return true;
+    if (t.includes('★ FunTime') || t.includes('FunTime.su ★')) return true;
+    if (/^[╔╚║═\s]+$/.test(t)) return true;
+    if (t.includes('Добро пожаловать на FunTime')) return true;
+    if (t.includes('Наши социальные сети')) return true;
+    if (t.includes('Приятной игры и новых побед')) return true;
+    if (t.includes('Успешная авторизация')) return true;
+    if (t.includes('уже авторизованы')) return true;
+    if (isLobbyBroadcastMessage(t)) return true;
+    return false;
+}
+
 function logChat(raw) {
+    if (isNoisyChatLine(raw)) return;
     console.log(`${ANSI.dim}${logTag()} 💬 ${raw}${ANSI.reset}`);
 }
 
@@ -1509,12 +1524,16 @@ async function handleChatMessage(text) {
             logWarn(`clan → ${text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms'} (leave/owner ban)`);
             return;
         }
-        const reason = text.includes(CLAN_HELP_MARKER) ? 'not_in_clan' : 'no_perms';
-        logWarn(`clan → ${reason} → Go clan_needed an${config.anarchy}`);
+        // no_perms = уже в клане, без прав — owner setup не нужен
+        if (!text.includes(CLAN_HELP_MARKER)) {
+            logWarn('clan → no_perms (в клане, без прав) — clan_setup не зовём');
+            return;
+        }
+        logWarn(`clan → not_in_clan → Go clan_needed an${config.anarchy}`);
         parentPort.postMessage({
             name: 'clan_setup',
             anarchy: config.anarchy,
-            reason,
+            reason: 'not_in_clan',
         });
         return;
     }
@@ -2835,19 +2854,24 @@ async function drainTreasuryAndLeaveClan({ skipIfOurClan = false } = {}) {
         logInfo('/clan info…');
         bot.chat('/clan info');
         await waitChatFlag(() => Boolean(clanLeaderNick || notInClanHint), 12_000);
-        if (notInClanHint || !clanLeaderNick) {
+        if (notInClanHint) {
             if (skipIfOurClan) {
-                // Раньше: leave skip без clan_needed → Go никогда не звал owner
-                const reason = notInClanHint ? 'not_in_clan' : 'no_clan_leader';
-                logWarn(`/clan info → ${reason} → Go clan_needed an${config.anarchy}`);
+                // Только явный «Помощь по Кланам» — не таймаут /clan info
+                logWarn(`/clan info → not_in_clan → Go clan_needed an${config.anarchy}`);
                 parentPort.postMessage({
                     name: 'clan_setup',
                     anarchy: config.anarchy,
-                    reason,
+                    reason: 'not_in_clan',
                 });
             } else {
                 logInfo('клана нет — leave skip');
             }
+            if (config.ownerBanDrain) config.ownerBanLeaveDone = true;
+            return;
+        }
+        if (!clanLeaderNick) {
+            // Таймаут без ответа ≠ нет клана: иначе LOCAL_MODE крутит owner вечно
+            logWarn('/clan info → нет ответа (лидер/help) — clan_setup не зовём');
             if (config.ownerBanDrain) config.ownerBanLeaveDone = true;
             return;
         }

@@ -163,7 +163,9 @@ export function requestClanSetup({ anarchy, reason, username }, ctx, opts = {}) 
             buf = parts.pop() || '';
             for (const line of parts) {
                 if (line) {
-                    write(`${prefix} ${line}`);
+                    // скрипт уже пишет [clan-setup] — не дублируем
+                    const bare = line.replace(/^\[clan-setup\]\s*/, '');
+                    write(`${prefix} ${bare}`);
                     if (/BAN — stop|ВЫ ЗАБАНЕНЫ|Пункт 4\.3/i.test(line)) bannedSeen = true;
                 }
             }

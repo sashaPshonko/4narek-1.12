@@ -440,7 +440,19 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
 
     const onChatText = async (text) => {
         if (!text) return;
-        console.log(`[clan-setup] 💬 ${text}`);
+        const line = String(text);
+        // баннер/auth — шум; дубли с systemChat не пишем
+        if (
+            !/^[╔╚║═\s]+$/.test(line)
+            && !line.includes('★ FunTime')
+            && !line.includes('Добро пожаловать')
+            && !line.includes('социальные сети')
+            && !line.includes('новых побед')
+            && !line.includes('Успешная авторизация')
+            && !line.includes('уже авторизованы')
+        ) {
+            console.log(`[clan-setup] 💬 ${line}`);
+        }
 
         if (isBanChatText(text)) {
             const reason = extractBanReason(text) || 'ВЫ ЗАБАНЕНЫ!';
@@ -579,12 +591,7 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
     bot.on('messagestr', (msg) => {
         void onChatText(String(msg || ''));
     });
-    bot._client?.on('systemChat', (data) => {
-        void onChatText(packetToText(data));
-    });
-    bot._client?.on('playerChat', (data) => {
-        void onChatText(packetToText(data));
-    });
+    // systemChat/playerChat дублируют messagestr → в логе всё дважды
 
     bot.on('windowOpen', () => {
         void onWindowOpen(bot, state);
@@ -888,6 +895,11 @@ async function main() {
             if (/funtime_vpn_proxy|vpn_proxy_block/i.test(msg)) {
                 log(`VPN/Proxy block FunTime — stop clan-setup (смени owner SOCKS): ${msg.slice(0, 120)}`);
                 process.exit(3);
+            }
+            // Parse/protocol desync — бесконечный ретрай только засоряет лог
+            if (/array size is abnormally large|Parse error for play\.toClient/i.test(msg) && n >= 3) {
+                log(`protocol fail ×${n} — stop clan-setup: ${msg.slice(0, 160)}`);
+                process.exit(4);
             }
             // incomplete — мягкий ретрай; FunAuth — дольше
             let waitMs = 5_000;
