@@ -42,6 +42,7 @@ import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { installBotView } from './lib/bot-view/install.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
+import { decideFuntimeMaxPrice } from './lib/funtime-max-price.mjs';
 
 process.on('uncaughtException', (err) => {
     if (isIgnorableProtocolNoise(err)) return;
@@ -893,22 +894,31 @@ async function handleChatMessage(text) {
         const balance = parseChatPrice(text);
         const info = getHeldItemInfo();
         if (!info?.id || !info.sellPrice) {
+            config.needPrice = 0;
             finishSellListAck('skip');
             return;
         }
-        const basePrice = Math.floor(balance / 10000) * 10000;
-        const marker = info.sellPrice % 100;
-        let finalPrice = basePrice + marker;
-        if (finalPrice > balance) finalPrice = basePrice - 100 + marker;
-        config.needPrice = finalPrice;
         const heldItem = bot.inventory.slots[quickToHotbarSlot(bot.quickBarSlot)];
         const durabilityPercent = getDurabilityPercent(heldItem);
         if (durabilityPercent < 0.9) {
-            logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — в оркестратор не шлём`);
+            config.needPrice = 0;
+            logInfo(`макс. цена: прочность ${Math.floor(durabilityPercent * 100)}% — skip слот`);
             finishSellListAck('skip');
             return;
         }
-        parentPort.postMessage({ name: 'set_max_price', type: info.id, price: finalPrice });
+        const decided = decideFuntimeMaxPrice(balance, info.sellPrice);
+        if (!decided.ok) {
+            config.needPrice = 0;
+            logWarn(
+                `макс. цена FunTime → skip ${info.id}: ${decided.reason} (в Go не пишем)`,
+            );
+            finishSellListAck('skip');
+            return;
+        }
+        config.needPrice = decided.listPrice;
+        logInfo(
+            `макс. цена FunTime ≈ каталог → retry ${info.id} @ ${decided.listPrice} (без set_max в Go)`,
+        );
         finishSellListAck('retry');
         return;
     }
