@@ -658,6 +658,7 @@ function isNoisyChatLine(raw) {
     const t = String(raw || '');
     if (!t.trim()) return true;
     if (t.includes('★ FunTime') || t.includes('FunTime.su ★')) return true;
+    if (t.includes('═══') || t.includes('╔') || t.includes('╚') || t.includes('║')) return true;
     if (/^[╔╚║═\s]+$/.test(t)) return true;
     if (t.includes('Добро пожаловать на FunTime')) return true;
     if (t.includes('Наши социальные сети')) return true;
