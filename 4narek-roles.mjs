@@ -34,7 +34,7 @@ import {
 } from './lib/ah-buy-tempo.mjs';
 import { lookAroundSpin as lookAroundSpinLib, nextWalkGapMs } from './lib/afk-look.mjs';
 import { patchWalking } from './lib/vanilla-move.mjs';
-import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
+import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn, installFuntimeKeepAlive } from './lib/vanilla-client.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { isWrongPasswordText, EXIT_BAD_PASSWORD, EXIT_PROXY_ERROR } from './lib/auth-fault.mjs';
@@ -951,6 +951,7 @@ async function main() {
         },
     });
 
+    installFuntimeKeepAlive(bot);
     patchWalking(bot, { tickEndEveryTick: true });
     patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     setupConfigurationTransferFix(bot);

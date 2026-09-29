@@ -37,7 +37,7 @@ import {
     runAntiAfkMotion as runVanillaMove,
     nextWalkGapMs as nextVanillaWalkGapMs,
 } from './lib/vanilla-move.mjs';
-import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
+import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn, installFuntimeKeepAlive } from './lib/vanilla-client.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { installBotView } from './lib/bot-view/install.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
@@ -1100,6 +1100,7 @@ async function main() {
         },
     });
 
+    installFuntimeKeepAlive(bot);
     // E14: ClientTickEnd каждый physicsTick (лок. PASS 16.09); rewrite pos/collision выкл
     patchWalking(bot, { tickEndEveryTick: true });
     // physics OFF — вместе с full move сажал y≈70 и глушил /ah (см. 4narek-old A/B 16.09)

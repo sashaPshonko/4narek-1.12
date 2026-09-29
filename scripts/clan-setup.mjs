@@ -22,6 +22,7 @@ import { extractBanReason, isBanChatText } from '../lib/clan-owner-ping.mjs';
 import { reportClanOwnerToGo } from '../lib/clan-owner-go.mjs';
 import { proxyHostFromString } from '../lib/proxy-host.mjs';
 import { awaitFleetLaunchGrant, cancelFleetLaunch } from '../lib/fleet-launch-gate.mjs';
+import { installFuntimeKeepAlive, FUNTIME_KEEPALIVE_BOT_OPTS } from '../lib/funtime-keepalive.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -366,9 +367,11 @@ async function runSession({ anarchy, me, owner, proxyString, inviteNicks, requir
         physicsEnabled: false,
         hideErrors: true,
         logErrors: false,
+        ...FUNTIME_KEEPALIVE_BOT_OPTS,
         agent: proxy.agent,
         connect: proxy.connect,
     });
+    installFuntimeKeepAlive(bot);
 
     const failSession = (msg) => {
         if (finishedOk || state.aborted) return;

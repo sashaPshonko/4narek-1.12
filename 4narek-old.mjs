@@ -47,7 +47,7 @@ import {
 } from './lib/afk-simple.mjs';
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isStandingOnFloor, isNearPitEdge } from './lib/wasd-pit-guard.mjs';
-import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn } from './lib/vanilla-client.mjs';
+import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn, installFuntimeKeepAlive } from './lib/vanilla-client.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
@@ -2070,6 +2070,7 @@ async function main() {
             });
         },
     });
+    installFuntimeKeepAlive(bot);
     setEnchantRegistry();
     // input-only: полный player_input + tick_end на WASD (AFK сходит).
     // position fround/collision — нет (сажало y≈70, глушило /ah). physics patch — нет.
