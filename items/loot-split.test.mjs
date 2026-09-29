@@ -13,8 +13,7 @@ const catalog = [
             { name: 'minecraft:sharpness', lvl: 7 },
             { name: 'minecraft:looting', lvl: 5 },
         ],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 7 }],
-        num: 4,
+        num: 6,
         priceSell: 1_200_000,
         nacenka: 400_000,
     },
@@ -26,11 +25,7 @@ const catalog = [
             { name: 'minecraft:sharpness', lvl: 7 },
             { name: 'minecraft:looting', lvl: 4 },
         ],
-        max_effects: [
-            { name: 'minecraft:sharpness', lvl: 7 },
-            { name: 'minecraft:looting', lvl: 4 },
-        ],
-        num: 3,
+        num: 4,
         priceSell: 700_019,
         nacenka: 400_000,
     },
@@ -42,11 +37,7 @@ const catalog = [
             { name: 'minecraft:sharpness', lvl: 6 },
             { name: 'minecraft:looting', lvl: 5 },
         ],
-        max_effects: [
-            { name: 'minecraft:sharpness', lvl: 6 },
-            { name: 'minecraft:looting', lvl: 5 },
-        ],
-        num: 2,
+        num: 5,
         priceSell: 600_018,
         nacenka: 400_000,
     },
@@ -55,10 +46,6 @@ const catalog = [
         name: 'netherite_sword',
         type: 'netherite_sword-1.21',
         effects: [
-            { name: 'minecraft:sharpness', lvl: 5 },
-            { name: 'minecraft:looting', lvl: 5 },
-        ],
-        max_effects: [
             { name: 'minecraft:sharpness', lvl: 5 },
             { name: 'minecraft:looting', lvl: 5 },
         ],
@@ -71,7 +58,6 @@ const catalog = [
         name: 'netherite_sword',
         type: 'netherite_sword-1.21',
         effects: [{ name: 'minecraft:sharpness', lvl: 5 }],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 5 }],
         num: 1,
         priceSell: 400_015,
         nacenka: 400_000,
@@ -85,8 +71,7 @@ const catalog = [
             { name: 'minecraft:fire_aspect', lvl: 1 },
             { name: 'minecraft:sharpness', lvl: 7 },
         ],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 7 }],
-        num: 1,
+        num: 3,
         priceSell: 1_000_000,
         nacenka: 400_000,
     },
@@ -135,10 +120,11 @@ test('sharp7+loot5 farm kit → farm', () => {
     assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'фарм-1.21');
 });
 
-test('sharp7+loot5 cannot fall into loot4 (max_effects)', () => {
+test('sharp7+loot5 prefers sharp6-loot5 over loot4 by num', () => {
     const item = sword([
         { name: 'minecraft:sharpness', lvl: 7 },
         { name: 'minecraft:looting', lvl: 5 },
     ]);
     assert.notEqual(findBestMatchingConfigItem(item, catalog)?.id, 'sword-sharp7-loot4-1.21');
+    assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'sword-sharp6-loot5-1.21');
 });

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { findBestMatchingConfigItem } from './slotInfo.mjs';
 
-/** Минимальный каталог: sharp5/6 + sword7 + bare — как в проде после сплита. */
+/** Минимальный каталог: sharp5/6 + sword7 + bare — приоритет по num, без max_effects. */
 const catalog = [
     {
         id: 'sword7-1.21',
@@ -13,8 +13,7 @@ const catalog = [
             { name: 'minecraft:fire_aspect', lvl: 1 },
             { name: 'minecraft:sharpness', lvl: 7 },
         ],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 7 }],
-        num: 1,
+        num: 3,
         priceSell: 1_000_000,
         nacenka: 300_000,
     },
@@ -23,8 +22,7 @@ const catalog = [
         name: 'netherite_sword',
         type: 'netherite_sword-1.21',
         effects: [{ name: 'minecraft:sharpness', lvl: 6 }],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 6 }],
-        num: 1,
+        num: 2,
         priceSell: 550_016,
         nacenka: 300_000,
     },
@@ -33,7 +31,6 @@ const catalog = [
         name: 'netherite_sword',
         type: 'netherite_sword-1.21',
         effects: [{ name: 'minecraft:sharpness', lvl: 5 }],
-        max_effects: [{ name: 'minecraft:sharpness', lvl: 5 }],
         num: 1,
         priceSell: 400_015,
         nacenka: 300_000,
@@ -75,9 +72,10 @@ test('sharp5 + other enchants still sharp5 (not bare, not 7)', () => {
     assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'sword-sharp5-1.21');
 });
 
-test('sharp6 does not fall into sharp5 (max_effects)', () => {
+test('sharp6 wins over sharp5 by num (>= mins)', () => {
     const item = sword([{ name: 'minecraft:sharpness', lvl: 6 }]);
     assert.notEqual(findBestMatchingConfigItem(item, catalog)?.id, 'sword-sharp5-1.21');
+    assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'sword-sharp6-1.21');
 });
 
 test('sharp7 kit still sword7, not sharp5/6', () => {
