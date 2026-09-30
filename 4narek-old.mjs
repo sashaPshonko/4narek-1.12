@@ -744,10 +744,9 @@ const config = {
     lastWarp: null,
     /** Старт воркера — для первого warp-gap 25–30 мин. */
     workerStartedAt: Date.now(),
-    enoughItems: false,
     /** До этого ts не кликаем снятие лотов (сервер: переставлять раз в минуту). */
     storageUnlistUntil: 0,
-    /** Последний цикл «снять→продать» по КД (даже без enoughItems). */
+    /** Последний цикл «снять→продать» по КД. */
     lastUnlistCycleAt: Date.now(),
     /** Следующий зазор КД на снятие, мс. */
     unlistCycleGapMs: 150_000,
@@ -1290,8 +1289,8 @@ function markUnlistCycleDone() {
 
 /**
  * Слот 0–4 в «Хранилище»: снять мусор / сильное несовпадение цены.
- * Цену сверяем с listing memory (прочность при /ah sell). enoughItems сюда НЕ входит:
- * АХ полон → лоты висят, только стоп новых листингов (иначе вечный снос витрины).
+ * Цену сверяем с listing memory (прочность при /ah sell).
+ * Инвентарь ≥27 / КД-снятие — снимаем любой свой лот.
  * @returns {Promise<{ slot: number, reason: string } | null>}
  */
 async function findStorageSlotToUnlist() {
@@ -1568,7 +1567,6 @@ async function handleChatMessage(text) {
     if (text.includes('[✔] Предметы успешно перевыставлены!')) {
         config.lastResetTime = Date.now();
         config.needReset = false;
-        // enoughItems не трогаем — сброс только когда слот 0 хранилища пуст.
         return;
     }
     if (text.includes('переставлять предметы раз в минуту')) {
@@ -1600,8 +1598,6 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('[☃] У Вас купили')) {
-        // Освободился слот АХ — можно снова выставлять.
-        config.enoughItems = false;
         const price = parseChatPrice(text);
         let meta = null;
         try {
@@ -1649,11 +1645,9 @@ async function handleChatMessage(text) {
         return;
     }
 
-    // Как в июне: оба = АХ/хранилище забито → снять всё, потом продать.
-    // КД-снятие по таймеру (unlistCycleDue) — отдельно, не через этот флаг.
+    // АХ/хранилище забито — стоп этого sellItems, покупки не трогаем.
     if (text.includes('[☃] Не удалось выставить') ||
         text.includes('[✘] Ошибка! У Вас переполнено Хранилище!')) {
-        config.enoughItems = true;
         finishSellListAck('full');
         return;
     }
@@ -2346,7 +2340,6 @@ async function main() {
                     flushAhBookLots();
 
                     // Сброс цены / КД / полный инвентарь → хранилище.
-                    // enoughItems НЕ сюда: АХ полон — лоты оставляем, только не добираем/не довыставляем.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
                         config.needReset ||
@@ -2367,7 +2360,7 @@ async function main() {
                         return;
                     }
 
-                    if (config.needSell && !config.enoughItems && hasBotItem()) {
+                    if (config.needSell && hasBotItem()) {
                         logInfo('АХ → sellItems (needSell)');
                         await sellItems();
                         if (config.key !== key) return;
@@ -2519,21 +2512,6 @@ async function main() {
                     break;
                 }
 
-                // enoughItems: если в хранилище есть дырка 0..4 — снова можно выставлять.
-                if (config.enoughItems) {
-                    let freeAh = false;
-                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
-                        if (!bot.currentWindow?.slots[i]) {
-                            freeAh = true;
-                            break;
-                        }
-                    }
-                    if (freeAh) {
-                        config.enoughItems = false;
-                        config.needSell = true;
-                        logInfo('хранилище → есть свободный слот АХ, enoughItems off');
-                    }
-                }
                 if (config.needSendAH) {
                     const botAh = [];
                     for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
@@ -2566,8 +2544,6 @@ async function main() {
                     parentPort.postMessage({ name: 'inventory', data: inv, username: config.username });
                 }
                 // Как в июне: клик 52 только раз в ≥60с (таймер сразу), потом break.
-                // enoughItems снимает лоты ниже — не форсит сброс каждый цикл (иначе шторм
-                // поверх серверного «переставлять раз в минуту»).
                 if (config.lastResetTime < Date.now() - 60000) {
                     config.lastResetTime = Date.now();
                     if (bot.currentWindow?.slots[0]) {
@@ -2652,7 +2628,7 @@ async function main() {
                 config.storageStaleUnlistKey = '';
 
                 // После «снять» / inv≥27 — продать (+ walk внутри sell). КД-снятие тоже сюда.
-                if ((config.needSell || isBotInventoryFull()) && hasBotItem() && !config.enoughItems) {
+                if ((config.needSell || isBotInventoryFull()) && hasBotItem()) {
                     logInfo(
                         isBotInventoryFull()
                             ? 'хранилище → sellItems (инвентарь ≥27, продать всё)'
@@ -3344,7 +3320,6 @@ async function sellItems() {
             let currentSlot = firstHotbarSlot;
             while (
                 hasBotItem()
-                && !config.enoughItems
                 && currentSlot <= lastHotbarSlot
                 && !config.hasDangerousTrash
                 && isSellSessionAlive(gen)
@@ -3402,7 +3377,7 @@ async function sellItems() {
                     // Один /ah sell + быстрый ack (без двойной команды и без BASE_DELAY 1–3с)
                     for (let attempt = 1; attempt <= SELL_SLOT_MAX_ATTEMPTS; attempt++) {
                         if (!isSellSessionAlive(gen)) return;
-                        if (slotGone() || config.enoughItems || config.hasDangerousTrash) break;
+                        if (slotGone() || config.hasDangerousTrash) break;
                         if (config.needPrice) {
                             sellPrice = config.needPrice;
                             config.needPrice = 0;
@@ -3425,7 +3400,6 @@ async function sellItems() {
                         const listPrice = alloc?.listPrice;
                         if (listingId == null || !Number.isFinite(listPrice)) {
                             logWarn(`sellItems slot=${currentSlot} → нет свободного listing id 0–4`);
-                            config.enoughItems = true;
                             break;
                         }
                         await waitActionsSettled(() => !isSellSessionAlive(gen));
@@ -3436,7 +3410,6 @@ async function sellItems() {
                         if (!isSellSessionAlive(gen)) return;
                         if (ack === 'timeout') {
                             if (config.needPrice) ack = 'retry';
-                            else if (config.enoughItems) ack = 'full';
                             else if (slotGone()) ack = 'ok';
                             else ack = 'confirm';
                         }
