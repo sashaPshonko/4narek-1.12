@@ -3212,8 +3212,8 @@ function sessionLooksAliveOnAnarchy() {
 /**
  * Мягкая проверка анки. Не сбрасываем timeJoin при фейле — иначе rejoin-шторм.
  * play+пол → без /balance, КРОМЕ forceCommandProbe.
- * Глухой /balance при живом play — НЕ exit воркера (mineflayer часто не ловит ответ;
- * TLauncher при этом всё ещё онлайн). Soft-ok + следующий цикл с nudge.
+ * Глухой /balance при живом play: 1–2 раза soft + nudge; дальше — reconnect
+ * (раньше soft-skip крутил зомби вечно, пока kaAge сбрасывался idle-retry).
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
@@ -3396,18 +3396,22 @@ async function sellItems() {
             const kaAge = bot?._funtimeKaLastPacketAt
                 ? Date.now() - bot._funtimeKaLastPacketAt
                 : 99_000;
+            const muteStrikes = config.commandsMuteStrikes || 0;
+            const zombieKa = kaAge > 60_000 || (bot?._funtimeKaIdleStrikes || 0) > 0;
             if (
-                (kaAge > 75_000 || !sessionLooksAliveOnAnarchy())
+                (zombieKa || muteStrikes >= 2 || !sessionLooksAliveOnAnarchy())
                 && isSellSessionAlive(gen)
             ) {
-                logWarn(`продажа → зомби-сокет (ka=${Math.round(kaAge / 1000)}с) — рестарт`);
+                logWarn(
+                    `продажа → мёртвая сессия (ka=${Math.round(kaAge / 1000)}с mute=${muteStrikes}) — рестарт`,
+                );
                 try { bot?.quit?.('dead_socket'); } catch { /* ignore */ }
                 forceWorkerExit(1);
                 return;
             }
             if (sessionLooksAliveOnAnarchy() && isSellSessionAlive(gen)) {
                 config.forceCommandProbe = true;
-                logWarn('продажа → confirm fail, пакеты идут — soft skip + nudge');
+                logWarn('продажа → confirm fail — ещё nudge (потом рестарт)');
                 await nudgePlayerInput(() => !isSellSessionAlive(gen));
                 return;
             }
@@ -3569,7 +3573,9 @@ async function sellItems() {
                             break;
                         }
                         if (ack === 'full') {
-                            logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито`);
+                            logInfo(`sellItems slot=${currentSlot} → АХ/хранилище забито — стоп sell`);
+                            // Не долбим остальные слоты тем же «Не удалось выставить».
+                            currentSlot = lastHotbarSlot + 1;
                             break;
                         }
                         if (ack === 'retry' || ack === 'confirm') {
@@ -3792,19 +3798,21 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            // Рестарт только если входящий поток реально мёртв (ка как у зомби).
-            // mute без ka-stale = FunTime economy-mute / mineflayer chat — soft, не орк-шторм.
             const kaAge = bot?._funtimeKaLastPacketAt
                 ? Date.now() - bot._funtimeKaLastPacketAt
                 : 99_000;
-            if (kaAge > 75_000 || !sessionLooksAliveOnAnarchy()) {
-                logWarn(`safeAH → зомби-сокет (ka=${Math.round(kaAge / 1000)}с) — рестарт`);
+            const muteStrikes = config.commandsMuteStrikes || 0;
+            const zombieKa = kaAge > 60_000 || (bot?._funtimeKaIdleStrikes || 0) > 0;
+            if (zombieKa || muteStrikes >= 2 || !sessionLooksAliveOnAnarchy()) {
+                logWarn(
+                    `safeAH → мёртвая сессия (ka=${Math.round(kaAge / 1000)}с mute=${muteStrikes}) — рестарт`,
+                );
                 try { bot?.quit?.('dead_socket'); } catch { /* ignore */ }
                 forceWorkerExit(1);
                 return;
             }
             config.forceCommandProbe = true;
-            logWarn('safeAH → confirm fail — soft skip (пакеты ещё идут, не рвём)');
+            logWarn('safeAH → confirm fail — ещё nudge (потом рестарт)');
             await nudgePlayerInput();
             return;
         }
