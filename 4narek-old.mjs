@@ -3105,16 +3105,25 @@ async function nudgePlayerInput(shouldAbort = null) {
     }
 }
 
+/** Анка ещё жива для mineflayer (не рвём воркер из‑за глухого чата). */
+function sessionLooksAliveOnAnarchy() {
+    if (!config.timeJoinAnarchy) return false;
+    if (bot?._client?.state !== 'play') return false;
+    const y = bot?.entity?.position?.y;
+    return Number.isFinite(y);
+}
+
 /**
  * Мягкая проверка анки. Не сбрасываем timeJoin при фейле — иначе rejoin-шторм.
- * Сначала nudge, потом /balance; при удаче — ок. При фейле только warn.
+ * FunTime часто глушит /balance,/ah пока не на полу или GUI открыт — сначала
+ * close+ground, потом 2–3 попытки (как safeBalance). При фейле только warn.
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
     if (Date.now() < (config.noCommandsUntil || 0)) {
         const until = Date.now() + Math.min(
             (config.noCommandsUntil - Date.now()) + 50,
-            5_000,
+            8_000,
         );
         while (Date.now() < until) {
             if (typeof shouldAbort === 'function' && shouldAbort()) return false;
@@ -3127,56 +3136,69 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
         || !config.timeJoinAnarchy;
 
-    const y = bot.entity?.position?.y;
-    logInfo(
-        `${label} → probe state=${bot._client?.state || '?'} y=${Number.isFinite(y) ? y.toFixed(1) : '?'}`,
-    );
-    await nudgePlayerInput(shouldAbort);
-    if (abort()) return false;
-
-    config.balance = null;
-    logInfo(`${label} → probe /balance`);
-    try {
-        bot.chat('/balance');
-    } catch {
-        /* ignore */
-    }
-    await chatChain;
-    let deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
+    const attempts = 3;
+    for (let tryN = 1; tryN <= attempts; tryN++) {
         if (abort()) return false;
-        if (config.balance != null) {
-            logOk(`${label} → balance ok (${config.balance}), на анке`);
-            return true;
-        }
-        await sleepMs(150);
-    }
 
-    // /ah без search — если окно открылось, экономика жива
-    const keyBefore = config.key;
-    logInfo(`${label} → probe /ah`);
-    try {
-        bot.chat('/ah');
-    } catch {
-        /* ignore */
-    }
-    await chatChain;
-    deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
+        await closeCurrentWindowSafe();
         if (abort()) return false;
-        if (config.key !== keyBefore) {
-            logOk(`${label} → AH window ok`);
-            return true;
+        await ensureGroundedForCommands(label, shouldAbort);
+        if (abort()) return false;
+
+        const y = bot.entity?.position?.y;
+        logInfo(
+            `${label} → probe#${tryN}/${attempts} state=${bot._client?.state || '?'} y=${Number.isFinite(y) ? y.toFixed(1) : '?'} onGround=${Boolean(bot.entity?.onGround)}`,
+        );
+        await nudgePlayerInput(shouldAbort);
+        if (abort()) return false;
+
+        config.balance = null;
+        logInfo(`${label} → probe /balance`);
+        try {
+            bot.chat('/balance');
+        } catch {
+            /* ignore */
         }
-        if (config.balance != null) {
-            logOk(`${label} → balance ok (late), на анке`);
-            return true;
+        await chatChain;
+        let deadline = Date.now() + 8_000;
+        while (Date.now() < deadline) {
+            if (abort()) return false;
+            if (config.balance != null) {
+                logOk(`${label} → balance ok (${config.balance}), на анке`);
+                return true;
+            }
+            await sleepMs(150);
         }
-        await sleepMs(150);
+
+        // /ah без search — если окно открылось, экономика жива
+        const keyBefore = config.key;
+        logInfo(`${label} → probe /ah`);
+        try {
+            bot.chat('/ah');
+        } catch {
+            /* ignore */
+        }
+        await chatChain;
+        deadline = Date.now() + 8_000;
+        while (Date.now() < deadline) {
+            if (abort()) return false;
+            if (config.key !== keyBefore) {
+                logOk(`${label} → AH window ok`);
+                return true;
+            }
+            if (config.balance != null) {
+                logOk(`${label} → balance ok (late), на анке`);
+                return true;
+            }
+            await sleepMs(150);
+        }
+
+        logWarn(`${label} → probe#${tryN} без ответа (balance/ah)`);
+        if (tryN < attempts) await sleepMs(800);
     }
 
     logWarn(
-        `${label} → probe без ответа (balance/ah) — продолжаем, не сбрасываем анку`,
+        `${label} → probe без ответа после ${attempts} попыток — анку не сбрасываем`,
     );
     return false;
 }
@@ -3247,7 +3269,12 @@ async function sellItems() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('sell', () => !isSellSessionAlive(gen)))) {
-            logWarn('продажа → confirm fail (нет ответа balance/ah) — выход, рестарт воркера');
+            // TLauncher/прокси ок, mineflayer иногда не ловит ответ чата — не рвём сессию.
+            if (sessionLooksAliveOnAnarchy() && isSellSessionAlive(gen)) {
+                logWarn('продажа → confirm fail, анка play — soft skip (без рестарта)');
+                return;
+            }
+            logWarn('продажа → confirm fail + сессия мёртвая — выход, рестарт воркера');
             try { bot?.quit?.('dead_session'); } catch { /* ignore */ }
             forceWorkerExit(1);
             return;
@@ -3615,9 +3642,12 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            // Зомби-сессия (SOCKS/Mac): команды не доходят, /ah search только шумит → keepAliveError.
-            // Рвём воркер — орк поднимет заново чистым сокетом.
-            logWarn('safeAH → confirm fail (нет ответа balance/ah) — выход, рестарт воркера');
+            // Зомби только если play уже нет. Иначе soft skip — иначе рестарт-шторм как у sypuchij.
+            if (sessionLooksAliveOnAnarchy()) {
+                logWarn('safeAH → confirm fail, анка play — soft skip (без рестарта)');
+                return;
+            }
+            logWarn('safeAH → confirm fail + сессия мёртвая — выход, рестарт воркера');
             try { bot?.quit?.('dead_session'); } catch { /* ignore */ }
             forceWorkerExit(1);
             return;
