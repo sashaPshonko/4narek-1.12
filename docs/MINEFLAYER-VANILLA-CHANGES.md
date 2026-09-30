@@ -1,6 +1,6 @@
 # Mineflayer / physics — что мы меняем под ваниль
 
-Дата фиксации: 2026-09-16 (обновлено: floor-watchdog / reconcile).  
+Дата фиксации: 2026-09-16 (обновлено: floor-watchdog / reconcile / tick без чанка).  
 Стек: `mineflayer` ^4.37 + `prismarine-physics` (через зависимости mineflayer).  
 Цель: поведение ближе к Notchian 1.21.x на FunTime, без Java-клиента.
 
@@ -13,9 +13,11 @@
 
 | Файл | Что делает |
 |------|------------|
-| `lib/vanilla-move.mjs` | **input-only (prod):** полный `player_input`, sprint off, **`tickEndEveryTick`** (1× `tick_end` на physicsTick / ClientTickEnd, E14 PASS). **`rewriteMovePackets` выкл** — fround pos/collision сажали y≈70 и глушили /ah. |
+| `lib/vanilla-move.mjs` | **input-only (prod):** полный `player_input`, sprint off, **`tickEndEveryTick`** (client clock 50мс, не только physicsTick). |
+| `lib/inbound-rebind.mjs` | Soft-skip item-пакетов при дыре Slot (страховка). Не mid-stream rebind. |
+| `scripts/apply-vanilla-engine-patches.mjs` | + `attribute_modifiers` в `minecraft-data` 1.21.11: **display per entry**, как TLauncher jar (`ItemAttributeModifiers$Entry`). Фикс регрессии 3.116. |
 | `lib/vanilla-physics.mjs` | **выкл в 4narek-old** (16.09). Опция `maxCatchupTicks: 1` через createBot всё ещё |
-| `4narek-old.mjs` / `4NAREK.mjs` | `patchWalking` input-only; `patchVanillaPhysics` выкл; floor-watchdog; RP/settings/tick. Локальный прогон: `scripts/run-4narek-local.mjs` |
+| `4narek-old.mjs` / `4NAREK.mjs` | `patchWalking` input-only; `patchVanillaPhysics` выкл; floor-watchdog; RP/settings/tick. |
 
 Stock mineflayer сам по себе этого не делает.
 
@@ -24,17 +26,19 @@ Stock mineflayer сам по себе этого не делает.
 ## 2. Патч `mineflayer/lib/plugins/physics.js`
 
 Файл: `node_modules/mineflayer/lib/plugins/physics.js`  
-Накат: `scripts/apply-vanilla-engine-patches.mjs` (hunk `single-tick doPhysics`).
+Накат: `scripts/apply-vanilla-engine-patches.mjs` (hunks `single-tick doPhysics`, `tickPhysics without chunk early-return`).
 
 ### Было (stock)
 - `setInterval(doPhysics, 50)`
 - внутри `doPhysics`: аккумулятор wall-clock → несколько `tickPhysics` подряд (`maxCatchupTicks`, по умолчанию 4)
+- `if (blockAt(pos) == null) return` — **весь тик** (нет position/physicsTick) пока чанк не пришёл
 
 ### Стало
 - Таймер по-прежнему стартует как `setInterval(..., 50)`, но **перехватывается** `lib/vanilla-tick.mjs` (точный schedule).
 - `doPhysics` вызывает **ровно один** `tickPhysics` — без catchup-пачки по wall-clock.
+- Без чанка: simulatePlayer не гоняем, но **physicsTick + updatePosition** идут (как ваниль/TLauncher). Иначе FunTime глушит /ah|/balance.
 
-Зачем: рваный motion и пачки тиков после лага event loop ≠ ванильный клиент / FunAC.
+Зачем: рваный motion и пачки тиков после лага event loop ≠ ванильный клиент / FunAC; early-return по чанку = «мёртвый» клиент на анке.
 
 ---
 

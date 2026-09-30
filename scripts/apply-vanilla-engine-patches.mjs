@@ -2,6 +2,7 @@
  * Повторно накатывает vanilla-правки на node_modules после npm i:
  * - mineflayer physics: 1 tick / fire (без wall-clock catchup)
  * - prismarine-physics: float accel 0.16277136 + fround heading/friction
+ * - minecraft-data 1.21.11: attribute_modifiers как в TLauncher/Java (display per entry)
  *
  * Usage: node scripts/apply-vanilla-engine-patches.mjs
  */
@@ -15,6 +16,132 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function resolvePkg(name) {
     return dirname(require.resolve(`${name}/package.json`));
+}
+
+/** Как ItemAttributeModifiers$Entry.STREAM_CODEC в клиенте 1.21.11 (TLauncher jar). */
+const ATTR_MODIFIERS_VANILLA = [
+    'array',
+    {
+        countType: 'varint',
+        type: [
+            'container',
+            [
+                { name: 'typeId', type: 'varint' },
+                { name: 'name', type: 'string' },
+                { name: 'value', type: 'f64' },
+                {
+                    name: 'operation',
+                    type: [
+                        'mapper',
+                        {
+                            type: 'varint',
+                            mappings: {
+                                0: 'add',
+                                1: 'multiply_base',
+                                2: 'multiply_total',
+                            },
+                        },
+                    ],
+                },
+                {
+                    name: 'slot',
+                    type: [
+                        'mapper',
+                        {
+                            type: 'varint',
+                            mappings: {
+                                0: 'any',
+                                1: 'main_hand',
+                                2: 'off_hand',
+                                3: 'hand',
+                                4: 'feet',
+                                5: 'legs',
+                                6: 'chest',
+                                7: 'head',
+                                8: 'armor',
+                                9: 'body',
+                                10: 'saddle',
+                            },
+                        },
+                    ],
+                },
+                {
+                    name: 'display',
+                    type: [
+                        'container',
+                        [
+                            {
+                                name: 'type',
+                                type: [
+                                    'mapper',
+                                    {
+                                        type: 'varint',
+                                        mappings: {
+                                            0: 'default',
+                                            1: 'hidden',
+                                            2: 'override',
+                                        },
+                                    },
+                                ],
+                            },
+                            {
+                                name: 'component',
+                                type: [
+                                    'switch',
+                                    {
+                                        compareTo: 'type',
+                                        fields: {
+                                            default: 'void',
+                                            hidden: 'void',
+                                            override: 'anonymousNbt',
+                                        },
+                                        default: 'void',
+                                    },
+                                ],
+                            },
+                        ],
+                    ],
+                },
+            ],
+        ],
+    },
+];
+
+function patchAttributeModifiersProtocol() {
+    const protoPath = join(
+        resolvePkg('minecraft-data'),
+        'minecraft-data/data/pc/1.21.11/protocol.json',
+    );
+    if (!fs.existsSync(protoPath)) {
+        console.warn('[miss] minecraft-data 1.21.11 protocol.json');
+        return 0;
+    }
+    const proto = JSON.parse(fs.readFileSync(protoPath, 'utf8'));
+    const fields = proto?.types?.SlotComponent?.[1]?.[1]?.type?.[1]?.fields;
+    if (!fields?.attribute_modifiers) {
+        console.warn('[miss] SlotComponent.attribute_modifiers');
+        return 0;
+    }
+    const cur = fields.attribute_modifiers;
+    const already =
+        Array.isArray(cur) &&
+        cur[0] === 'array' &&
+        JSON.stringify(cur[1]?.type?.[1]?.map((f) => f.name)) ===
+            JSON.stringify(['typeId', 'name', 'value', 'operation', 'slot', 'display']);
+    if (already) {
+        // всё равно дожмём void defaults на display switch
+        const entry = cur[1]?.type?.[1];
+        const disp = entry?.find((f) => f.name === 'display');
+        const sw = disp?.type?.[1]?.find((f) => f.name === 'component')?.type?.[1];
+        if (sw && sw.fields?.default === 'void' && sw.default === 'void') {
+            console.log('[skip] minecraft-data: attribute_modifiers (already vanilla)');
+            return 0;
+        }
+    }
+    fields.attribute_modifiers = ATTR_MODIFIERS_VANILLA;
+    fs.writeFileSync(protoPath, JSON.stringify(proto));
+    console.log('[ok] minecraft-data: attribute_modifiers → TLauncher/Java per-entry display');
+    return 1;
 }
 
 function patchFile(filePath, replacements, label) {
@@ -212,6 +339,35 @@ total += patchFile(
         to: doPhysicsNew,
         id: 'single-tick doPhysics',
         already: 'ровно один клиентский тик на срабатывание таймера',
+    }, {
+        from: `  function tickPhysics (now) {
+    if (!bot.entity?.position || !Number.isFinite(bot.entity.position.x)) return // entity not ready
+    if (bot.blockAt(bot.entity.position) == null) return // check if chunk is unloaded
+    if (bot.physicsEnabled && shouldUsePhysics) {
+      physics.simulatePlayer(new PlayerState(bot, controlState), world).apply(bot)
+      bot.emit('physicsTick')
+      bot.emit('physicTick') // Deprecated, only exists to support old plugins. May be removed in the future
+    }
+    if (shouldUsePhysics) {
+      updatePosition(now)
+    }
+  }`,
+        to: `  function tickPhysics (now) {
+    if (!bot.entity?.position || !Number.isFinite(bot.entity.position.x)) return // entity not ready
+    // FunTime/TLauncher: тик и position идут даже без чанка. Stock mineflayer
+    // делал return → нет physicsTick → FunAC/команды глухие (4narek vanilla patch).
+    const chunkReady = bot.blockAt(bot.entity.position) != null
+    if (bot.physicsEnabled && shouldUsePhysics && chunkReady) {
+      physics.simulatePlayer(new PlayerState(bot, controlState), world).apply(bot)
+    }
+    if (shouldUsePhysics) {
+      bot.emit('physicsTick')
+      bot.emit('physicTick') // Deprecated, only exists to support old plugins. May be removed in the future
+      updatePosition(now)
+    }
+  }`,
+        id: 'tickPhysics without chunk early-return',
+        already: 'тик и position идут даже без чанка',
     }],
     'mineflayer/physics.js',
 );
@@ -233,5 +389,7 @@ total += patchFile(
     ],
     'prismarine-physics',
 );
+
+total += patchAttributeModifiersProtocol();
 
 console.log(total ? `patched ${total} hunk(s)` : 'nothing to patch (already applied or upstream changed)');

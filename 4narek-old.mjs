@@ -50,6 +50,7 @@ import {
 import { attachFloorWatchdog } from './lib/floor-watchdog.mjs';
 import { isStandingOnFloor, isNearPitEdge } from './lib/wasd-pit-guard.mjs';
 import { VANILLA_BOT_OPTS, applyVanillaClientSettings, ensurePhysicsOn, installFuntimeKeepAlive } from './lib/vanilla-client.mjs';
+import { installInboundRebind, isDeserializerKillError, waitChunkUnderFeet, hasChunkUnderFeet } from './lib/inbound-rebind.mjs';
 import { patchVanillaPhysics } from './lib/vanilla-physics.mjs';
 import { acceptResourcePackVanilla } from './lib/vanilla-resource-pack.mjs';
 import { installBotView, isClanOwnerUsername } from './lib/bot-view/install.mjs';
@@ -311,8 +312,22 @@ function wrapChat(bot) {
                 if (sinceLook < 280) {
                     await sleepMs(280 - sinceLook);
                 }
+                // Перед командой — свежий player_input (FunTime иначе глотает chat_command).
+                const isCmd = typeof message === 'string' && message.startsWith('/');
+                if (isCmd && typeof bot.refreshPlayerInput === 'function') {
+                    try {
+                        bot.refreshPlayerInput();
+                    } catch { /* ignore */ }
+                    await sleepMs(40);
+                }
                 origChat(message);
                 lastChatAt = Date.now();
+                if (isCmd) {
+                    const short = String(message).slice(0, 48);
+                    if (/^\/(balance|ah|clan|warp|an)\b/i.test(short)) {
+                        logInfo(`chat → wire ${short}`);
+                    }
+                }
             })
             .catch((err) => reportError('gatedChat', err));
     };
@@ -348,9 +363,9 @@ async function pauseAfterChatBeforeLook(shouldAbort = null) {
 function setupChatSafeGuard(bot) {
     const client = bot._client;
     if (!client) return;
-
-    client.removeAllListeners('playerChat');
-    client.removeAllListeners('systemChat');
+    // НЕ removeAllListeners — убивает mineflayer chat.js → messagestr/скорборд-связки.
+    if (client._chatSafeGuardInstalled) return;
+    client._chatSafeGuardInstalled = true;
 
     const onPacket = (data) => {
         const raw = data?.formattedMessage ?? data?.content ?? data?.unsignedContent;
@@ -362,8 +377,9 @@ function setupChatSafeGuard(bot) {
         if (accept) void handleClanInviteAccept(accept);
     };
 
-    client.on('playerChat', onPacket);
-    client.on('systemChat', onPacket);
+    client.prependListener('playerChat', onPacket);
+    client.prependListener('systemChat', onPacket);
+    // messagestr не дублируем — systemChat уже кормит onBotChatText (иначе ×2 в логе).
 }
 
 function nbtLeafString(node) {
@@ -758,6 +774,8 @@ const config = {
     ahInFlight: false,
     /** После фейла search — следующий confirm не skip'ает probe. */
     forceCommandProbe: false,
+    /** Сколько подряд force-probe с глухим /balance (потом reconnect). */
+    commandsMuteStrikes: 0,
     /** Поколение sellItems — лобби/таймаут бампят, старая сессия выходит. */
     sellGen: 0,
     sellStartedAt: 0,
@@ -1500,6 +1518,17 @@ function getHeldItemInfo() {
 }
 
 async function onBotChatText(text) {
+    // systemChat иногда приходит дважды с одним текстом за тот же тик
+    const now = Date.now();
+    if (
+        text
+        && text === onBotChatText._lastText
+        && now - (onBotChatText._lastAt || 0) < 80
+    ) {
+        return;
+    }
+    onBotChatText._lastText = text;
+    onBotChatText._lastAt = now;
     logChat(text);
     if (text.includes('[⚝] Телепортация!')) {
         config.lastWarpTime = Date.now();
@@ -2103,10 +2132,32 @@ async function main() {
         },
     });
     installFuntimeKeepAlive(bot);
+    installInboundRebind(bot, {
+        log: (msg) => logWarn(msg),
+        desyncMs: 20_000,
+    });
     setEnchantRegistry();
     // input-only: полный player_input + tick_end на WASD (AFK сходит).
     // position fround/collision — нет (сажало y≈70, глушило /ah). physics patch — нет.
     patchVanillaMove(bot, { tickEndEveryTick: true });
+    // Ваниль шлёт player_input при жизни сессии; mineflayer — только на смене клавиш.
+    // Без периодического snapshot FunTime снова глушит /ah|/balance (TLauncher pilot это закрывает).
+    {
+        const inputHeartbeat = setInterval(() => {
+            try {
+                if (!bot || bot._client?.state !== 'play') return;
+                if (!config.timeJoinAnarchy) return;
+                if (Date.now() < (config.noCommandsUntil || 0)) return;
+                if (isInConfigurationTransfer()) return;
+                if (bot._viewPilotActive) return; // pilot сам шлёт input
+                bot.refreshPlayerInput?.();
+            } catch {
+                /* ignore */
+            }
+        }, 2500);
+        inputHeartbeat.unref?.();
+        bot.once('end', () => clearInterval(inputHeartbeat));
+    }
     // patchVanillaPhysics(bot, { log: (msg) => logInfo(msg) });
     attachFloorWatchdog(bot, {
         log: (msg) => logWarn(msg),
@@ -2228,12 +2279,18 @@ async function main() {
         forceWorkerExit(1);
     });
     bot.on('error', (err) => {
+        if (isDeserializerKillError(err)) {
+            if (bot._client?._rebindInbound?.('bot.error')) return;
+        }
         if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ error${ANSI.reset}: ${err}`);
         forceWorkerExit(1);
     });
 
     bot._client?.on('error', (err) => {
+        if (isDeserializerKillError(err)) {
+            if (bot._client?._rebindInbound?.('client.error')) return;
+        }
         if (isIgnorableProtocolNoise(err)) return;
         console.error(`${logTag()} ${ANSI.red}⛔ client error${ANSI.reset}: ${err}`);
         forceWorkerExit(1);
@@ -2276,12 +2333,15 @@ async function main() {
             return;
         }
         if (Date.now() - config.timeActive > 60000) {
-            // Не закрывать АХ «осмотром»: in-place reload не даёт windowOpen → timeActive не тикает.
+            // Раньше при открытом окне только тикали timeActive — если windowOpen
+            // уже вышел (race sellInFlight), бот молчал вечно. Закрываем и заново.
             if (bot.currentWindow) {
+                logWarn('АХ → idle 60с с открытым окном — close + reenter');
                 config.timeActive = Date.now();
-                return;
+                await closeCurrentWindowSafe();
+            } else {
+                config.timeActive = Date.now();
             }
-            config.timeActive = Date.now();
             await sellItems();
             if (!config.sellInFlight) await safeAH();
         }
@@ -2361,11 +2421,17 @@ async function main() {
                     }
 
                     if (config.needSell && hasBotItem()) {
-                        logInfo('АХ → sellItems (needSell)');
-                        await sellItems();
-                        if (config.key !== key) return;
-                        if (!config.hasDangerousTrash) await safeAH();
-                        return;
+                        // Параллельный sell уже крутится (buy→needSell) — не return,
+                        // иначе окно АХ бросаем и бот «зависает» до следующего триггера.
+                        if (config.sellInFlight) {
+                            logInfo('АХ → needSell, sell уже идёт — browse дальше');
+                        } else {
+                            logInfo('АХ → sellItems (needSell)');
+                            await sellItems();
+                            if (config.key !== key) return;
+                            if (!config.hasDangerousTrash && !config.ahInFlight) await safeAH();
+                            return;
+                        }
                     }
 
                     const slotToBuy = await getBestAHSlot();
@@ -2710,7 +2776,26 @@ async function joinAnarchy(gen = null) {
                 await rnd('POLL');
             }
         }
-        if (config.timeJoinAnarchy && config.timeJoinAnarchy === joinedAt) return;
+        if (config.timeJoinAnarchy && config.timeJoinAnarchy === joinedAt) {
+            // Без чанка mineflayer глотает physics → FunTime глушит /clan|/balance|/ah.
+            if (!hasChunkUnderFeet(bot)) {
+                logInfo('joinAnarchy → жду чанк под ногами');
+                const ok = await waitChunkUnderFeet(
+                    bot,
+                    20_000,
+                    gen != null ? () => !isSellSessionAlive(gen) : null,
+                );
+                if (!ok) {
+                    logWarn('joinAnarchy → чанк так и не пришёл — reconnect');
+                    try { bot?.quit?.('no_chunk'); } catch { /* ignore */ }
+                    forceWorkerExit(1);
+                    return;
+                }
+                logOk('joinAnarchy → чанк есть');
+            }
+            await nudgePlayerInput(gen != null ? () => !isSellSessionAlive(gen) : null);
+            return;
+        }
     }
 }
 
@@ -3094,17 +3179,21 @@ async function ensureGroundedForCommands(label = 'ground', shouldAbort = null) {
 }
 
 /**
- * Разблокировка после transfer: FunTime иногда глушит /ah,/balance,/warp,
- * пока не было player_input. /clan при этом уже отвечает.
+ * Разблокировка после transfer: FunTime глушит /ah,/balance,/warp без живого input.
+ * Короткий pulse мало помогал — делаем WASD как anti-AFK / TLauncher pilot.
  */
 async function nudgePlayerInput(shouldAbort = null) {
     if (!bot?.entity || !bot.setControlState) return;
     try {
         ensurePhysicsOn(bot);
         if (typeof shouldAbort === 'function' && shouldAbort()) return;
-        bot.setControlState('forward', true);
-        await sleepMs(280);
-        bot.setControlState('forward', false);
+        // Полный player_input snapshot (как ваниль при смене клавиш)
+        if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
+        await sleepMs(80);
+        const key = ['forward', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        bot.setControlState(key, true);
+        await sleepMs(280 + Math.floor(Math.random() * 200));
+        bot.setControlState(key, false);
         if (typeof bot.refreshPlayerInput === 'function') bot.refreshPlayerInput();
         await sleepMs(200);
     } catch {
@@ -3122,8 +3211,9 @@ function sessionLooksAliveOnAnarchy() {
 
 /**
  * Мягкая проверка анки. Не сбрасываем timeJoin при фейле — иначе rejoin-шторм.
- * play+пол → без долбёжки /balance (3×16с давали «20 попыток» в логе).
- * Иначе одна короткая попытка; при фейле и живом play — всё равно ok.
+ * play+пол → без /balance, КРОМЕ forceCommandProbe.
+ * Глухой /balance при живом play — НЕ exit воркера (mineflayer часто не ловит ответ;
+ * TLauncher при этом всё ещё онлайн). Soft-ok + следующий цикл с nudge.
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
@@ -3145,9 +3235,11 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
 
     if (abort()) return false;
 
+    const mustProbe = Boolean(config.forceCommandProbe);
+
     // Уже на анке и на полу — без долбёжки /balance, кроме force после фейла AH.
     if (
-        !config.forceCommandProbe
+        !mustProbe
         && sessionLooksAliveOnAnarchy()
         && (bot.entity?.onGround || isStandingOnFloor(bot))
     ) {
@@ -3163,9 +3255,10 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     await ensureGroundedForCommands(label, shouldAbort);
     if (abort()) return false;
 
-    // после ground снова можем быть ok без чата
+    // после ground ок без чата — но не когда нас заставили проверить команды
     if (
-        sessionLooksAliveOnAnarchy()
+        !mustProbe
+        && sessionLooksAliveOnAnarchy()
         && (bot.entity?.onGround || isStandingOnFloor(bot))
     ) {
         logOk(`${label} → skip probe after ground`);
@@ -3197,6 +3290,35 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
         await sleepMs(150);
     }
 
+    // Второй pulse + ещё один /balance — FunTime часто отвечает со 2-й попытки после input.
+    if (mustProbe && sessionLooksAliveOnAnarchy()) {
+        logWarn(`${label} → /balance молчит, ещё nudge + повтор`);
+        await nudgePlayerInput(shouldAbort);
+        if (abort()) return false;
+        config.balance = null;
+        try {
+            bot.chat('/balance');
+        } catch { /* ignore */ }
+        await chatChain;
+        const retryUntil = Date.now() + 4_000;
+        while (Date.now() < retryUntil) {
+            if (abort()) return false;
+            if (config.balance != null) {
+                logOk(`${label} → balance ok после retry (${config.balance})`);
+                return true;
+            }
+            await sleepMs(150);
+        }
+    }
+
+    if (mustProbe) {
+        // force уже стоял (AH/balance timeout) + снова глухо.
+        // play+ground тут врёт при зомби-TCP — не soft-ok, пусть caller рвёт/ждёт ka-end.
+        logWarn(`${label} → /balance глухой после force — сессия подохлявая`);
+        config.forceCommandProbe = true;
+        config.commandsMuteStrikes = (config.commandsMuteStrikes || 0) + 1;
+        return false;
+    }
     if (sessionLooksAliveOnAnarchy()) {
         logWarn(`${label} → /balance молчит, play жив — идём дальше`);
         return true;
@@ -3271,9 +3393,22 @@ async function sellItems() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('sell', () => !isSellSessionAlive(gen)))) {
-            // TLauncher/прокси ок, mineflayer иногда не ловит ответ чата — не рвём сессию.
+            const kaAge = bot?._funtimeKaLastPacketAt
+                ? Date.now() - bot._funtimeKaLastPacketAt
+                : 99_000;
+            if (
+                (kaAge > 75_000 || !sessionLooksAliveOnAnarchy())
+                && isSellSessionAlive(gen)
+            ) {
+                logWarn(`продажа → зомби-сокет (ka=${Math.round(kaAge / 1000)}с) — рестарт`);
+                try { bot?.quit?.('dead_socket'); } catch { /* ignore */ }
+                forceWorkerExit(1);
+                return;
+            }
             if (sessionLooksAliveOnAnarchy() && isSellSessionAlive(gen)) {
-                logWarn('продажа → confirm fail, анка play — soft skip (без рестарта)');
+                config.forceCommandProbe = true;
+                logWarn('продажа → confirm fail, пакеты идут — soft skip + nudge');
+                await nudgePlayerInput(() => !isSellSessionAlive(gen));
                 return;
             }
             logWarn('продажа → confirm fail + сессия мёртвая — выход, рестарт воркера');
@@ -3281,6 +3416,7 @@ async function sellItems() {
             forceWorkerExit(1);
             return;
         }
+        config.commandsMuteStrikes = 0;
         if (!isSellSessionAlive(gen)) return;
         config.timeActive = Date.now();
         let canSell = true;
@@ -3400,6 +3536,8 @@ async function sellItems() {
                         const listPrice = alloc?.listPrice;
                         if (listingId == null || !Number.isFinite(listPrice)) {
                             logWarn(`sellItems slot=${currentSlot} → нет свободного listing id 0–4`);
+                            // АХ 5/5 — не долбим остальные слоты hotbar тем же «нет id».
+                            currentSlot = lastHotbarSlot + 1;
                             break;
                         }
                         await waitActionsSettled(() => !isSellSessionAlive(gen));
@@ -3618,7 +3756,20 @@ async function antiAfkIfNeeded(shouldAbort = null) {
     logOk(`AFK снят (${result?.mode || 'ok'})`);
 }
 
-/** Пока ключ не сменился (открылось окно АХ) — `/ah search`, с recovery. */
+/** Ждём open_window / смену key после /ah search (не долбим следующим search сразу). */
+async function waitAhOpenedAfterSearch(key, maxMs = 7000) {
+    const deadline = Date.now() + maxMs;
+    while (Date.now() < deadline) {
+        if (key !== config.key) return 'key';
+        if (bot?.currentWindow) return 'window';
+        await sleep(50);
+    }
+    if (key !== config.key) return 'key';
+    if (bot?.currentWindow) return 'window';
+    return null;
+}
+
+/** Пока ключ не сменился (открылось окно АХ) — `/ah search`, ждём окно; глухой чат → рестарт. */
 async function safeAH() {
     if (config.staffCheckIdle) return;
     if (config.ownerBanDrain) {
@@ -3641,15 +3792,23 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            if (sessionLooksAliveOnAnarchy()) {
-                logWarn('safeAH → confirm fail, анка play — soft skip (без рестарта)');
+            // Рестарт только если входящий поток реально мёртв (ка как у зомби).
+            // mute без ka-stale = FunTime economy-mute / mineflayer chat — soft, не орк-шторм.
+            const kaAge = bot?._funtimeKaLastPacketAt
+                ? Date.now() - bot._funtimeKaLastPacketAt
+                : 99_000;
+            if (kaAge > 75_000 || !sessionLooksAliveOnAnarchy()) {
+                logWarn(`safeAH → зомби-сокет (ka=${Math.round(kaAge / 1000)}с) — рестарт`);
+                try { bot?.quit?.('dead_socket'); } catch { /* ignore */ }
+                forceWorkerExit(1);
                 return;
             }
-            logWarn('safeAH → confirm fail + сессия мёртвая — выход, рестарт воркера');
-            try { bot?.quit?.('dead_session'); } catch { /* ignore */ }
-            forceWorkerExit(1);
+            config.forceCommandProbe = true;
+            logWarn('safeAH → confirm fail — soft skip (пакеты ещё идут, не рвём)');
+            await nudgePlayerInput();
             return;
         }
+        config.commandsMuteStrikes = 0;
         await ensureGroundedForCommands('safeAH');
         if (!config.timeJoinAnarchy || Date.now() < (config.noCommandsUntil || 0)) {
             logWarn('safeAH → abort после ground');
@@ -3668,37 +3827,7 @@ async function safeAH() {
         const key = config.key;
 
         let searchCount = 0;
-        const MAX_SEARCH = 12;
-
-        async function ahRecovery(why) {
-            logWarn(`safeAH → recovery (${why})`);
-            config.forceCommandProbe = true;
-            await antiAfkIfNeeded();
-            if (key !== config.key) return true;
-            try {
-                const pick = await pickWarpForSession();
-                const warp = typeof pick === 'string' ? pick : pick?.warp;
-                if (warp) {
-                    logInfo(`safeAH → recovery /warp ${warp}`);
-                    config.lastWarp = warp;
-                    bot.chat(`/warp ${warp}`);
-                    await chatChain;
-                    await rnd('BASE_DELAY');
-                }
-            } catch (e) {
-                logWarn(`safeAH → recovery warp: ${e.message}`);
-            }
-            if (key !== config.key) return true;
-            await ensureGroundedForCommands('safeAH');
-            if (key !== config.key) return true;
-            logInfo('safeAH → recovery /ah');
-            try {
-                bot.chat('/ah');
-            } catch { /* ignore */ }
-            await chatChain;
-            await rnd('AH_CMD');
-            return key !== config.key || Boolean(bot.currentWindow);
-        }
+        const MAX_SEARCH = 6;
 
         while (key === config.key) {
             if (config.staffCheckIdle) return;
@@ -3710,12 +3839,22 @@ async function safeAH() {
                 logWarn(`safeAH → стоп (лимобо) после ${searchCount} search`);
                 return;
             }
-            if (searchCount > 0 && searchCount % 4 === 0) {
-                if (await ahRecovery(`каждые 4 search, #${searchCount}`)) {
-                    logOk(`safeAH → выход после recovery (открылось окно)`);
+
+            // После 3 пустых search — один /ah (без warp-спама), ждём окно.
+            if (searchCount === 3) {
+                logInfo('safeAH → fallback /ah после 3 search без окна');
+                await antiAfkIfNeeded();
+                try {
+                    bot.chat('/ah');
+                } catch { /* ignore */ }
+                await chatChain;
+                const openedAh = await waitAhOpenedAfterSearch(key, 7000);
+                if (openedAh) {
+                    logOk(`safeAH → окно после /ah (${openedAh})`);
                     return;
                 }
             }
+
             searchCount++;
             logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
             await antiAfkIfNeeded();
@@ -3726,14 +3865,16 @@ async function safeAH() {
             config.menu = analysisAH;
             bot.chat(`/ah search ${config.item}`);
             await chatChain;
-            await rnd('AH_CMD');
+            const opened = await waitAhOpenedAfterSearch(key, 7000);
+            if (opened) {
+                logOk(`safeAH → выход после ${searchCount} search (открылось окно, ${opened})`);
+                return;
+            }
+
             if (searchCount >= MAX_SEARCH) {
-                if (await ahRecovery(`лимит ${MAX_SEARCH}`)) {
-                    logOk('safeAH → выход после recovery на лимите');
-                    return;
-                }
-                logWarn(`safeAH → ${MAX_SEARCH} search без окна, стоп (force probe next)`);
+                logWarn(`safeAH → ${MAX_SEARCH} search без окна — стоп (не рвём сессию)`);
                 config.forceCommandProbe = true;
+                await nudgePlayerInput();
                 return;
             }
         }
@@ -3777,6 +3918,8 @@ async function safeBalance() {
     }
     if (config.balance == null) {
         logWarn(`safeBalance → timeout после ${tries} попыток`);
+        // Иначе следующий safeAH сделает skip probe и снова заспамит /ah search.
+        config.forceCommandProbe = true;
     }
 }
 
