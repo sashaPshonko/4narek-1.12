@@ -24,7 +24,7 @@ import {
     collectAhBookLots,
     expectedSellFromListingMeta,
 } from './items/slotInfo.mjs';
-import { pricesMatch } from './items/listing-memory.mjs';
+import { pricesAligned } from './items/listing-memory.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
 import { clanKeepSum } from './lib/clan-save-sum.mjs';
 
@@ -757,6 +757,8 @@ const config = {
     sellInFlight: false,
     /** safeAH крутится — physicTick не стартует параллельный sell. */
     ahInFlight: false,
+    /** После фейла search — следующий confirm не skip'ает probe. */
+    forceCommandProbe: false,
     /** Поколение sellItems — лобби/таймаут бампят, старая сессия выходит. */
     sellGen: 0,
     sellStartedAt: 0,
@@ -1287,17 +1289,16 @@ function markUnlistCycleDone() {
 }
 
 /**
- * Слот 0–4 в «Хранилище»: снять мусор / несовпадение цены.
- * Цену сверяем с listing memory (прочность на момент /ah sell), не с NBT слота АХ —
- * у FunTime в хранилище damage часто ≠ инвентарю → ложный ≠ и снос витрины.
- * Инвентарь ≥27 / enoughItems / КД-снятие — снимаем любой свой лот.
+ * Слот 0–4 в «Хранилище»: снять мусор / сильное несовпадение цены.
+ * Цену сверяем с listing memory (прочность при /ah sell). enoughItems сюда НЕ входит:
+ * АХ полон → лоты висят, только стоп новых листингов (иначе вечный снос витрины).
  * @returns {Promise<{ slot: number, reason: string } | null>}
  */
 async function findStorageSlotToUnlist() {
     let priceOrFullSlot = null;
     let priceOrFullReason = '';
     const invFull = isBotInventoryFull();
-    const clearAll = invFull || config.enoughItems || unlistCycleDue();
+    const clearAll = invFull || unlistCycleDue();
 
     /** @type {Map<number, { catalogId: string, durability?: number|null, price?: number }>} */
     const memById = new Map();
@@ -1316,7 +1317,6 @@ async function findStorageSlotToUnlist() {
         const currentSlot = bot.currentWindow?.slots[i];
         if (!currentSlot) continue;
 
-        // Матч SKU без sellPrice из AH-прочности (getSlotInfo тут врал бы).
         let hit;
         try {
             hit = findMatchingConfigItemResult(currentSlot, config.catalogAll, config.goType);
@@ -1342,8 +1342,8 @@ async function findStorageSlotToUnlist() {
         const listingId = priceOnAH % 10;
         const mem = memById.get(listingId);
         const expected = expectedSellFromListingMeta(config.catalogAll, mem);
-        // Нет memory (рестарт/старый лот) — не сносим по «≠», только clearAll/мусор.
-        if (expected != null && !pricesMatch(priceOnAH, expected)) {
+        // Нет memory — не сносим по цене. Микро-тик Go (±1%/2k) — тоже не сносим.
+        if (expected != null && !pricesAligned(priceOnAH, expected)) {
             if (priceOrFullSlot === null) {
                 priceOrFullSlot = i;
                 priceOrFullReason = `цена ${priceOnAH} ≠ ${expected}`;
@@ -1353,11 +1353,9 @@ async function findStorageSlotToUnlist() {
 
         if (clearAll && priceOrFullSlot === null) {
             priceOrFullSlot = i;
-            priceOrFullReason = config.enoughItems
-                ? 'enoughItems — снять всё, потом продать'
-                : invFull
-                  ? 'инвентарь ≥27 — снять для перевыставления'
-                  : 'КД-снятие — снять→продать→walk';
+            priceOrFullReason = invFull
+                ? 'инвентарь ≥27 — снять для перевыставления'
+                : 'КД-снятие — снять→продать→walk';
         }
     }
 
@@ -1602,8 +1600,8 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('[☃] У Вас купили')) {
-        // enoughItems не сбрасываем здесь — только пустой слот 0 в хранилище
-        // (сначала снять все лоты, потом sellItems).
+        // Освободился слот АХ — можно снова выставлять.
+        config.enoughItems = false;
         const price = parseChatPrice(text);
         let meta = null;
         try {
@@ -2347,10 +2345,10 @@ async function main() {
 
                     flushAhBookLots();
 
-                    // Сброс / enoughItems / КД-снятие / инвентарь≥27 — раньше buy.
+                    // Сброс цены / КД / полный инвентарь → хранилище.
+                    // enoughItems НЕ сюда: АХ полон — лоты оставляем, только не добираем/не довыставляем.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
-                        config.enoughItems ||
                         config.needReset ||
                         isBotInventoryFull() ||
                         unlistCycleDue()
@@ -2358,13 +2356,11 @@ async function main() {
                         logInfo(
                             isBotInventoryFull()
                                 ? 'АХ → хранилище (инвентарь ≥27)'
-                                : config.enoughItems
-                                  ? 'АХ → хранилище (enoughItems — снять всё, потом продать)'
-                                  : unlistCycleDue()
-                                    ? 'АХ → хранилище (КД-снятие)'
-                                    : config.needReset
-                                      ? 'АХ → хранилище (needReset)'
-                                      : 'АХ → хранилище (timer60)',
+                                : unlistCycleDue()
+                                  ? 'АХ → хранилище (КД-снятие)'
+                                  : config.needReset
+                                    ? 'АХ → хранилище (needReset)'
+                                    : 'АХ → хранилище (timer60)',
                         );
                         config.menu = myItems;
                         await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
@@ -2523,11 +2519,20 @@ async function main() {
                     break;
                 }
 
-                // enoughItems off только когда слот 0 пуст (= лоты сняты / хранилище пусто слева).
-                if (!bot.currentWindow?.slots[0] && config.enoughItems) {
-                    config.enoughItems = false;
-                    config.needSell = true;
-                    logInfo('хранилище → слот 0 пуст, enoughItems off → дальше sellItems');
+                // enoughItems: если в хранилище есть дырка 0..4 — снова можно выставлять.
+                if (config.enoughItems) {
+                    let freeAh = false;
+                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
+                        if (!bot.currentWindow?.slots[i]) {
+                            freeAh = true;
+                            break;
+                        }
+                    }
+                    if (freeAh) {
+                        config.enoughItems = false;
+                        config.needSell = true;
+                        logInfo('хранилище → есть свободный слот АХ, enoughItems off');
+                    }
                 }
                 if (config.needSendAH) {
                     const botAh = [];
@@ -3164,9 +3169,10 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
 
     if (abort()) return false;
 
-    // Уже на анке и на полу — FunTime команды могут молчать, сессия при этом жива.
+    // Уже на анке и на полу — без долбёжки /balance, кроме force после фейла AH.
     if (
-        sessionLooksAliveOnAnarchy()
+        !config.forceCommandProbe
+        && sessionLooksAliveOnAnarchy()
         && (bot.entity?.onGround || isStandingOnFloor(bot))
     ) {
         await nudgePlayerInput(shouldAbort);
@@ -3174,6 +3180,7 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
         logOk(`${label} → skip probe (play+ground y=${bot.entity.position.y.toFixed(1)})`);
         return true;
     }
+    config.forceCommandProbe = false;
 
     await closeCurrentWindowSafe();
     if (abort()) return false;
@@ -3638,7 +3645,7 @@ async function antiAfkIfNeeded(shouldAbort = null) {
     logOk(`AFK снят (${result?.mode || 'ok'})`);
 }
 
-/** Пока ключ не сменился (открылось окно АХ) — одно движение и `/ah search`. */
+/** Пока ключ не сменился (открылось окно АХ) — `/ah search`, с recovery. */
 async function safeAH() {
     if (config.staffCheckIdle) return;
     if (config.ownerBanDrain) {
@@ -3661,7 +3668,6 @@ async function safeAH() {
             return;
         }
         if (!(await confirmAnarchyWithWarp('safeAH'))) {
-            // Зомби только если play уже нет. Иначе soft skip — иначе рестарт-шторм как у sypuchij.
             if (sessionLooksAliveOnAnarchy()) {
                 logWarn('safeAH → confirm fail, анка play — soft skip (без рестарта)');
                 return;
@@ -3678,7 +3684,6 @@ async function safeAH() {
         }
         await rnd('BASE_DELAY');
 
-        // если probe /ah уже открыл окно — выходим, windowOpen крутит browse
         if (config.key && bot.currentWindow) {
             logOk('safeAH → окно уже открыто после probe');
             return;
@@ -3690,6 +3695,38 @@ async function safeAH() {
         const key = config.key;
 
         let searchCount = 0;
+        const MAX_SEARCH = 12;
+
+        async function ahRecovery(why) {
+            logWarn(`safeAH → recovery (${why})`);
+            config.forceCommandProbe = true;
+            await antiAfkIfNeeded();
+            if (key !== config.key) return true;
+            try {
+                const pick = await pickWarpForSession();
+                const warp = typeof pick === 'string' ? pick : pick?.warp;
+                if (warp) {
+                    logInfo(`safeAH → recovery /warp ${warp}`);
+                    config.lastWarp = warp;
+                    bot.chat(`/warp ${warp}`);
+                    await chatChain;
+                    await rnd('BASE_DELAY');
+                }
+            } catch (e) {
+                logWarn(`safeAH → recovery warp: ${e.message}`);
+            }
+            if (key !== config.key) return true;
+            await ensureGroundedForCommands('safeAH');
+            if (key !== config.key) return true;
+            logInfo('safeAH → recovery /ah');
+            try {
+                bot.chat('/ah');
+            } catch { /* ignore */ }
+            await chatChain;
+            await rnd('AH_CMD');
+            return key !== config.key || Boolean(bot.currentWindow);
+        }
+
         while (key === config.key) {
             if (config.staffCheckIdle) return;
             if (config.ownerBanDrain) {
@@ -3700,15 +3737,15 @@ async function safeAH() {
                 logWarn(`safeAH → стоп (лимобо) после ${searchCount} search`);
                 return;
             }
-            if (searchCount > 0 && searchCount % 5 === 0) {
-                await ensureGroundedForCommands('safeAH');
+            if (searchCount > 0 && searchCount % 4 === 0) {
+                if (await ahRecovery(`каждые 4 search, #${searchCount}`)) {
+                    logOk(`safeAH → выход после recovery (открылось окно)`);
+                    return;
+                }
             }
-            if (config.afk) logAfk('режим AFK (safeAH)');
             searchCount++;
             logInfo(`safeAH → /ah search #${searchCount} (${config.item})`);
             await antiAfkIfNeeded();
-            // Раньше: if (afk) continue — /ah search никогда не уходил, книга пустая.
-            // Пробуем search даже если un-AFK не вышел (сервер часто отвечает на /ah).
             if (config.afk) {
                 logWarn('safeAH → AFK ещё висит, всё равно шлём /ah search');
             }
@@ -3717,8 +3754,13 @@ async function safeAH() {
             bot.chat(`/ah search ${config.item}`);
             await chatChain;
             await rnd('AH_CMD');
-            if (searchCount >= 40) {
-                logWarn('safeAH → 40 search без окна, выход');
+            if (searchCount >= MAX_SEARCH) {
+                if (await ahRecovery(`лимит ${MAX_SEARCH}`)) {
+                    logOk('safeAH → выход после recovery на лимите');
+                    return;
+                }
+                logWarn(`safeAH → ${MAX_SEARCH} search без окна, стоп (force probe next)`);
+                config.forceCommandProbe = true;
                 return;
             }
         }

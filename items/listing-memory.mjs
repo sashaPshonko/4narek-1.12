@@ -12,6 +12,21 @@ export function pricesMatch(ahPrice, catalogSellPrice) {
     return Math.floor(ahPrice / 10) === Math.floor(catalogSellPrice / 10);
 }
 
+/**
+ * Сверка с допуском: Go часто дёргает sell на ±100–1k — не сносить витрину.
+ * listing id (последняя цифра) игнорируется как в pricesMatch.
+ */
+export function pricesAligned(ahPrice, catalogSellPrice, opts = {}) {
+    if (pricesMatch(ahPrice, catalogSellPrice)) return true;
+    if (!Number.isFinite(ahPrice) || !Number.isFinite(catalogSellPrice)) return false;
+    const a = Math.floor(ahPrice / 10) * 10;
+    const e = Math.floor(catalogSellPrice / 10) * 10;
+    const minAbs = Number.isFinite(opts.minAbs) ? opts.minAbs : 2_000;
+    const frac = Number.isFinite(opts.frac) ? opts.frac : 0.01;
+    const tol = Math.max(minAbs, Math.round(Math.max(a, e) * frac));
+    return Math.abs(a - e) <= tol;
+}
+
 /** Каталожная sell-цена → цена с последней цифрой = listingId. */
 export function priceWithListingId(basePrice, listingId) {
     const base = Math.floor(Number(basePrice));

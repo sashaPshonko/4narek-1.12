@@ -43,3 +43,9 @@ test('Go price change still mismatches', () => {
     assert.ok(expected > 850_000);
     assert.equal(pricesMatch(850_003, expected), false);
 });
+
+test('pricesAligned tolerates Go micro-tick', async () => {
+    const { pricesAligned } = await import('./listing-memory.mjs');
+    assert.equal(pricesAligned(830_000, 829_900), true);
+    assert.equal(pricesAligned(950_002, 500_000), false);
+});
