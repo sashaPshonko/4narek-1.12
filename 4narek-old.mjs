@@ -3115,15 +3115,15 @@ function sessionLooksAliveOnAnarchy() {
 
 /**
  * Мягкая проверка анки. Не сбрасываем timeJoin при фейле — иначе rejoin-шторм.
- * FunTime часто глушит /balance,/ah пока не на полу или GUI открыт — сначала
- * close+ground, потом 2–3 попытки (как safeBalance). При фейле только warn.
+ * play+пол → без долбёжки /balance (3×16с давали «20 попыток» в логе).
+ * Иначе одна короткая попытка; при фейле и живом play — всё равно ok.
  */
 async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     if (!bot?.chat || !config.timeJoinAnarchy) return false;
     if (Date.now() < (config.noCommandsUntil || 0)) {
         const until = Date.now() + Math.min(
             (config.noCommandsUntil - Date.now()) + 50,
-            8_000,
+            5_000,
         );
         while (Date.now() < until) {
             if (typeof shouldAbort === 'function' && shouldAbort()) return false;
@@ -3136,70 +3136,63 @@ async function confirmAnarchyWithWarp(label = 'join', shouldAbort = null) {
     const abort = () => (typeof shouldAbort === 'function' && shouldAbort())
         || !config.timeJoinAnarchy;
 
-    const attempts = 3;
-    for (let tryN = 1; tryN <= attempts; tryN++) {
-        if (abort()) return false;
+    if (abort()) return false;
 
-        await closeCurrentWindowSafe();
-        if (abort()) return false;
-        await ensureGroundedForCommands(label, shouldAbort);
-        if (abort()) return false;
-
-        const y = bot.entity?.position?.y;
-        logInfo(
-            `${label} → probe#${tryN}/${attempts} state=${bot._client?.state || '?'} y=${Number.isFinite(y) ? y.toFixed(1) : '?'} onGround=${Boolean(bot.entity?.onGround)}`,
-        );
+    // Уже на анке и на полу — FunTime команды могут молчать, сессия при этом жива.
+    if (
+        sessionLooksAliveOnAnarchy()
+        && (bot.entity?.onGround || isStandingOnFloor(bot))
+    ) {
         await nudgePlayerInput(shouldAbort);
         if (abort()) return false;
-
-        config.balance = null;
-        logInfo(`${label} → probe /balance`);
-        try {
-            bot.chat('/balance');
-        } catch {
-            /* ignore */
-        }
-        await chatChain;
-        let deadline = Date.now() + 8_000;
-        while (Date.now() < deadline) {
-            if (abort()) return false;
-            if (config.balance != null) {
-                logOk(`${label} → balance ok (${config.balance}), на анке`);
-                return true;
-            }
-            await sleepMs(150);
-        }
-
-        // /ah без search — если окно открылось, экономика жива
-        const keyBefore = config.key;
-        logInfo(`${label} → probe /ah`);
-        try {
-            bot.chat('/ah');
-        } catch {
-            /* ignore */
-        }
-        await chatChain;
-        deadline = Date.now() + 8_000;
-        while (Date.now() < deadline) {
-            if (abort()) return false;
-            if (config.key !== keyBefore) {
-                logOk(`${label} → AH window ok`);
-                return true;
-            }
-            if (config.balance != null) {
-                logOk(`${label} → balance ok (late), на анке`);
-                return true;
-            }
-            await sleepMs(150);
-        }
-
-        logWarn(`${label} → probe#${tryN} без ответа (balance/ah)`);
-        if (tryN < attempts) await sleepMs(800);
+        logOk(`${label} → skip probe (play+ground y=${bot.entity.position.y.toFixed(1)})`);
+        return true;
     }
 
-    logWarn(
-        `${label} → probe без ответа после ${attempts} попыток — анку не сбрасываем`,
+    await closeCurrentWindowSafe();
+    if (abort()) return false;
+    await ensureGroundedForCommands(label, shouldAbort);
+    if (abort()) return false;
+
+    // после ground снова можем быть ok без чата
+    if (
+        sessionLooksAliveOnAnarchy()
+        && (bot.entity?.onGround || isStandingOnFloor(bot))
+    ) {
+        logOk(`${label} → skip probe after ground`);
+        return true;
+    }
+
+    const y = bot.entity?.position?.y;
+    logInfo(
+        `${label} → probe state=${bot._client?.state || '?'} y=${Number.isFinite(y) ? y.toFixed(1) : '?'} onGround=${Boolean(bot.entity?.onGround)}`,
     );
+    await nudgePlayerInput(shouldAbort);
+    if (abort()) return false;
+
+    config.balance = null;
+    logInfo(`${label} → probe /balance`);
+    try {
+        bot.chat('/balance');
+    } catch {
+        /* ignore */
+    }
+    await chatChain;
+    const deadline = Date.now() + 4_000;
+    while (Date.now() < deadline) {
+        if (abort()) return false;
+        if (config.balance != null) {
+            logOk(`${label} → balance ok (${config.balance}), на анке`);
+            return true;
+        }
+        await sleepMs(150);
+    }
+
+    if (sessionLooksAliveOnAnarchy()) {
+        logWarn(`${label} → /balance молчит, play жив — идём дальше`);
+        return true;
+    }
+    logWarn(`${label} → probe fail, сессия не play`);
     return false;
 }
 
