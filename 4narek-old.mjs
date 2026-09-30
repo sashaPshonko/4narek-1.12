@@ -1290,15 +1290,16 @@ function markUnlistCycleDone() {
 
 /**
  * Слот 0–4 в «Хранилище»: снять мусор / сильное несовпадение цены.
- * Цену сверяем с listing memory (прочность при /ah sell). enoughItems сюда НЕ входит:
- * АХ полон → лоты висят, только стоп новых листингов (иначе вечный снос витрины).
+ * Цену сверяем с listing memory (прочность при /ah sell).
+ * Инвентарь ≥27 / enoughItems / КД-снятие — снимаем любой свой лот
+ * (enoughItems: снять всё → слот 0 пуст → sellItems перевыставить).
  * @returns {Promise<{ slot: number, reason: string } | null>}
  */
 async function findStorageSlotToUnlist() {
     let priceOrFullSlot = null;
     let priceOrFullReason = '';
     const invFull = isBotInventoryFull();
-    const clearAll = invFull || unlistCycleDue();
+    const clearAll = invFull || config.enoughItems || unlistCycleDue();
 
     /** @type {Map<number, { catalogId: string, durability?: number|null, price?: number }>} */
     const memById = new Map();
@@ -1353,9 +1354,11 @@ async function findStorageSlotToUnlist() {
 
         if (clearAll && priceOrFullSlot === null) {
             priceOrFullSlot = i;
-            priceOrFullReason = invFull
-                ? 'инвентарь ≥27 — снять для перевыставления'
-                : 'КД-снятие — снять→продать→walk';
+            priceOrFullReason = config.enoughItems
+                ? 'enoughItems — снять всё, потом продать'
+                : invFull
+                  ? 'инвентарь ≥27 — снять для перевыставления'
+                  : 'КД-снятие — снять→продать→walk';
         }
     }
 
@@ -1600,8 +1603,8 @@ async function handleChatMessage(text) {
     }
 
     if (text.includes('[☃] У Вас купили')) {
-        // Освободился слот АХ — можно снова выставлять.
-        config.enoughItems = false;
+        // enoughItems не сбрасываем здесь — только пустой слот 0 в хранилище
+        // (сначала снять все лоты, потом sellItems).
         const price = parseChatPrice(text);
         let meta = null;
         try {
@@ -2345,10 +2348,11 @@ async function main() {
 
                     flushAhBookLots();
 
-                    // Сброс цены / КД / полный инвентарь → хранилище.
-                    // enoughItems НЕ сюда: АХ полон — лоты оставляем, только не добираем/не довыставляем.
+                    // Сброс / enoughItems / КД-снятие / инвентарь≥27 — раньше buy.
+                    // enoughItems: снять всё → sellItems перевыставить.
                     if (
                         config.lastResetTime < Date.now() - 60000 ||
+                        config.enoughItems ||
                         config.needReset ||
                         isBotInventoryFull() ||
                         unlistCycleDue()
@@ -2356,11 +2360,13 @@ async function main() {
                         logInfo(
                             isBotInventoryFull()
                                 ? 'АХ → хранилище (инвентарь ≥27)'
-                                : unlistCycleDue()
-                                  ? 'АХ → хранилище (КД-снятие)'
-                                  : config.needReset
-                                    ? 'АХ → хранилище (needReset)'
-                                    : 'АХ → хранилище (timer60)',
+                                : config.enoughItems
+                                  ? 'АХ → хранилище (enoughItems — снять всё, потом продать)'
+                                  : unlistCycleDue()
+                                    ? 'АХ → хранилище (КД-снятие)'
+                                    : config.needReset
+                                      ? 'АХ → хранилище (needReset)'
+                                      : 'АХ → хранилище (timer60)',
                         );
                         config.menu = myItems;
                         await safeClickBuy(bot, slotToStorage, delayMs({ min: 1500, max: 4500 }), key);
@@ -2519,20 +2525,11 @@ async function main() {
                     break;
                 }
 
-                // enoughItems: если в хранилище есть дырка 0..4 — снова можно выставлять.
-                if (config.enoughItems) {
-                    let freeAh = false;
-                    for (let i = 0; i < STORAGE_AH_SLOTS; i++) {
-                        if (!bot.currentWindow?.slots[i]) {
-                            freeAh = true;
-                            break;
-                        }
-                    }
-                    if (freeAh) {
-                        config.enoughItems = false;
-                        config.needSell = true;
-                        logInfo('хранилище → есть свободный слот АХ, enoughItems off');
-                    }
+                // enoughItems off только когда слот 0 пуст (= лоты сняты / хранилище пусто слева).
+                if (!bot.currentWindow?.slots[0] && config.enoughItems) {
+                    config.enoughItems = false;
+                    config.needSell = true;
+                    logInfo('хранилище → слот 0 пуст, enoughItems off → дальше sellItems');
                 }
                 if (config.needSendAH) {
                     const botAh = [];
