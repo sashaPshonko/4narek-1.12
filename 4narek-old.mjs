@@ -1188,7 +1188,7 @@ function attachWindowCloseTrace(bot) {
     else bot.once('inject_allowed', wrapClose);
 }
 
-/** FunTime часто: close_window → (дыра 0–2с) → open_window. Vanilla за это не «теряет» АХ. */
+/** FunTime: close_window → дыра → open_window. TLauncher ждёт reopen, не /ah сразу. */
 async function waitForCurrentWindow(maxMs, key = null) {
     const deadline = Date.now() + maxMs;
     while (!bot?.currentWindow && Date.now() < deadline) {
@@ -2353,6 +2353,12 @@ async function main() {
             await drainTreasuryAndLeaveClan();
             return;
         }
+        // Продажа из хотбара — не крутим параллельный АХ (TLauncher так не делает).
+        if (config.sellInFlight) {
+            logInfo('windowOpen → skip, sellInFlight');
+            return;
+        }
+        if (config.staffCheckIdle) return;
         config.timeActive = Date.now();
         const key = generateKey();
         logInfo(`windowOpen → key …${String(key).slice(-6)}`);
@@ -2377,18 +2383,18 @@ async function main() {
                     }
                     if (config.key !== key) return;
                     config.timeActive = Date.now();
-                    if (!bot.currentWindow) {
+                        if (!bot.currentWindow) {
                         logWarn(
                             `АХ → GUI null (${lastWindowGone.why || '?'}) — жду open_window, не /ah`,
                         );
-                        const waited = await waitForCurrentWindow(2500, key);
+                        const waited = await waitForCurrentWindow(4000, key);
                         if (waited === 'newkey') return;
                         if (!bot.currentWindow) {
                             logWarn('АХ → open_window так и не пришёл — тогда /ah search');
                             await safeAH();
                             return;
                         }
-                        logInfo('АХ → окно вернулось (это была дыра close→open, не «потеря»)');
+                        logInfo('АХ → окно вернулось (дыра close→open, как у TLauncher)');
                     }
 
                     config.menu = resolveWindowMenu(bot.currentWindow);
@@ -2453,7 +2459,7 @@ async function main() {
                         const settleBuy = await waitAhGuiSettle(bot, { key, contentBefore: contentBeforeBuy });
                         if (settleBuy === 'newkey') return;
                         if (settleBuy === 'no_window') {
-                            const waited = await waitForCurrentWindow(2500, key);
+                            const waited = await waitForCurrentWindow(4000, key);
                             if (waited === 'newkey') return;
                             if (!bot.currentWindow) {
                                 logWarn(`АХ → после buy GUI нет (${lastWindowGone.why || '?'}) → /ah search`);
@@ -3356,6 +3362,8 @@ async function tossTrashAtSlot(slot) {
 async function closeCurrentWindowSafe() {
     const win = bot?.currentWindow;
     if (!win) return;
+    // Как ваниль: закрыли GUI → больше нет кликов по старому окну.
+    generateKey();
     await rnd('BASE_DELAY');
     if (bot?.currentWindow !== win) return;
     try {
@@ -3380,6 +3388,11 @@ async function sellItems() {
     config.sellStartedAt = Date.now();
     config.timeActive = Date.now();
     logOk('продажа → старт');
+    // Сразу рвём GUI-цикл (TLauncher не кликает АХ, пока «продаёт» из хотбара).
+    generateKey();
+    try {
+        await closeCurrentWindowSafe();
+    } catch { /* ignore */ }
     try {
         if (config.ownerBanDrain) {
             await drainTreasuryAndLeaveClan();
