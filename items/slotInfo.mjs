@@ -59,12 +59,29 @@ export function getDurabilityPercent(item) {
     return (item.maxDurability - damage) / item.maxDurability;
 }
 
-function priceWithDurability(basePriceSell, durabilityPercent) {
+/** Каталог × прочность (как при /ah sell). Не звать с NBT слота хранилища АХ — там damage врёт. */
+export function priceWithDurability(basePriceSell, durabilityPercent) {
     if (durabilityPercent < 0.5) return 0;
     let price = Math.floor(basePriceSell * durabilityPercent);
     const marker = basePriceSell % 100;
     price = Math.floor(price / 100) * 100 + marker;
     return price;
+}
+
+/**
+ * Ожидаемая sell-цена своего лота: catalogId + прочность из listing memory (снимок при выставлении).
+ * @param {object[]} catalogAll
+ * @param {{ catalogId?: string, durability?: number|null, price?: number }|null|undefined} meta
+ * @returns {number|null}
+ */
+export function expectedSellFromListingMeta(catalogAll, meta) {
+    if (!meta?.catalogId || !Array.isArray(catalogAll)) return null;
+    const cfg = catalogAll.find((c) => c?.id === meta.catalogId);
+    if (!cfg || typeof cfg.priceSell !== 'number' || Number.isNaN(cfg.priceSell)) return null;
+    const dur =
+        typeof meta.durability === 'number' && Number.isFinite(meta.durability) ? meta.durability : 1;
+    const sell = priceWithDurability(cfg.priceSell, dur);
+    return sell || null;
 }
 
 function getForbiddenEffectNames(configItem) {

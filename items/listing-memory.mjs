@@ -85,6 +85,12 @@ export function createListingMemory() {
             return row;
         },
 
+        getByListingId(listingId) {
+            const id = Number(listingId) % 10;
+            if (!Number.isFinite(id)) return null;
+            return memory.get(id) ?? null;
+        },
+
         exportState() {
             return {
                 pending,

@@ -16,11 +16,13 @@ import {
     getItemUUID,
     getPriceFromAhItem,
     findMatchingConfigItem,
+    findMatchingConfigItemResult,
     getDurabilityPercent,
     getAllEnchants,
     isBotTradeItem,
     setEnchantRegistry,
     collectAhBookLots,
+    expectedSellFromListingMeta,
 } from './items/slotInfo.mjs';
 import { pricesMatch } from './items/listing-memory.mjs';
 import { catalogTypeMatchesGoType } from './lib/go-type.mjs';
@@ -1286,26 +1288,46 @@ function markUnlistCycleDone() {
 
 /**
  * Слот 0–4 в «Хранилище»: снять мусор / несовпадение цены.
- * Инвентарь ≥27 / enoughItems / КД-снятие — снимаем любой свой лот
- * (снять → слот 0 пуст → продать → walk в sell).
- * @returns {{ slot: number, reason: string } | null}
+ * Цену сверяем с listing memory (прочность на момент /ah sell), не с NBT слота АХ —
+ * у FunTime в хранилище damage часто ≠ инвентарю → ложный ≠ и снос витрины.
+ * Инвентарь ≥27 / enoughItems / КД-снятие — снимаем любой свой лот.
+ * @returns {Promise<{ slot: number, reason: string } | null>}
  */
-function findStorageSlotToUnlist() {
+async function findStorageSlotToUnlist() {
     let priceOrFullSlot = null;
     let priceOrFullReason = '';
     const invFull = isBotInventoryFull();
     const clearAll = invFull || config.enoughItems || unlistCycleDue();
 
+    /** @type {Map<number, { catalogId: string, durability?: number|null, price?: number }>} */
+    const memById = new Map();
+    try {
+        const st = await listingOp('exportState');
+        for (const row of st?.listings || []) {
+            const id = Number(row?.listingId);
+            if (!Number.isFinite(id)) continue;
+            memById.set(id % 10, row);
+        }
+    } catch (e) {
+        logWarn(`listing exportState: ${e.message}`);
+    }
+
     for (let i = STORAGE_AH_SLOTS - 1; i >= 0; i--) {
         const currentSlot = bot.currentWindow?.slots[i];
         if (!currentSlot) continue;
 
-        const info = getSlotInfoSafe(currentSlot, i);
+        // Матч SKU без sellPrice из AH-прочности (getSlotInfo тут врал бы).
+        let hit;
+        try {
+            hit = findMatchingConfigItemResult(currentSlot, config.catalogAll, config.goType);
+        } catch (err) {
+            reportError(`getSlotInfo slot=${i}`, err);
+            hit = null;
+        }
 
-        // Чужая категория — оставляем на АХ, не снимаем и не считаем мусором
-        if (info?.isForeignCategory) continue;
+        if (hit?.foreign) continue;
 
-        if (!info || info.isTrash) {
+        if (!hit) {
             return { slot: i, reason: 'мусор (нет в каталоге)' };
         }
 
@@ -1317,10 +1339,14 @@ function findStorageSlotToUnlist() {
             return { slot: i, reason: 'мусор (не читается цена)' };
         }
 
-        if (!pricesMatch(priceOnAH, info.sellPrice)) {
+        const listingId = priceOnAH % 10;
+        const mem = memById.get(listingId);
+        const expected = expectedSellFromListingMeta(config.catalogAll, mem);
+        // Нет memory (рестарт/старый лот) — не сносим по «≠», только clearAll/мусор.
+        if (expected != null && !pricesMatch(priceOnAH, expected)) {
             if (priceOrFullSlot === null) {
                 priceOrFullSlot = i;
-                priceOrFullReason = `цена ${priceOnAH} ≠ ${info.sellPrice}`;
+                priceOrFullReason = `цена ${priceOnAH} ≠ ${expected}`;
             }
             continue;
         }
@@ -2554,7 +2580,7 @@ async function main() {
                     break;
                 }
 
-                const unlist = findStorageSlotToUnlist();
+                const unlist = await findStorageSlotToUnlist();
                 const storageKeyNow = ahWindowContentKey(bot.currentWindow);
 
                 // Тот же слот + тот же GUI ≥2 раза подряд → reload 50 (окно не обновилось).

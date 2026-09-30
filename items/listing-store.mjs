@@ -109,6 +109,22 @@ export function createListingStore(stateDir) {
                     : null;
                 break;
             }
+            case 'getByListingId': {
+                const row = mem.getByListingId(msg.listingId);
+                result = row
+                    ? {
+                          catalogId: row.catalogId,
+                          listingId: row.listingId,
+                          price: row.price,
+                          enchants: row.enchants,
+                          durability: row.durability,
+                      }
+                    : null;
+                break;
+            }
+            case 'exportState':
+                result = mem.exportState();
+                break;
             default:
                 result = { error: `unknown_op:${msg.op}` };
         }
