@@ -338,9 +338,9 @@ export function itemMatchesCrusherKit(item) {
     return false;
 }
 
-/** Книга АХ: крушитель не шлём в Go (матч закупа не трогаем). */
+/** Книга АХ: крушитель не шлём в Go — только по киту зачарований, не по слову «крушител» в имени. */
 export function skipAhBookCrusher(item) {
-    return isFunTimeCrusherItem(item) || itemMatchesCrusherKit(item);
+    return itemMatchesCrusherKit(item);
 }
 
 /** Лучший id по num среди всего каталога (все go-типы). */

@@ -29,18 +29,28 @@ VIEW_PILOT=1 VIEW_RECORD=1 VIEW_PORT=25501 \
 | Команда | Действие |
 |---|---|
 | `!pilot on` / `!pilot off` | вкл/выкл прокидку look+input |
-| `!rec start [tag]` | начать JSONL |
+| `!rec start [tag]` | начать JSONL (+ wire out/spec) |
 | `!rec stop` | остановить, путь в лог |
-| `!rec status` | счётчик сэмплов |
+| `!rec status` | счётчик samples/outs/specs |
+| `!rec wire on` / `off` | wire в текущей сессии |
 | `!help` | кратко в лог воркера |
 
 ## Формат
 
-`motion-records/<iso>_<tag>.jsonl`:
+`motion-records/<iso>_<tag>.jsonl` (v2):
 
-- meta / end
-- sample @ ~20 Hz: `t_ms, yaw, pitch, fwd/back/left/right/jump/sneak, x,y,z, onGround`  
-  yaw/pitch — радианы mineflayer
+- `meta` / `end`
+- `sample` @ ~20 Hz: поза бота + controls (как раньше)
+- `out` — пакеты **бот → FunTime** (`player_input`, `tick_end`, `look` / `position*`…)
+- `spec` — пакеты **TLauncher → view** (что пилот реально увидел)
+
+Wire по умолчанию **вкл** вместе с записью. Выкл: `VIEW_RECORD_WIRE=0` или `!rec wire off`. Всё подряд: `VIEW_RECORD_WIRE=all`.
+
+Сводка:
+
+```bash
+node scripts/analyze-wire-record.mjs motion-records/<file>.jsonl
+```
 
 ## Заметки
 
@@ -48,4 +58,4 @@ VIEW_PILOT=1 VIEW_RECORD=1 VIEW_PORT=25501 \
 - Пока `pilot` активен, anti-AFK бота пропускается.
 - Sprint по умолчанию режется патчем ходьбы; `VIEW_PILOT_SPRINT=1` — разрешить в пилоте.
 - На проде (502 orch) pilot **выкл**, пока не поставишь `VIEW_PILOT=1` в env оркестратора.
-- Запись `motion-records/` — только эталон ритма мыши/W для тюнинга `afk-forward-look.mjs`, не реплей.
+- Запись `motion-records/` — эталон ритма + wire для сравнения с anti-AFK/продом, не реплей трека.

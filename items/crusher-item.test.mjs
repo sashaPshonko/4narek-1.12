@@ -111,7 +111,7 @@ test('renamed original lore is not enough', () => {
     assert.equal(skipAhBookCrusher(loreOriginal()), false);
 });
 
-test('named crusher skipped for AH book, catalog match unchanged', () => {
+test('named crusher alone does not skip AH book (enchants only); catalog match unchanged', () => {
     const catalog = [
         {
             id: 'megasword-яд3-1.21',
@@ -123,7 +123,7 @@ test('named crusher skipped for AH book, catalog match unchanged', () => {
     ];
     const item = named('Меч крушителя');
     assert.equal(findBestMatchingConfigItem(item, catalog)?.id, 'megasword-яд3-1.21');
-    assert.equal(skipAhBookCrusher(item), true);
+    assert.equal(skipAhBookCrusher(item), false);
 });
 
 test('crusher helmet kit by enchants skips AH book', () => {

@@ -1,6 +1,7 @@
 !StartDocs: Types
 
-TexturePackInfos: []li16
+# As of 1.26.40 the pack list is prefixed with a varint count instead of a little endian short.
+TexturePackInfos: []varint
    uuid: uuid
    version: string
    size: lu64
@@ -22,7 +23,7 @@ ResourcePackIdVersions: []varint
    # The subpack name of the resource pack.
    name: string
 
-ResourcePackIds: string[]li16
+ResourcePackIds: string[]varint
 
 Experiment:
    name: string
@@ -116,28 +117,27 @@ ItemExtraDataWithoutBlockingTick:
    can_destroy: ShortString[]li32
 
 # Same as below but without a "networkStackID" boolean
+# As of 1.26.40 an air item (network_id 0) no longer short-circuits: every field is always written, only
+# the extra data blob ends up empty.
 ItemLegacy:
    network_id: zigzag32
-   _: network_id?
-      if 0: void
-      default:
-         count: lu16
-         metadata: varint
-         block_runtime_id: zigzag32
-         extra: network_id ?
-            # The Shield Item ID is sent in the StartGame packet. It is usually 355 in vanilla.
-            if /ShieldItemID: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithBlockingTick" }]'
-            default: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithoutBlockingTick" }]'
+   count: lu16
+   metadata: varint
+   block_runtime_id: zigzag32
+   extra: network_id ?
+      # The Shield Item ID is sent in the StartGame packet. It is usually 355 in vanilla.
+      if /ShieldItemID: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithBlockingTick" }]'
+      default: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithoutBlockingTick" }]'
 
-ItemNew:
+# As of 1.26.40 the standalone `Item` encoding is gone: everything that used it now uses `ItemV4`.
+# As of 1.26.40 the net ID is a plain zigzag32 again; the oneOf variant tag that preceded it is gone.
+ItemV4:
    network_id: li16
    count: lu16
    metadata: varint
    has_stack_id: bool
    stack_id: has_stack_id ?
-      if true:
-         empty: varint
-         id: zigzag32
+      if true: zigzag32
       default: void
    block_runtime_id: varint
    extra: network_id ?
@@ -145,32 +145,7 @@ ItemNew:
       if /ShieldItemID: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithBlockingTick" }]'
       default: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithoutBlockingTick" }]'
 
-# An "ItemStack" here represents an Item instance. You can think about it like a pointer
-# to an item class. The data for the class gets updated with the data in the `item` field
-# As of 1.16.220, now functionally the same as `Item` just without an extra boolean when
-# server auth inventories is disabled.
-Item:
-   network_id: zigzag32
-   _: network_id?
-      if 0: void
-      default:
-         count: lu16
-         metadata: varint
-         # When server authoritative inventory is enabled, all allocated items have a unique ID used to identify
-         # a specifc item instance.
-         has_stack_id: u8
-         # StackNetworkID is the network ID of this item *instance*. If the stack is empty, 0 is always written for this
-         # field. If not, the field should be set to 1 if the server authoritative inventories are disabled in the
-         # StartGame packet, or to a unique stack ID if it is enabled.
-         stack_id: has_stack_id ?
-            if 0: void
-            default: zigzag32
-         block_runtime_id: zigzag32
-         extra: network_id ?
-            # The Shield Item ID is sent in the StartGame packet. It is usually 355 in vanilla.
-            ## Really bad compiler hack to allow us to use a global variable
-            if /ShieldItemID: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithBlockingTick" }]'
-            default: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithoutBlockingTick" }]'
+ItemV4s: ItemV4[]varint
 
 vec3i:
    x: zigzag32
@@ -191,6 +166,11 @@ vec3f:
    x: lf32
    y: lf32
    z: lf32
+
+vec3i8:
+   x: i8
+   y: i8
+   z: i8
 
 vec2f:
    x: lf32
@@ -361,6 +341,8 @@ MetadataDictionary: []varint
       6: vec3i
       7: long
       8: vec3f
+   # As of 1.26.40 the value type is sent twice: once as an unsigned varint and once as a byte.
+   legacy_type: u8
    value: key ?
       if flags: MetadataFlags1
       if flags_extended: MetadataFlags2
@@ -517,7 +499,8 @@ MetadataFlags2: [ "bitflags", {
       "rotation_locked_to_vehicle",
       "uses_legacy_friction",
       "uses_uniform_air_drag",
-      "nameplate_depth_tested"
+      "nameplate_depth_tested",
+      "not_pickable_from_inside"
    ]
 }]
 
@@ -577,7 +560,7 @@ PlayerAttributes: []varint
 TransactionUseItem:
    # ActionType is the type of the UseItem inventory transaction. It is one of the action types found above,
    # and specifies the way the player interacted with the block.
-   action_type: varint =>
+   action_type: zigzag32 =>
       # Right click item use on a surface like placing a block
       0: click_block
       # Start right click and hold style item use or potentially interact with nothing.
@@ -592,7 +575,7 @@ TransactionUseItem:
    # types found in the constants above. If TriggerType is TriggerTypePlayerInput, the transaction is from
    # the initial input of the player. If it is TriggerTypeSimulationTick, the transaction is from a simulation
    # tick when the player is holding down the input.
-   trigger_type: varint =>
+   trigger_type: u8 =>
    - unknown
    - player_input
    - simulation_tick
@@ -601,13 +584,13 @@ TransactionUseItem:
    block_position: BlockCoordinates
    # BlockFace is the face of the block that was interacted with. When clicking the block, it is the face
    # clicked. When breaking the block, it is the face that was last being hit until the block broke.
-   face: zigzag32
+   face: u8
    # HotBarSlot is the hot bar slot that the player was holding while clicking the block. It should be used
    # to ensure that the hot bar slot and held item are correctly synchronised with the server.
    hotbar_slot: zigzag32
    # HeldItem is the item that was held to interact with the block. The server should check if this item
    # is actually present in the HotBarSlot.
-   held_item: Item
+   held_item: ItemV4
    # Position is the position of the player at the time of interaction. For clicking a block, this is the
    # position at that time, whereas for breaking the block it is the position at the time of breaking.
    player_pos: vec3f
@@ -618,9 +601,9 @@ TransactionUseItem:
    # that the player's world client-side is synchronised with the server's.
    block_runtime_id: varint
    # ClientPrediction is the client's prediction on the output of the transaction.
-   client_prediction: varint =>
-   - failure
-   - success
+   client_prediction: u8 =>
+      - failure
+      - success
    client_cooldown_state: u8 =>
       0: off
       1: on
@@ -637,17 +620,13 @@ TransactionActions: []varint
       3: creative
       100: craft_slot
       99999: craft
-   _: source_type?
-      if container or craft:
-         inventory_id: WindowIDZigzag32
-      if world_interaction:
-         flags: varint
-      if craft or craft_slot:
-         action: varint
-      default: void
+   container_presence: bool
+   window_id?: i8
+   flag_presence: bool
+   flags?: varint
    slot: varint
-   old_item: Item
-   new_item: Item
+   old_item: ItemV4
+   new_item: ItemV4
 
 # The Minecraft bedrock inventory system was refactored, but not all inventory actions use the new packet.
 # This data structure holds actions that have not been updated to the new system.
@@ -662,18 +641,19 @@ TransactionLegacy:
    # `legacy_transactions` are only present if the LegacyRequestID is non-zero. These item slots inform the
    # server of the slots that were changed during the inventory transaction, and the server should send
    # back an ItemStackResponse packet with these slots present in it. (Or false with no slots, if rejected.)
-   legacy_transactions: legacy_request_id?
-      if 0: void
-      default: []varint
-         container_id: u8
-         changed_slots: []varint
-            slot_id: u8
+   legacy_transactions?: []varint
+      container_id: u8
+      changed_slots: []varint
+         slot_id: u8
+
+# As of 1.26.40 the inventory transaction embedded in PlayerAuthInput was brought back in line with the
+# one in InventoryTransaction, so it reuses `TransactionLegacy`/`TransactionActions` above again.
 
 Transaction:
    # Old transaction system data
    legacy: TransactionLegacy
    # What type of transaction took place
-   transaction_type: varint =>
+   transaction_type?: varint =>
       # Sent for container UI operations depending on if ItemStackNetManager is enabled
       0: normal
       # Sent from server to client to reject a transaction
@@ -689,7 +669,7 @@ Transaction:
       # See ItemReleaseInventoryTransaction::ActionType for which it is.
       4: item_release
    # The list of inventory internal actions in this packet, e.g. inventory GUI actions
-   actions: TransactionActions
+   actions?: TransactionActions
    # Extra data if an intenal inventory transaction did not take place, e.g. use of an item 
    transaction_data: transaction_type?
       if normal or inventory_mismatch: void
@@ -704,7 +684,7 @@ Transaction:
          entity_runtime_id: varint64
          # ActionType is the type of the UseItemOnEntity inventory transaction. It is one of the action types
          # found in the constants above, and specifies the way the player interacted with the entity.
-         action_type: varint =>
+         action_type: zigzag32 =>
             # Right click interact with actor.
             0: interact
             # Left click style attack of actor or elytra spin attack. Server is expected to deal damage to the entity with visuals.
@@ -714,7 +694,7 @@ Transaction:
          hotbar_slot: zigzag32
          # HeldItem is the item that was held to interact with the entity. The server should check if this item
          # is actually present in the HotBarSlot.
-         held_item: Item
+         held_item: ItemV4
          # Position is the position of the player at the time of clicking the entity.
          player_pos: vec3f
          # ClickedPosition is the position that was clicked relative to the entity's base coordinate. It can be
@@ -727,7 +707,7 @@ Transaction:
          # in the constants above, and specifies the way the item was released.
          # As of 1.13, the ActionType is always 0. This field can be ignored, because releasing food (by consuming
          # it) or releasing a bow (to shoot an arrow) is essentially the same.
-         action_type: varint =>
+         action_type: zigzag32 =>
             # Release right click and hold style item use, like firing a bow
             0: release
             # Finish right click and hold style item use, like charging a crossbow
@@ -737,54 +717,50 @@ Transaction:
          hotbar_slot: zigzag32
          # HeldItem is the item that was released. The server should check if this item is actually present in the
          # HotBarSlot.
-         held_item: Item
+         held_item: ItemV4
          # HeadPosition is the position of the player's head at the time of releasing the item. This is used
          # mainly for purposes such as spawning eating particles at that position.
          head_pos: vec3f
 
-ItemStacks: Item[]varint
+ItemStacks: ItemV4[]varint
 
+# As of 1.26.40 the descriptor is identified by a string rather than by the numeric tag. The leading
+# varint only distinguishes 'no descriptor' (0) from 'a descriptor follows' (1); when it is 1 the actual
+# kind is read from the descriptor_type string. The deferred and complex alias descriptors are gone.
 RecipeIngredient:
-   type: u8 =>
+   type: varint =>
       0: invalid
-      # DefaultItemDescriptor represents an item descriptor for regular items.
-      1: int_id_meta
-      # MoLangItemDescriptor represents an item descriptor for items that use MoLang (e.g. behaviour packs).
-      2: molang
-      # ItemTagItemDescriptor represents an item descriptor that uses item tagging. This should be used to reduce duplicative
-      # entries for items that can be grouped under a single tag.
-      3: item_tag
-      # DeferredItemDescriptor represents an item descriptor that uses a namespace and metadata value to identify the item.
-      # There is no clear benefit of using this item descriptor.
-      4: string_id_meta
-      # ComplexAliasItemDescriptor represents an item descriptor that uses a single name to identify the item. There is no
-      # clear benefit of using this item descriptor and only seem to be used for specific recipes.
-      5: complex_alias
+      1: valid
    _: type ?
-      if int_id_meta:
-         # NetworkID is the numerical network ID of the item. This is sometimes a positive ID, and sometimes a
-         # negative ID, depending on what item it concerns.
-         network_id: li16
-         metadata: network_id ?
-            if 0: void
-            default: li16
-      if molang:
-         # Expression represents the MoLang expression used to identify the item/it's associated tag.
-         expression: string
-         # Version represents the version of MoLang to use.
-         version: u8
-      if item_tag:
-         # Tag represents the tag that the item is part of.
-         tag: string
-      if string_id_meta:
-         # Name is the name of the item, which is a name like 'minecraft:stick'.
-         name: string
-         # MetadataValue is the metadata value of the item. For some items, this is the damage value, whereas for
-         # other items it is simply an identifier of a variant of the item.
-         metadata: li16
-      if complex_alias:
-         # Name is the name of the item, which is a name like 'minecraft:stick'.
-         name: string
+      if invalid:
+         # Always 32767.
+         metadata: zigzag32
+      if valid:
+         descriptor_type: string
+         _: descriptor_type ?
+            if empty:
+               # Always 32767.
+               metadata: zigzag32
+            # DefaultItemDescriptor represents an item descriptor for regular items.
+            if name:
+               # Name is the name of the item, which is a name like 'minecraft:stick'.
+               name: string
+               # MetadataValue is the metadata value of the item. For some items, this is the damage value,
+               # whereas for other items it is simply an identifier of a variant of the item.
+               metadata: zigzag32
+            # MoLangItemDescriptor represents an item descriptor for items that use MoLang (e.g. behaviour packs).
+            if molang:
+               # Expression represents the MoLang expression used to identify the item/it's associated tag.
+               expression: string
+               # Version represents the version of MoLang to use.
+               version: li16
+            # ItemTagItemDescriptor represents an item descriptor that uses item tagging. This should be used to
+            # reduce duplicative entries for items that can be grouped under a single tag.
+            if item_tag:
+               # Tag represents the tag that the item is part of.
+               tag: string
+               # Always 32767.
+               metadata: zigzag32
    count: zigzag32
 
 PotionTypeRecipes: []varint
@@ -800,107 +776,125 @@ PotionContainerChangeRecipes: []varint
    ingredient_id: zigzag32
    output_item_id: zigzag32
 
-Recipes: []varint
-   type: zigzag32 =>
-      0: shapeless #'ENTRY_SHAPELESS',
-      1: shaped #'ENTRY_SHAPED',
-      2: furnace # 'ENTRY_FURNACE', # removed 1.26.20
-      # `furnace_with_metadata` is a recipe specifically used for furnace-type crafting stations. It is equal to
-      # `furnace`, except it has an input item with a specific metadata value, instead of any metadata value.
-      3: furnace_with_metadata # 'ENTRY_FURNACE_DATA', # removed 1.26.20
-      4: multi #'ENTRY_MULTI', //TODO
-      5: shulker_box #'ENTRY_SHULKER_BOX', //TODO
-      6: shapeless_chemistry #'ENTRY_SHAPELESS_CHEMISTRY', //TODO
-      7: shaped_chemistry #'ENTRY_SHAPED_CHEMISTRY', //TODO
-      # SmithingTransformRecipe is a recipe specifically used for smithing tables. It has two input items and adds them
-      # together, resulting in a new item.
-      8: smithing_transform
-      9: smithing_trim
-   recipe: type?
-      if shapeless or shulker_box or shapeless_chemistry:
-         recipe_id: LatinString
-         input: RecipeIngredient[]varint
-         output: ItemLegacy[]varint
-         uuid: uuid
-         block: string
-         priority: zigzag32
-         unlocking_requirement: RecipeUnlockingRequirement
-         network_id: varint
-      if shaped or shaped_chemistry:
-         recipe_id: LatinString
-         width: zigzag32
-         height: zigzag32
-         # 2D input array, size of width*height
-         input: []$width
-            _: RecipeIngredient[]$height
-         output: ItemLegacy[]varint
-         uuid: uuid
-         block: string
-         priority: zigzag32
-         assume_symmetry: bool
-         unlocking_requirement: RecipeUnlockingRequirement
-         network_id: varint
-      if furnace: # removed 1.26.20
-         input_id: zigzag32
-         output: ItemLegacy
-         block: string
-      if furnace_with_metadata: # removed 1.26.20
-         input_id: zigzag32
-         input_meta: zigzag32
-         output: ItemLegacy
-         block: string
-      if multi:
-         uuid: uuid
-         network_id: varint
-      if smithing_transform:
-         # RecipeID is a unique ID of the recipe. This ID must be unique amongst all other types of recipes too,
-         # but its functionality is not exactly known.
-         recipe_id: LatinString
-         template: RecipeIngredient
-         # Base is the item that the Addition is being applied to in the smithing table.
-         base: RecipeIngredient
-         # Addition is the item that is being added to the Base item to result in a modified item.
-         addition: RecipeIngredient
-         # Result is the resulting item from the two items being added together.
-         result: ItemLegacy
-         # Tag is a serialized compound tag in the network little endian format.
-         tag: string
-         # RecipeNetworkID is a unique ID used to identify the recipe over network. Each recipe must have a unique
-         # network ID. Recommended is to just increment a variable for each unique recipe registered.
-         # This field must never be 0.
-         network_id: varint
-      if smithing_trim:
-         recipe_id: LatinString
-         template: RecipeIngredient
-         input: RecipeIngredient
-         addition: RecipeIngredient
-         block: string
-         network_id: varint
+# As of 1.26.40 each recipe kind is sent in its own array in packet_crafting_data, so the recipe type
+# tag that used to prefix every entry is gone.
+ShapedRecipe:
+   recipe_id: LatinString
+   width: zigzag32
+   height: zigzag32
+   # Flat input array, size of width*height
+   input: RecipeIngredient[]varint
+   output: ItemLegacy[]varint
+   uuid: uuid
+   block: string
+   priority: zigzag32
+   assume_symmetry: bool
+   # Only written for regular shaped recipes, never for chemistry ones.
+   unlocking_requirement?: RecipeUnlockingRequirement
+   network_id: varint
 
+ShapelessRecipe:
+   recipe_id: LatinString
+   input: RecipeIngredient[]varint
+   output: ItemLegacy[]varint
+   uuid: uuid
+   block: string
+   priority: zigzag32
+   # Only written for regular shapeless and shulker box recipes, never for chemistry ones.
+   unlocking_requirement?: RecipeUnlockingRequirement
+   network_id: varint
+
+MultiRecipe:
+   uuid: uuid
+   network_id: varint
+
+# SmithingTransformRecipe is a recipe specifically used for smithing tables. It has two input items and adds
+# them together, resulting in a new item.
+SmithingTransformRecipe:
+   # RecipeID is a unique ID of the recipe. This ID must be unique amongst all other types of recipes too,
+   # but its functionality is not exactly known.
+   recipe_id: LatinString
+   template: RecipeIngredient
+   # Base is the item that the Addition is being applied to in the smithing table.
+   base: RecipeIngredient
+   # Addition is the item that is being added to the Base item to result in a modified item.
+   addition: RecipeIngredient
+   # Result is the resulting item from the two items being added together.
+   result: ItemLegacy
+   # Tag is a serialized compound tag in the network little endian format.
+   tag: string
+   # RecipeNetworkID is a unique ID used to identify the recipe over network. Each recipe must have a unique
+   # network ID. Recommended is to just increment a variable for each unique recipe registered.
+   # This field must never be 0.
+   network_id: varint
+
+SmithingTrimRecipe:
+   recipe_id: LatinString
+   template: RecipeIngredient
+   input: RecipeIngredient
+   addition: RecipeIngredient
+   block: string
+   network_id: varint
+
+# As of 1.26.40 the context is a zigzag32 and the ingredient list is written as an optional (present only
+# when the context is 'none') rather than being inferred from the context alone.
 RecipeUnlockingRequirement:
-   context: u8 =>
+   context: zigzag32 =>
       - none
       - always_unlocked
       - player_in_water
       - player_has_many_items
-   ingredients: context?
-      if none: RecipeIngredient[]varint
+   ingredients?: RecipeIngredient[]varint
 
 SkinImage:
    width: li32
    height: li32
    data: ByteArray
 
+# 1.26.40 reworked most of this type: the three arrays are now varint-counted, the arm size and the piece
+# types are numeric, the colours are little endian ints instead of strings, and the trusted flag and the
+# profile hash were appended at the end.
+PersonaPieceType: li32 =>
+   - unknown
+   - skeleton
+   - body
+   - skin
+   - bottom
+   - feet
+   - dress
+   - top
+   - high_pants
+   - hands
+   - outerwear
+   - facial_hair
+   - mouth
+   - eyes
+   - hair
+   - hood
+   - back
+   - face_accessory
+   - head
+   - legs
+   - left_leg
+   - right_leg
+   - arms
+   - left_arm
+   - right_arm
+   - capes
+   - classic_skin
+   - emote
+   - unsupported
+
 Skin:
    skin_id: string
    play_fab_id: string
    skin_resource_pack: string
    skin_data: SkinImage
-   animations: []li32
+   animations: []varint
       skin_image: SkinImage
-      animation_type: li32
+      animation_type: varint
       animation_frames: lf32
-      expression_type: lf32
+      expression_type: varint
    cape_data: SkinImage
    geometry_data: string
    geometry_data_version: string
@@ -908,17 +902,20 @@ Skin:
 
    cape_id: string
    full_skin_id: string
-   arm_size: string
-   skin_color: string
-   personal_pieces: []li32
+   arm_size: u8 =>
+      0: slim
+      1: wide
+   skin_color: i32
+   personal_pieces: []varint
       piece_id: string
-      piece_type: string
-      pack_id: string
+      piece_type: PersonaPieceType
+      pack_id: uuid
       is_default_piece: bool
       product_id: string
-   piece_tint_colors: []li32
+   piece_tint_colors: []varint
+      # The piece type is still sent by name here, unlike in the persona pieces above.
       piece_type: string
-      colors: string[]li32
+      colors: '["array", { "count": 4, "type": "i32" }]'
    premium: bool
    persona: bool
    # PersonaCapeOnClassicSkin specifies if the skin had a Persona cape (in-game skin creator cape) equipped
@@ -926,32 +923,40 @@ Skin:
    cape_on_classic: bool
    primary_user: bool
    overriding_player_appearance: bool
+   # Added in 1.26.40. Sent as the string "true" or "false".
+   trusted: string
+   # Added in 1.26.40.
+   profile_hash: string
 
-PlayerRecords:
-   type: u8 =>
-      0: add
-      1: remove
-   records_count: varint
-   records: []$records_count
-      _: type?
-         if add:
-            uuid: uuid
-            entity_unique_id: zigzag64
-            username: string
-            xbox_user_id: string
-            platform_chat_id: string
-            build_platform: li32
-            skin_data: Skin
-            is_teacher: bool
-            is_host: bool
-            is_subclient: bool
-            # PlayerColour is the colour of the player that is shown in UI elements, currently only used for the
-            # player locator bar.
-            player_color: li32
-         if remove:
-            uuid: uuid
-   verified: type ?
-      if add: bool[]$records_count
+# As of 1.26.40 the packet-wide action is gone: every record carries its own action, written first as an
+# unsigned varint (1 = add, 0 = remove) and then again as the legacy action ordinal byte (0 = add,
+# 1 = remove). The trailing array of skin-verified booleans was removed as well.
+PlayerRecord:
+   type: varint =>
+      0: remove
+      1: add
+   legacy_type: u8
+   _: type ?
+      if add:
+         uuid: uuid
+         entity_unique_id: zigzag64
+         username: string
+         xbox_user_id: string
+         platform_chat_id: string
+         build_platform: li32
+         skin_data: Skin
+         is_teacher: bool
+         is_host: bool
+         is_subclient: bool
+         # PlayerColour is the colour of the player that is shown in UI elements, currently only used for the
+         # player locator bar. Since 1.26.40 this is encoded as big-endian ARGB.
+         player_color: i32
+      if remove:
+         uuid: uuid
+
+# BDS 1.26.40 may truncate the final record. Player List is a packet-bounded payload, so treat the declared
+# count as an upper bound and stop decoding when the packet ends, including midway through the final record.
+PlayerRecords: '["maybeIncompleteArray", { "countType": "varint", "type": "PlayerRecord" }]'
 
 Enchant:
    id: u8
@@ -1019,7 +1024,48 @@ StackRequestSlotInfo:
    # StackNetworkID is the unique stack ID that the client assumes to be present in this slot. The server
    # must check if these IDs match. If they do not match, servers should reject the stack request that the
    # action holding this info was in.
-   stack_id: zigzag32
+   # As of 1.26.40 this is a little endian int instead of a zigzag varint.
+   stack_id: li32
+
+# The ingredient encoding used inside auto-craft item stack request actions. It differs from
+# `RecipeIngredient` in that the descriptor kind is numeric (and repeated as a byte) and the count is a
+# little endian short.
+RecipeIngredient2:
+   type: varint =>
+      0: invalid
+      1: name
+      2: molang
+      3: item_tag
+   # The descriptor kind again, as a byte. The reader ignores it in favour of the varint above.
+   legacy_type: u8
+   _: type ?
+      if invalid: void
+      if name:
+         name: string
+         metadata: zigzag32
+      if molang:
+         expression: string
+         version: li16
+      if item_tag:
+         tag: string
+   count: lu16
+
+# The item encoding used by the deprecated craft-results item stack request action. Unlike `ItemLegacy` it
+# identifies the item by name through a descriptor rather than by network ID.
+ItemStackRequestInstanceDescriptor:
+   type: varint =>
+      0: invalid
+      1: name
+   # The descriptor kind again, as a byte.
+   legacy_type: u8
+   _: type ?
+      if invalid: void
+      default:
+         name: string
+         metadata: zigzag32
+   count: li16
+   block_runtime_id: varint
+   extra: '["encapsulated", { "lengthType": "varint", "type": "ItemExtraDataWithoutBlockingTick" }]'
 
 # ItemStackRequest is sent by the client to change item stacks in an inventory. It is essentially a
 # replacement of the InventoryTransaction packet added in 1.16 for inventory specific actions, such as moving
@@ -1030,7 +1076,9 @@ ItemStackRequest:
    # specific request in the ItemStackResponse packet.
    request_id: zigzag32
    actions: []varint
-      type_id: u8 =>
+      # As of 1.26.40 the action type is an unsigned varint, the 'place in container' and 'take out
+      # container' entries are gone, and the type is repeated as a byte right after it.
+      type_id: varint =>
          # TakeStackRequestAction is sent by the client to the server to take x amount of items from one slot in a
          # container to the cursor.
          - take
@@ -1059,10 +1107,6 @@ ItemStackRequest:
          # that are not fully consumed when used for a recipe should not be destroyed there, but instead, should be
          # turned into their respective resulting items. 
          - create
-         # (as of 1.18.10) Not currently used
-         - place_in_container
-         # (as of 1.18.10) Not currently used
-         - take_out_container
          # LabTableCombineStackRequestAction is sent by the client when it uses a lab table to combine item stacks.
          - lab_table_combine
          # BeaconPaymentStackRequestAction is sent by the client when it submits an item to enable effects from a
@@ -1099,8 +1143,10 @@ ItemStackRequest:
          # This action is also sent when an item is enchanted. Enchanting should be treated mostly the same way as
          # crafting, where the old item is consumed.
          - results_deprecated
+      # The action type again, as a byte.
+      legacy_type_id: u8
       _: type_id ?
-         if take or place or place_in_container or take_out_container:
+         if take or place:
             count: u8
             source: StackRequestSlotInfo
             destination: StackRequestSlotInfo
@@ -1139,7 +1185,8 @@ ItemStackRequest:
             # StackNetworkID is the unique stack ID that the client assumes to be present at the time. The server
             # must check if these IDs match. If they do not match, servers should reject the stack request that the
             # action holding this info was in.
-            network_id: zigzag32 
+            # As of 1.26.40 this is a little endian int.
+            network_id: li32
          if craft_recipe:
             # RecipeNetworkID is the network ID of the recipe that is about to be crafted. This network ID matches
             # one of the recipes sent in the CraftingData packet, where each of the recipes have a RecipeNetworkID as
@@ -1150,10 +1197,9 @@ ItemStackRequest:
             # RecipeNetworkID is the network ID of the recipe that is about to be crafted. This network ID matches
             # one of the recipes sent in the CraftingData packet, where each of the recipes have a RecipeNetworkID as
             recipe_network_id: varint
-            # TODO: Duplicate field?
-            times_crafted_2: u8
+            # As of 1.26.40 the duplicated craft count is gone and the ingredients use their own encoding.
             times_crafted: u8
-            ingredients: RecipeIngredient[]varint
+            ingredients: RecipeIngredient2[]varint
          if craft_creative:
             # The stack ID of the creative item that is being created. This is one of the
             # creative item stack IDs sent in the CreativeContent packet.
@@ -1167,12 +1213,13 @@ ItemStackRequest:
          if craft_grindstone_request:
             # RecipeNetworkID is the network ID of the recipe that is about to be crafted. This network ID matches
             # one of the recipes sent in the CraftingData packet, where each of the recipes have a RecipeNetworkID as
-            recipe_network_id: varint
+            # As of 1.26.40 it is a little endian int here.
+            recipe_network_id: li32
             # NumberOfCrafts is how many times the recipe was crafted. This field appears to be boilerplate and
             # has no effect.
             times_crafted: u8
             # Cost is the cost of the recipe that was crafted.
-            cost: varint
+            cost: zigzag32
          if craft_loom_request:
             # Pattern is the pattern identifier for the loom recipe.
             pattern: string
@@ -1180,7 +1227,7 @@ ItemStackRequest:
             times_crafted: u8
          if non_implemented: void
          if results_deprecated:
-            result_items: ItemLegacy[]varint
+            result_items: ItemStackRequestInstanceDescriptor[]varint
             times_crafted: u8
    # CustomNames is a list of custom names involved in the request. This is typically filled with one string
    # when an anvil is used.
@@ -1216,35 +1263,38 @@ ItemStackResponses: []varint
    # RequestID is the unique ID of the request that this response is in reaction to. If rejected, the client
    # will undo the actions from the request with this ID.
    request_id: zigzag32
-   _: status ?
-      if ok:
-         # ContainerInfo holds information on the containers that had their contents changed as a result of the
-         # request.
-         containers: []varint
-            # ContainerID is the container ID of the container that the slots that follow are in. For the main
-            # inventory, this value seems to be 0x1b. For the cursor, this value seems to be 0x3a. For the crafting
-            # grid, this value seems to be 0x0d.
-            # * actually, this is ContainerSlotType - used by the inventory system that specifies the type of slot
-            slot_type: FullContainerName
-            # SlotInfo holds information on what item stack should be present in specific slots in the container.
-            slots: []varint
-               # Slot and HotbarSlot seem to be the same value every time: The slot that was actually changed. I'm not
-               # sure if these slots ever differ.
-               slot: u8
-               hotbar_slot: u8
-               # Count is the total count of the item stack. This count will be shown client-side after the response is
-               # sent to the client.
-               count: u8
-               # StackNetworkID is the network ID of the new stack at a specific slot.
-               item_stack_id: zigzag32
-               # CustomName is the custom name of the item stack. It is used in relation to text filtering.
-               custom_name: string
-               # FilteredCustomName is a filtered version of CustomName with all the profanity removed. The client will
-               # use this over CustomName if this field is not empty and they have the "Filter Profanity" setting enabled.
-               filtered_custom_name: string
-               # DurabilityCorrection is the current durability of the item stack. This durability will be shown
-               # client-side after the response is sent to the client.
-               durability_correction: zigzag32
+   # As of 1.26.40 the container list no longer depends on the status: it is preceded by a presence byte
+   # (always written as true) and is then written as an optional.
+   containers_presence: bool
+   # ContainerInfo holds information on the containers that had their contents changed as a result of the
+   # request. Absent when there are no containers to report.
+   containers?: []varint
+      # ContainerID is the container ID of the container that the slots that follow are in. For the main
+      # inventory, this value seems to be 0x1b. For the cursor, this value seems to be 0x3a. For the crafting
+      # grid, this value seems to be 0x0d.
+      # * actually, this is ContainerSlotType - used by the inventory system that specifies the type of slot
+      slot_type: FullContainerName
+      # SlotInfo holds information on what item stack should be present in specific slots in the container.
+      slots: []varint
+         # Slot and HotbarSlot seem to be the same value every time: The slot that was actually changed. I'm not
+         # sure if these slots ever differ.
+         slot: u8
+         hotbar_slot: u8
+         # Count is the total count of the item stack. This count will be shown client-side after the response is
+         # sent to the client.
+         count: u8
+         # StackNetworkID is the network ID of the new stack at a specific slot. As of 1.26.40 it is preceded
+         # by a presence byte (always written as true) and is then written as an optional.
+         item_stack_id_presence: bool
+         item_stack_id?: zigzag32
+         # CustomName is the custom name of the item stack. It is used in relation to text filtering.
+         custom_name: string
+         # FilteredCustomName is a filtered version of CustomName with all the profanity removed. The client will
+         # use this over CustomName if this field is not empty and they have the "Filter Profanity" setting enabled.
+         filtered_custom_name: string
+         # DurabilityCorrection is the current durability of the item stack. This durability will be shown
+         # client-side after the response is sent to the client.
+         durability_correction: zigzag32
 
 
 CommandOrigin:
@@ -1273,14 +1323,13 @@ TrackedObject:
    type: li32 =>
       0: entity
       1: block
+   # As of 1.26.40 both members are written as optionals rather than being selected by Type.
    # EntityUniqueID is the unique ID of the entity, if the tracked object was an entity. It needs not to be
    # filled out if Type is not MapObjectTypeEntity.
-   entity_unique_id: type ?
-      if entity: zigzag64
+   entity_unique_id?: zigzag64
    # BlockPosition is the position of the block, if the tracked object was a block. It needs not to be
    # filled out if Type is not MapObjectTypeBlock.
-   block_position: type ?
-      if block: BlockCoordinates
+   block_position?: BlockCoordinates
 
 # MapDecoration is a fixed decoration on a map: Its position or other properties do not change automatically
 # client-side.
@@ -1344,8 +1393,8 @@ MapDecoration:
    # Label is the name of the map decoration. This name may be of any value.
    label: string
    # Colour is the colour of the map decoration. Some map decoration types have a specific colour set
-   # automatically, whereas others may be changed.
-   color_abgr: varint
+   # automatically, whereas others may be changed. As of 1.26.40 this is a little endian int.
+   color_abgr: li32
 
 
 StructureBlockSettings:
@@ -2216,6 +2265,24 @@ SoundType: varint =>
    - ResetGrowth
    - PushedByPlayer
    - Bounce
+   - SlimeLanding
+   - AbsorbBlock
+   - EjectBlock
+   - GeyserEruptionStart
+   - GeyserEruptionActive
+   - RecordBounce
+   - BucketFillLandAnimal
+   - BucketEmptyLandAnimal
+   - GeyserContinuousEruptionStart
+   - GeyserContinuousEruptionActive
+   - Mount
+   - Dismount
+   - StrawBedBreakLeave
+   - Undefined
+
+# As of 1.26.30, sounds are now sent as strings with their registry name
+ServerSoundHandle: lu64
+SoundEventIdentifier: string
 
 # TODO: remove?
 LegacyEntityType: li32 =>
@@ -2592,7 +2659,7 @@ VoxelCells:
    storage: u8[]varint
 
 VoxelShape:
-   cells: VoxelCells[]varint
+   cells: VoxelCells
    x_coordinates: lf32[]varint
    y_coordinates: lf32[]varint
    z_coordinates: lf32[]varint
@@ -2604,20 +2671,21 @@ VoxelShapeNameEntry:
 GatheringJoinInfo:
    experience_id: uuid
    experience_name: string
-   experience_world_id: uuid
-   experience_world_name: string
+   experience_world_id?: uuid
+   experience_world_name?: string
    creator_id: string
-   target_id: uuid
-   scenario_id: string
-   server_id: string
+   target_id?: uuid
+   scenario_id?: string
+   server_id?: string
 
 StoreEntryPointInfo:
    store_id: string
    store_name: string
 
 PresenceInfo:
-   experience_name: string
-   world_name: string
+   experience_name?: string
+   world_name?: string
+   rich_presence_id?: string
 
 ServerJoinInformation:
    has_gathering_info: bool
@@ -2751,6 +2819,9 @@ DisconnectFailReason: zigzag32 =>
    - realms_timeline_required
    - guest_withough_host
    - failed_to_join_experience
+   - nethernet_data_channel_closed
+   - discovery_environment_mismatch
+   - host_without_keys
    - host_signed_out
    - script_watchdog_exception
    - script_memory_limit_exceeded
@@ -2766,6 +2837,14 @@ DisconnectFailReason: zigzag32 =>
    - nonce_not_found
    - nonce_expired
    - nonce_not_valid
+   - host_disconnected
+   - editor_join_intent_policy_failure
+   - nethernet_identity_not_allowed
+   - invalid_name
+   - expired_token
+   - host_accepts_no_type_of_auth
+   - not_authenticated_fast_fail
+   - editor_not_allowed
 
 FullContainerName:
    container_id: ContainerSlotType
@@ -2774,6 +2853,7 @@ FullContainerName:
 MovementEffectType: varint =>
    -1: invalid
    0: GLIDE_BOOST
+   1: GEYSER_BOOST
 
 # BiomeDefinition represents a biome definition in the game. This can be a vanilla biome or a completely
 # custom biome.
@@ -2814,6 +2894,25 @@ BiomeChunkGeneration:
    mountain_parameters?: BiomeMountainParameters
    # SurfaceMaterialAdjustments is a list of surface material adjustments.
    surface_material_adjustments?: BiomeElementData[]varint
+   # OverworldRules is optional information to specify the biome's overworld rules, such as rivers and hills.
+   overworld_rules?: BiomeOverworldRules
+   # MultiNoiseRules is optional information to specify the biome's multi-noise rules.
+   multi_noise_rules?: BiomeMultiNoiseRules
+   # LegacyRules is a list of legacy rules for the biomes using an older format, which is just a list of
+   # weighted biomes.
+   legacy_rules?: BiomeConditionalTransformation[]varint
+   # ReplacementsData is a list of biome replacement data.
+   replacements_data?: BiomeReplacementData[]varint
+   has_village_type: bool
+   village_type: has_village_type ?
+      if true: u8
+   # As of 1.26.20 the surface descriptions moved out of this struct into a pair of surface builders at the
+   # end of it. SurfaceBuilder describes the top layer, SubSurfaceBuilder the layer underneath it.
+   surface_builder_data?: BiomeSurfaceBuilder
+   sub_surface_builder_data?: BiomeSurfaceBuilder
+
+# BiomeSurfaceBuilder describes how one layer of a biome's surface is generated.
+BiomeSurfaceBuilder:
    # SurfaceMaterials is a set of materials to use for the surface layers of the biome.
    surface_materials?: BiomeSurfaceMaterial
    # HasDefaultOverworldSurface is true if the biome has a default overworld surface.
@@ -2828,18 +2927,25 @@ BiomeChunkGeneration:
    mesa_surface?: BiomeMesaSurface
    # CappedSurface is optional information to specify the biome's capped surface, i.e. in the Nether.
    capped_surface?: BiomeCappedSurface
-   # OverworldRules is optional information to specify the biome's overworld rules, such as rivers and hills.
-   overworld_rules?: BiomeOverworldRules
-   # MultiNoiseRules is optional information to specify the biome's multi-noise rules.
-   multi_noise_rules?: BiomeMultiNoiseRules
-   # LegacyRules is a list of legacy rules for the biomes using an older format, which is just a list of
-   # weighted biomes.
-   legacy_rules?: BiomeConditionalTransformation[]varint
-   # ReplacementsData is a list of biome replacement data.
-   replacements_data?: BiomeReplacementData[]varint
-   has_village_type: bool
-   village_type: has_village_type ?
-      if true: u8
+   # NoiseGradientSurface drives the surface from a named noise function. Added in 1.26.20.
+   noise_gradient_surface?: BiomeNoiseGradientSurface
+
+# BiomeNoiseGradientSurface generates a surface by sampling a named noise function.
+BiomeNoiseGradientSurface:
+   non_replaceable_blocks: lu32[]varint
+   gradient_blocks: BiomeNoiseBlockSpecifier[]varint
+   noise_seed: string
+   first_octave: lu32
+   amplitudes: lf32[]varint
+
+# BiomeNoiseBlockSpecifier picks a block based on where a noise sample falls in a range. As of 1.26.30 this
+# replaced the plain block runtime id previously used for `gradient_blocks`.
+BiomeNoiseBlockSpecifier:
+   noise: string
+   threshold: lf32
+   min: lf32
+   max: lf32
+   block: lu32
 
 # BiomeClimate represents the climate of a biome, mainly for ambience but also defines certain behaviours.
 BiomeClimate:
@@ -3285,9 +3391,12 @@ EnvironmentAttributeData:
    current_transition_ticks: lu32
    total_transition_ticks: lu32
    ease_type: li32
+   local_transition_ticks: lu32
+   noise_transition: bool
 
 AttributeLayerData:
    name: string
+   noise_name?: string
    dimension_id: zigzag32
    settings: AttributeLayerSettings
    environment_attributes: EnvironmentAttributeData[]varint
@@ -3303,6 +3412,18 @@ SystemDiagnosticTimingInfo:
    system_index: lu64
    duration_nanos: lu64
    percent_of_total: u8
+
+# Added in 1.26.40.
+SystemCategory:
+   category_name: string
+   system_index: lu64
+
+WhiskerScopeDataSummary:
+   label: string
+   indentation: string
+   total_high_cost_ns: lu64
+   total_mid_cost_ns: lu64
+   total_low_cost_ns: lu64
 
 PrimitiveShape:
    network_id: varint64
